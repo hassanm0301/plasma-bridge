@@ -37,6 +37,7 @@ Default addresses:
 
 Supported flags:
 
+- `-h`, `--help`: print available command-line flags
 - `--host`: bind address, default `127.0.0.1`
 - `--port`: HTTP port, default `8080`
 - `--ws-port`: WebSocket port, default `8081`
@@ -45,6 +46,12 @@ Example:
 
 ```bash
 ./build/src/app/plasma_bridge --host 127.0.0.1 --port 8080 --ws-port 8081
+```
+
+To list all available flags:
+
+```bash
+./build/src/app/plasma_bridge -h
 ```
 
 ## Verify
