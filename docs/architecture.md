@@ -9,10 +9,13 @@ Core runtime choices:
 - C++
 - Qt 6
 - Qt DBus
+- Qt Network
+- Qt WebSockets
 - `KF6PulseAudioQt` for the first audio integration path
 - `libpulse` only if the Qt wrapper proves insufficient
-- `QWebSocketServer` later in the project
-- an HTTP server compatible with Qt 6 later in the project
+- a minimal in-repo HTTP server for the first transport slice
+- `QWebSocketServer` for the first live audio monitoring slice
+- a more complete HTTP surface later in the project
 - systemd user-service packaging later in the project
 
 ## Dependency Policy
@@ -24,13 +27,13 @@ Core runtime choices:
 
 ## Module Boundaries
 
-The backend should be split into clear layers so desktop integrations do not leak into transport code. The first checked-in code should keep only the layers needed for the audio probe and leave transport layers for later.
+The backend should be split into clear layers so desktop integrations do not leak into transport code. The first checked-in transport slice should keep the runtime narrow: audio observation, shared state, HTTP snapshots, and WebSocket live monitoring.
 
-- `app`: later startup and bootstrap code for the real service
+- `app`: startup and bootstrap code for the runtime executable
 - `core`: later service lifecycle, config, and logging
 - `adapters`: audio and window integrations
-- `state`: later canonical backend state and patch generation
-- `api`: later WebSocket and HTTP transport surfaces
+- `state`: canonical backend state and lookup helpers
+- `api`: HTTP and WebSocket transport surfaces
 - `actions`: later infrequent control operations
 - `common`: shared types, ids, and error helpers
 
@@ -74,6 +77,7 @@ packaging/
 
 - `tools/probes/` should exist before the real backend so feasibility work can be done without polluting the service runtime.
 - The first probe should validate output-sink enumeration, selected default sink tracking, and live sink updates.
+- The first checked-in runtime should expose read-only HTTP snapshot endpoints and a WebSocket live feed for audio sinks, and bind to localhost by default.
 - The public protocol should be backed by one canonical state model, not by raw KDE or Pulse events.
 - Window terminology should stay consistent with the product choice: V1 exposes individual usable windows, not grouped applications.
 - HTTP and WebSocket should share the same underlying state and action services rather than duplicating logic.

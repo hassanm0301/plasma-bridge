@@ -17,14 +17,14 @@ void AudioStateStore::attachObserver(audio::PulseAudioSinkObserver *observer)
     }
 
     connect(observer, &audio::PulseAudioSinkObserver::initialStateReady, this, [this, observer]() {
-        syncFromObserver(observer);
+        syncFromObserver(observer, QStringLiteral("initial"), QString());
     });
-    connect(observer, &audio::PulseAudioSinkObserver::audioStateChanged, this, [this, observer](const QString &, const QString &) {
-        syncFromObserver(observer);
+    connect(observer, &audio::PulseAudioSinkObserver::audioStateChanged, this, [this, observer](const QString &reason, const QString &sinkId) {
+        syncFromObserver(observer, reason, sinkId);
     });
 
     if (observer->hasInitialState()) {
-        syncFromObserver(observer);
+        syncFromObserver(observer, QStringLiteral("initial"), QString());
     }
 }
 
@@ -53,7 +53,7 @@ std::optional<plasma_bridge::AudioSinkState> AudioStateStore::defaultSink() cons
     return std::nullopt;
 }
 
-void AudioStateStore::syncFromObserver(audio::PulseAudioSinkObserver *observer)
+void AudioStateStore::syncFromObserver(audio::PulseAudioSinkObserver *observer, const QString &reason, const QString &sinkId)
 {
     if (observer == nullptr) {
         return;
@@ -67,7 +67,7 @@ void AudioStateStore::syncFromObserver(audio::PulseAudioSinkObserver *observer)
         emit readyChanged(m_ready);
     }
 
-    emit audioStateChanged();
+    emit audioStateChanged(reason, sinkId);
 }
 
 } // namespace plasma_bridge::state

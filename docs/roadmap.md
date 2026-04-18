@@ -21,9 +21,11 @@ The first real product version should stay narrow:
 - read per-sink volume and mute state
 - observe live sink changes without polling
 - support PipeWire sessions with ALSA-backed sinks
-- defer transport and broader desktop state until after the sink probe is proven
+- expose a small HTTP snapshot surface for audio sinks
+- expose WebSocket live updates for audio sinks and the current default sink
+- defer broader desktop state until after the audio transport surface is proven
 
-The first usable milestone after feasibility is read-only and audio-first. Control features, windows, and public transport surfaces come later.
+The first usable milestone after feasibility is read-only and audio-first. The first public transport slice includes HTTP snapshots and WebSocket live monitoring; controls and windows come later.
 
 ## Explicit Non-Goals
 
@@ -62,7 +64,11 @@ Add the first transport surface and expand beyond the audio-first probe once sin
 
 Success means:
 
-- live output-sink state is published
+- an HTTP runtime can serve `GET /snapshot/audio/sinks`
+- an HTTP runtime can serve `GET /snapshot/audio/default-sink`
+- repeated HTTP snapshot reads reflect current output-sink state
+- a WebSocket runtime can publish initial audio sink state after client hello
+- a WebSocket runtime can publish live audio updates after sink and default-sink changes
 - live usable-window state is published
 - active window changes are propagated
 - the canonical backend state remains stable through ordinary desktop changes
@@ -103,6 +109,6 @@ Success means:
 
 Do not move forward from the audio-first feasibility slice unless the project can cleanly read all KDE-visible output sinks, the default sink, and live sink updates on the target Plasma session.
 
-Do not add transport or controls before the sink probe is stable and the read-only state model is predictable.
+Do not add controls before the HTTP and WebSocket audio read surfaces are stable and the read-only state model is predictable.
 
 Do not expand scope into grouped apps, media, or non-Plasma desktops until the V1 read model is complete.

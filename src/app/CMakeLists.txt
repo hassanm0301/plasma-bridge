@@ -10,4 +10,5 @@ target_link_libraries(plasma_bridge
         plasma_bridge_state
         Qt6::Core
         Qt6::Network
+        Qt6::WebSockets
 )

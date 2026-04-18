@@ -29,10 +29,10 @@ public:
 
 signals:
     void readyChanged(bool ready);
-    void audioStateChanged();
+    void audioStateChanged(const QString &reason, const QString &sinkId);
 
 private:
-    void syncFromObserver(audio::PulseAudioSinkObserver *observer);
+    void syncFromObserver(audio::PulseAudioSinkObserver *observer, const QString &reason, const QString &sinkId);
 
     plasma_bridge::AudioState m_audioState;
     bool m_ready = false;

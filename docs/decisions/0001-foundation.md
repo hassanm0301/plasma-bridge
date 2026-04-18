@@ -20,8 +20,9 @@ The project needed a baseline set of product and implementation choices before b
 - V1 input-audio state is deferred until after the output-sink probe is proven.
 - The backend runtime is a standalone Qt 6 user-session service.
 - Plasma-specific libraries are acceptable when they reduce integration risk.
-- WebSocket is the live-state transport.
-- HTTP is the infrequent request and operational transport.
+- The first checked-in transport surface is HTTP snapshot read endpoints for audio sink state.
+- WebSocket now provides live audio sink monitoring alongside the existing HTTP snapshot surface.
+- HTTP remains the infrequent request and operational transport, starting with read-only audio snapshot endpoints.
 - Media integration is post-V1 optional work.
 - Stronger authentication is deferred until after the core backend works on the local network.
 
@@ -35,6 +36,4 @@ The project needed a baseline set of product and implementation choices before b
 
 - exact audio backend choice
 - exact window integration path
-- HTTP endpoint shape
-- WebSocket message schema details
 - authentication and pairing strategy

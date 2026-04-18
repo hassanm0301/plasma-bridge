@@ -1,4 +1,5 @@
 #include "adapters/audio/pulse_audio_sink_observer.h"
+#include "api/audio_websocket_server.h"
 #include "api/snapshot_http_server.h"
 #include "state/audio_state_store.h"
 
@@ -42,7 +43,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Serve audio sink snapshots over HTTP."));
+    parser.setApplicationDescription(QStringLiteral("Serve audio sink state over HTTP and WebSocket."));
     parser.addHelpOption();
     parser.addVersionOption();
 
@@ -54,9 +55,14 @@ int main(int argc, char *argv[])
                                   QStringLiteral("TCP port to bind. Defaults to 8080."),
                                   QStringLiteral("port"),
                                   QStringLiteral("8080"));
+    QCommandLineOption wsPortOption(QStringLiteral("ws-port"),
+                                    QStringLiteral("WebSocket port to bind. Defaults to 8081."),
+                                    QStringLiteral("ws-port"),
+                                    QStringLiteral("8081"));
 
     parser.addOption(hostOption);
     parser.addOption(portOption);
+    parser.addOption(wsPortOption);
     parser.process(app);
 
     QHostAddress bindAddress;
@@ -74,6 +80,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    bool wsPortOk = false;
+    const quint16 wsPort = parser.value(wsPortOption).toUShort(&wsPortOk);
+    if (!wsPortOk || wsPort == 0) {
+        QTextStream error(stderr);
+        error << "Invalid WebSocket port: " << parser.value(wsPortOption) << Qt::endl;
+        return 1;
+    }
+
     PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.plasma_bridge"));
 
     plasma_bridge::audio::PulseAudioSinkObserver observer;
@@ -88,6 +102,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    plasma_bridge::api::AudioWebSocketServer webSocketServer(&audioStateStore);
+    if (!webSocketServer.listen(bindAddress, wsPort)) {
+        QTextStream error(stderr);
+        error << "Failed to listen on " << parser.value(hostOption) << ':' << wsPort << " for WebSocket: "
+              << webSocketServer.errorString() << Qt::endl;
+        return 1;
+    }
+
     QObject::connect(&observer, &plasma_bridge::audio::PulseAudioSinkObserver::connectionFailed, &app, [](const QString &message) {
         QTextStream error(stderr);
         error << message << Qt::endl;
@@ -96,7 +118,8 @@ int main(int argc, char *argv[])
     observer.start();
 
     QTextStream output(stdout);
-    output << "Listening on http://" << httpServer.serverAddress().toString() << ':' << httpServer.serverPort() << Qt::endl;
+    output << "Listening on http://" << parser.value(hostOption) << ':' << httpServer.serverPort() << Qt::endl;
+    output << "Listening on ws://" << parser.value(hostOption) << ':' << webSocketServer.serverPort() << Qt::endl;
 
     return app.exec();
 }

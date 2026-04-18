@@ -1,4 +1,5 @@
 add_library(plasma_bridge_api STATIC
+    audio_websocket_server.cpp
     snapshot_http_server.cpp
 )
 
@@ -13,4 +14,5 @@ target_link_libraries(plasma_bridge_api
         plasma_bridge_state
         Qt6::Core
         Qt6::Network
+        Qt6::WebSockets
 )

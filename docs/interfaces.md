@@ -43,11 +43,68 @@ Filtering rule for V1:
 
 ## Transport Split
 
-No checked-in HTTP or WebSocket surface exists in the current audio-first milestone. The transport split below is still the intended direction once API work starts.
+The current milestone exposes both HTTP snapshots and WebSocket live monitoring for audio sinks.
 
 ### WebSocket
 
 WebSocket is the primary live-state interface.
+
+The current checked-in WebSocket surface is:
+
+- default URL: `ws://127.0.0.1:8081`
+
+Client hello:
+
+```json
+{ "type": "hello", "protocolVersion": 1 }
+```
+
+Server full snapshot:
+
+```json
+{
+  "type": "fullState",
+  "state": {
+    "audio": {
+      "sinks": [],
+      "selectedSinkId": null
+    }
+  }
+}
+```
+
+Server patch:
+
+```json
+{
+  "type": "patch",
+  "reason": "sink-updated",
+  "sinkId": "alsa_output.example",
+  "changes": [
+    {
+      "path": "audio",
+      "value": {
+        "sinks": [],
+        "selectedSinkId": null
+      }
+    }
+  ]
+}
+```
+
+Server error:
+
+```json
+{ "type": "error", "code": "not_ready", "message": "..." }
+```
+
+WebSocket rules for this slice:
+
+- the client must send `hello` before any state is streamed
+- a successful hello returns one `fullState`
+- later sink and default-sink changes are sent as coarse-grained `patch` messages replacing the full `audio` subtree
+- `audio.selectedSinkId` is the canonical way to identify the current default output sink
+- invalid JSON, unsupported protocol versions, or unsupported client messages return an error and close the socket
 
 Use WebSocket for:
 
@@ -62,12 +119,25 @@ WebSocket should be favored whenever the client would otherwise need to poll.
 
 HTTP is the infrequent request or operational interface.
 
-Use HTTP for:
+The current checked-in endpoints are:
 
-- health or readiness checks
-- version or capability reporting
-- rare actions that do not require a persistent subscription
-- one-off snapshot reads if that proves useful during implementation
+- `GET /snapshot/audio/sinks`
+- `GET /snapshot/audio/default-sink`
+
+Runtime defaults for this slice:
+
+- bind host: `127.0.0.1`
+- bind port: `8080`
+- response content type: `application/json; charset=utf-8`
+
+Response rules for this slice:
+
+- `GET /snapshot/audio/sinks` returns the `AudioState` shape with `sinks` and `selectedSinkId`
+- `GET /snapshot/audio/default-sink` returns one sink object when a default sink exists
+- `GET /snapshot/audio/default-sink` returns `404` with `{ "ok": false, "code": "not_found", "message": "No default audio sink available." }` when no default sink exists
+- known audio snapshot endpoints return `503` with `code: "not_ready"` before the initial sink state is ready
+- non-`GET` requests to known audio snapshot endpoints return `405` and `Allow: GET`
+- unknown paths return `404`
 
 The rule is case-by-case:
 
