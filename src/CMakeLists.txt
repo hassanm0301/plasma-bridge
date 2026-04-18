@@ -1,2 +1,5 @@
 add_subdirectory(common)
 add_subdirectory(adapters)
+add_subdirectory(state)
+add_subdirectory(api)
+add_subdirectory(app)
