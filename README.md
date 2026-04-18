@@ -1,5 +1,4 @@
-# Plasma Remote Toolbar Backend
-
+# Plasma Bridge - Server
 `plasma_bridge` is a Qt 6 service for KDE Plasma that exposes desktop state to local clients.
 
 The current implementation is audio-first and read-only:
