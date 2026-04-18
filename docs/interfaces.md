@@ -6,18 +6,31 @@ This document defines the contributor-facing backend contract summary: what stat
 
 ## Canonical State Model
 
-The backend owns one canonical state model for V1:
+The backend owns one canonical audio-first state model for the first V1 slice:
 
-- `audio.defaultOutput`
-- `audio.defaultInput`
-- `windows`
-- `activeWindowId`
+- `audio.sinks`
+- `audio.selectedSinkId`
 
 ### Audio
 
-Each default audio device state should provide enough information for a toolbar to display current status without exposing a full mixer model.
+The backend should expose all KDE-visible output sinks rather than only a single default device snapshot.
+
+`audio.sinks[]` entries should provide:
+
+- `id`
+- `label`
+- `volume`
+- `muted`
+- `available`
+- `isDefault`
+- `isVirtual`
+- `backendApi`
+
+`audio.selectedSinkId` should identify the current default output sink and should be `null` when no default sink is available.
 
 ### Windows
+
+Window state is still planned, but it is not part of the first checked-in audio milestone.
 
 The `windows` collection represents individual usable windows, not grouped apps.
 
@@ -30,7 +43,7 @@ Filtering rule for V1:
 
 ## Transport Split
 
-The backend exposes both WebSocket and HTTP, but they serve different jobs.
+No checked-in HTTP or WebSocket surface exists in the current audio-first milestone. The transport split below is still the intended direction once API work starts.
 
 ### WebSocket
 

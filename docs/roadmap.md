@@ -2,7 +2,7 @@
 
 ## Product Goal
 
-Build a standalone Qt 6 backend service for KDE Plasma that runs in the user session, reads selected desktop state, and exposes that state to remote clients through a narrow API.
+Build a standalone Qt 6 backend service for KDE Plasma that runs in the user session, reads selected desktop state, and later exposes that state to remote clients through a narrow API.
 
 The backend should become useful before control features exist, so the project starts with a short feasibility phase that proves the needed Plasma state is readable and observable from a separate process.
 
@@ -16,14 +16,14 @@ The backend should become useful before control features exist, so the project s
 
 The first real product version should stay narrow:
 
-- read default output audio state
-- read default input audio state
-- read the current list of usable windows
-- read the active window
-- stream live state changes to connected clients
-- expose a small HTTP surface for infrequent operations and operational checks
+- read all KDE-visible output sinks
+- read the current selected or default output sink
+- read per-sink volume and mute state
+- observe live sink changes without polling
+- support PipeWire sessions with ALSA-backed sinks
+- defer transport and broader desktop state until after the sink probe is proven
 
-The first usable milestone after feasibility is read-only. Control features come later.
+The first usable milestone after feasibility is read-only and audio-first. Control features, windows, and public transport surfaces come later.
 
 ## Explicit Non-Goals
 
@@ -42,26 +42,27 @@ These are out of scope for the initial implementation:
 
 ### Milestone 0: Feasibility Spike
 
-Run small probes to confirm that the target Plasma session exposes the audio and window state needed for the backend. The goal of this milestone is to validate the integration path before the real service is built.
+Run small probes to confirm that the target Plasma session exposes the sink data needed for the backend. The goal of this milestone is to validate the integration path before public API work begins.
 
-### Milestone 1: Service Skeleton
+### Milestone 1: Audio-First Skeleton
 
-Build the process, transport, and state shell with fake adapters first.
-
-Success means:
-
-- the Qt service starts inside the user session
-- clients can connect through WebSocket
-- HTTP exposes operational endpoints
-- a fake snapshot can be returned without desktop integrations
-
-### Milestone 2: Read-Only Desktop State
-
-Replace fake adapters with the integrations selected during feasibility.
+Build a minimal backend skeleton and a runnable audio probe around the validated integration path.
 
 Success means:
 
-- live audio state is published
+- the project configures and builds with Qt 6 and `KF6PulseAudioQt`
+- an `audio_probe` can enumerate all KDE-visible output sinks
+- the probe can identify the selected default sink
+- the probe can print per-sink volume and mute state
+- the probe can observe live sink changes without polling
+
+### Milestone 2: Public Transport And Broader Read Model
+
+Add the first transport surface and expand beyond the audio-first probe once sink observation is stable.
+
+Success means:
+
+- live output-sink state is published
 - live usable-window state is published
 - active window changes are propagated
 - the canonical backend state remains stable through ordinary desktop changes
@@ -73,7 +74,7 @@ Add a limited set of infrequent actions only after the read model is stable.
 Expected first candidates:
 
 - set output volume
-- set input mute or output mute if supported cleanly
+- set output mute if supported cleanly
 - activate a usable window
 - close a usable window if reliability is acceptable
 
@@ -100,8 +101,8 @@ Success means:
 
 ## Acceptance Gates
 
-Do not move forward from feasibility unless the project can cleanly read audio and usable-window state on the target Plasma session.
+Do not move forward from the audio-first feasibility slice unless the project can cleanly read all KDE-visible output sinks, the default sink, and live sink updates on the target Plasma session.
 
-Do not add controls before the read-only state model is stable and transport behavior is predictable.
+Do not add transport or controls before the sink probe is stable and the read-only state model is predictable.
 
 Do not expand scope into grouped apps, media, or non-Plasma desktops until the V1 read model is complete.
