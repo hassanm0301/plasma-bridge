@@ -14,4 +14,4 @@ Documentation:
 
 - [Getting Started](docs/getting-started.md)
 - [Architecture](docs/architecture.md)
-- [API Reference](docs/api.md)
+- [API Reference](docs/api/README.md)

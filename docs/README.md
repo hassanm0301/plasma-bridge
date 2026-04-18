@@ -6,4 +6,4 @@ This folder contains the public project documentation.
 
 - [Getting Started](getting-started.md): build, run, and verify the service
 - [Architecture](architecture.md): high-level overview of the system and current scope
-- [API Reference](api.md): HTTP endpoints and WebSocket message format
+- [API Reference](api/README.md): OpenAPI, AsyncAPI, and hosted local docs

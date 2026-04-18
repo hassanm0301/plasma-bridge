@@ -24,7 +24,11 @@ class SnapshotHttpServer final : public QObject
     Q_OBJECT
 
 public:
-    explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore, QObject *parent = nullptr);
+    explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                const QString &documentationHost,
+                                quint16 documentationHttpPort,
+                                quint16 documentationWsPort,
+                                QObject *parent = nullptr);
 
     bool listen(const QHostAddress &address, quint16 port);
     QString errorString() const;
@@ -35,6 +39,12 @@ private:
     void handleNewConnection();
     void handleReadyRead(QTcpSocket *socket);
     void processRequest(QTcpSocket *socket, const QByteArray &requestData);
+    void writeByteResponse(QTcpSocket *socket,
+                           int statusCode,
+                           const QByteArray &reasonPhrase,
+                           const QByteArray &contentType,
+                           const QByteArray &body,
+                           const QList<QPair<QByteArray, QByteArray>> &extraHeaders = {});
     void writeJsonResponse(QTcpSocket *socket,
                            int statusCode,
                            const QByteArray &reasonPhrase,
@@ -48,6 +58,9 @@ private:
                                 const QList<QPair<QByteArray, QByteArray>> &extraHeaders = {});
 
     state::AudioStateStore *m_audioStateStore = nullptr;
+    QString m_documentationHost;
+    quint16 m_documentationHttpPort = 0;
+    quint16 m_documentationWsPort = 0;
     QTcpServer m_server;
     QHash<QTcpSocket *, QByteArray> m_pendingRequests;
 };

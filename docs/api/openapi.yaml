@@ -1,0 +1,197 @@
+openapi: 3.2.0
+info:
+  title: plasma_bridge HTTP API
+  version: 0.1.0
+  summary: Read-only audio snapshot endpoints for KDE Plasma output sinks.
+servers:
+  - url: http://127.0.0.1:8080
+paths:
+  /snapshot/audio/sinks:
+    get:
+      operationId: getAudioSinksSnapshot
+      summary: List audio sinks
+      description: Returns the current audio snapshot, including all KDE-visible output sinks and the current default sink id.
+      responses:
+        '200':
+          description: Current audio sink snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioState'
+              examples:
+                snapshot:
+                  value:
+                    sinks:
+                      - id: alsa_output.usb-example.analog-stereo
+                        label: USB Audio
+                        volume: 0.75
+                        muted: false
+                        available: true
+                        isDefault: true
+                        isVirtual: false
+                        backendApi: alsa
+                    selectedSinkId: alsa_output.usb-example.analog-stereo
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                methodNotAllowed:
+                  value:
+                    ok: false
+                    code: method_not_allowed
+                    message: Only GET is supported for this endpoint.
+        '503':
+          description: Initial audio state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notReady:
+                  value:
+                    ok: false
+                    code: not_ready
+                    message: Initial audio sink state is not ready yet.
+  /snapshot/audio/default-sink:
+    get:
+      operationId: getDefaultAudioSink
+      summary: Get the default audio sink
+      description: Returns the current default output sink object.
+      responses:
+        '200':
+          description: Current default sink.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioSinkState'
+              examples:
+                defaultSink:
+                  value:
+                    id: alsa_output.usb-example.analog-stereo
+                    label: USB Audio
+                    volume: 0.75
+                    muted: false
+                    available: true
+                    isDefault: true
+                    isVirtual: false
+                    backendApi: alsa
+        '404':
+          description: No default sink is currently available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
+                  value:
+                    ok: false
+                    code: not_found
+                    message: No default audio sink available.
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                methodNotAllowed:
+                  value:
+                    ok: false
+                    code: method_not_allowed
+                    message: Only GET is supported for this endpoint.
+        '503':
+          description: Initial audio state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notReady:
+                  value:
+                    ok: false
+                    code: not_ready
+                    message: Initial audio sink state is not ready yet.
+components:
+  schemas:
+    AudioSinkState:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - label
+        - volume
+        - muted
+        - available
+        - isDefault
+        - isVirtual
+        - backendApi
+      properties:
+        id:
+          type: string
+          description: Canonical sink identifier.
+        label:
+          type: string
+          description: Human-readable sink name.
+        volume:
+          type: number
+          description: Normalized sink volume.
+          minimum: 0
+        muted:
+          type: boolean
+        available:
+          type: boolean
+        isDefault:
+          type: boolean
+        isVirtual:
+          type: boolean
+        backendApi:
+          type:
+            - string
+            - 'null'
+          description: Backend API reported by the sink, such as `alsa`.
+    AudioState:
+      type: object
+      additionalProperties: false
+      required:
+        - sinks
+        - selectedSinkId
+      properties:
+        sinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AudioSinkState'
+        selectedSinkId:
+          type:
+            - string
+            - 'null'
+          description: Identifier of the current default output sink.
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - ok
+        - code
+        - message
+      properties:
+        ok:
+          type: boolean
+          const: false
+        code:
+          type: string
+        message:
+          type: string

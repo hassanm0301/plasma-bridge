@@ -16,6 +16,8 @@ cmake -S . -B build -G Ninja
 cmake --build build --target plasma_bridge
 ```
 
+The first build downloads the pinned Swagger UI and AsyncAPI browser assets into the build tree. Later builds reuse that local cache.
+
 The optional audio probe can be built from the same tree:
 
 ```bash
@@ -63,6 +65,14 @@ curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
 ```
 
+Hosted docs and runtime-served specs:
+
+- `http://127.0.0.1:8080/docs/`
+- `http://127.0.0.1:8080/docs/http`
+- `http://127.0.0.1:8080/docs/ws`
+- `http://127.0.0.1:8080/docs/openapi.yaml`
+- `http://127.0.0.1:8080/docs/asyncapi.yaml`
+
 For WebSocket monitoring, connect to `ws://127.0.0.1:8081` and send:
 
 ```json
@@ -70,3 +80,8 @@ For WebSocket monitoring, connect to `ws://127.0.0.1:8081` and send:
 ```
 
 You should receive one `fullState` message followed by `patch` messages as sink state changes.
+
+Repo API specs:
+
+- [OpenAPI](api/openapi.yaml)
+- [AsyncAPI](api/asyncapi.yaml)

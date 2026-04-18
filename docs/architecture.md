@@ -27,6 +27,9 @@ The runtime has four main parts:
 
 Both transports use the same underlying state so HTTP snapshots and WebSocket updates stay aligned.
 
+The HTTP listener also serves local API documentation pages and runtime-adjusted OpenAPI and AsyncAPI documents under `/docs/`.
+The checked-in API specs remain the source of truth, while the interactive Swagger UI and AsyncAPI viewer assets are downloaded at build time into the build tree and then served locally by the app.
+
 ## Platform Assumptions
 
 The current build targets KDE Plasma on Linux and reads audio state from the Plasma session's audio stack. By default, the service binds only to localhost.
@@ -39,6 +42,7 @@ The current defaults are:
 - WebSocket on `127.0.0.1:8081`
 - read-only API behavior
 - localhost binding unless the operator explicitly changes it
+- hosted docs on the HTTP listener under `/docs/`
 
 ## Not Yet Included
 

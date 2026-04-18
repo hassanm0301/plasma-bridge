@@ -1,7 +1,38 @@
+set(DOCS_ASSETS_STAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/docs_assets")
+set(GENERATED_DOCS_QRC "${CMAKE_CURRENT_BINARY_DIR}/docs_resources.qrc")
+set(DOCS_ASSETS_STAMP "${DOCS_ASSETS_STAGE_DIR}/.prepared.stamp")
+
+add_custom_command(
+    OUTPUT
+        "${GENERATED_DOCS_QRC}"
+        "${DOCS_ASSETS_STAMP}"
+    COMMAND
+        "${CMAKE_COMMAND}"
+        -DPROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+        -DDOCS_STAGE_DIR=${DOCS_ASSETS_STAGE_DIR}
+        -DGENERATED_QRC=${GENERATED_DOCS_QRC}
+        -DSTAMP_FILE=${DOCS_ASSETS_STAMP}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/prepare_docs_assets.cmake"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/prepare_docs_assets.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/docs_assets/index.html"
+        "${CMAKE_CURRENT_SOURCE_DIR}/docs_assets/http.html"
+        "${CMAKE_CURRENT_SOURCE_DIR}/docs_assets/ws.html"
+        "${PROJECT_SOURCE_DIR}/docs/api/openapi.yaml"
+        "${PROJECT_SOURCE_DIR}/docs/api/asyncapi.yaml"
+    VERBATIM
+)
+
+set_source_files_properties("${GENERATED_DOCS_QRC}" PROPERTIES GENERATED TRUE)
+
 add_library(plasma_bridge_api STATIC
     audio_websocket_server.cpp
     snapshot_http_server.cpp
+    "${GENERATED_DOCS_QRC}"
 )
+
+set_target_properties(plasma_bridge_api PROPERTIES AUTORCC ON)
 
 target_include_directories(plasma_bridge_api
     PUBLIC

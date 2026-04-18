@@ -38,6 +38,8 @@ bool parseHostAddress(const QString &value, QHostAddress *outAddress)
 
 int main(int argc, char *argv[])
 {
+    Q_INIT_RESOURCE(docs_resources);
+
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("plasma_bridge"));
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
@@ -94,7 +96,10 @@ int main(int argc, char *argv[])
     plasma_bridge::state::AudioStateStore audioStateStore;
     audioStateStore.attachObserver(&observer);
 
-    plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore);
+    plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore,
+                                                      parser.value(hostOption),
+                                                      port,
+                                                      wsPort);
     if (!httpServer.listen(bindAddress, port)) {
         QTextStream error(stderr);
         error << "Failed to listen on " << parser.value(hostOption) << ':' << port << ": "

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>plasma_bridge WebSocket API</title>
+  <link rel="stylesheet" href="/docs/assets/asyncapi/default.min.css">
+  <style>
+    body {
+      margin: 0;
+      background: #ffffff;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      background: #111827;
+      color: #f9fafb;
+    }
+    .topbar a {
+      color: #93c5fd;
+      text-decoration: none;
+    }
+    #asyncapi {
+      min-height: 100vh;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div>plasma_bridge WebSocket API</div>
+    <a href="/docs/">All docs</a>
+  </div>
+  <div id="asyncapi"></div>
+  <script src="/docs/assets/asyncapi/asyncapi-standalone.js"></script>
+  <script>
+    AsyncApiStandalone.render(
+      {
+        schema: { url: "/docs/asyncapi.yaml" },
+        config: {
+          schemaID: "asyncapi",
+          show: {
+            sidebar: true,
+            info: true,
+            servers: true,
+            operations: true,
+            messages: true,
+            schemas: true,
+            errors: true
+          }
+        }
+      },
+      document.getElementById("asyncapi")
+    );
+  </script>
+</body>
+</html>
