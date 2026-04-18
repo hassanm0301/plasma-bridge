@@ -1,12 +1,17 @@
 # Plasma Remote Toolbar Backend
 
-This repository currently defines the contributor-facing plan for a KDE Plasma remote toolbar backend service.
+`plasma_bridge` is a Qt 6 service for KDE Plasma that exposes desktop state to local clients.
 
-Start in [docs/README.md](docs/README.md).
+The current implementation is audio-first and read-only:
 
-Recommended reading order:
+- list all KDE-visible output sinks
+- report the current default output sink
+- report per-sink volume and mute state
+- serve audio snapshots over HTTP
+- publish live audio updates over WebSocket
 
-1. [Roadmap](docs/roadmap.md)
-2. [Architecture](docs/architecture.md)
-3. [Interfaces](docs/interfaces.md)
-4. [Foundation Decisions](docs/decisions/0001-foundation.md)
+Documentation:
+
+- [Getting Started](docs/getting-started.md)
+- [Architecture](docs/architecture.md)
+- [API Reference](docs/api.md)
