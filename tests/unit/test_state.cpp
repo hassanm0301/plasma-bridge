@@ -12,7 +12,10 @@ private slots:
     void updateAudioStateTransitionsReadinessAndSignals();
     void defaultSinkPrefersSelectedSinkId();
     void defaultSinkFallsBackToIsDefault();
+    void defaultSourcePrefersSelectedSourceId();
+    void defaultSourceFallsBackToIsDefault();
     void defaultSinkRequiresReadyState();
+    void defaultSourceRequiresReadyState();
 };
 
 void AudioStateStoreTest::updateAudioStateTransitionsReadinessAndSignals()
@@ -30,7 +33,7 @@ void AudioStateStoreTest::updateAudioStateTransitionsReadinessAndSignals()
     QCOMPARE(stateSpy.takeFirst().at(0).toString(), QStringLiteral("initial"));
 
     const plasma_bridge::AudioState updatedState = plasma_bridge::tests::alternateAudioState();
-    store.updateAudioState(updatedState, true, QStringLiteral("sink-updated"), updatedState.selectedSinkId);
+    store.updateAudioState(updatedState, true, QStringLiteral("sink-updated"), updatedState.selectedSinkId, QString());
 
     QCOMPARE(store.isReady(), true);
     QCOMPARE(readySpy.count(), 1);
@@ -39,7 +42,9 @@ void AudioStateStoreTest::updateAudioStateTransitionsReadinessAndSignals()
     const QList<QVariant> stateArgs = stateSpy.takeFirst();
     QCOMPARE(stateArgs.at(0).toString(), QStringLiteral("sink-updated"));
     QCOMPARE(stateArgs.at(1).toString(), updatedState.selectedSinkId);
+    QCOMPARE(stateArgs.at(2).toString(), QString());
     QCOMPARE(store.audioState().selectedSinkId, updatedState.selectedSinkId);
+    QCOMPARE(store.audioState().selectedSourceId, updatedState.selectedSourceId);
 }
 
 void AudioStateStoreTest::defaultSinkPrefersSelectedSinkId()
@@ -70,11 +75,46 @@ void AudioStateStoreTest::defaultSinkFallsBackToIsDefault()
     QCOMPARE(defaultSink->id, state.sinks[0].id);
 }
 
+void AudioStateStoreTest::defaultSourcePrefersSelectedSourceId()
+{
+    plasma_bridge::state::AudioStateStore store;
+    plasma_bridge::AudioState state = plasma_bridge::tests::sampleAudioState();
+    state.sources[0].isDefault = false;
+    state.sources[1].isDefault = true;
+    state.selectedSourceId = state.sources[0].id;
+    store.updateAudioState(state, true, QStringLiteral("initial"));
+
+    const std::optional<plasma_bridge::AudioSourceState> defaultSource = store.defaultSource();
+
+    QVERIFY(defaultSource.has_value());
+    QCOMPARE(defaultSource->id, state.sources[0].id);
+}
+
+void AudioStateStoreTest::defaultSourceFallsBackToIsDefault()
+{
+    plasma_bridge::state::AudioStateStore store;
+    plasma_bridge::AudioState state = plasma_bridge::tests::sampleAudioState();
+    state.selectedSourceId.clear();
+    store.updateAudioState(state, true, QStringLiteral("initial"));
+
+    const std::optional<plasma_bridge::AudioSourceState> defaultSource = store.defaultSource();
+
+    QVERIFY(defaultSource.has_value());
+    QCOMPARE(defaultSource->id, state.sources[0].id);
+}
+
 void AudioStateStoreTest::defaultSinkRequiresReadyState()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), false, QStringLiteral("initial"));
     QVERIFY(!store.defaultSink().has_value());
+}
+
+void AudioStateStoreTest::defaultSourceRequiresReadyState()
+{
+    plasma_bridge::state::AudioStateStore store;
+    store.updateAudioState(plasma_bridge::tests::sampleAudioState(), false, QStringLiteral("initial"));
+    QVERIFY(!store.defaultSource().has_value());
 }
 
 QTEST_GUILESS_MAIN(AudioStateStoreTest)

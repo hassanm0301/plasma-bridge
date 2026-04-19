@@ -40,9 +40,9 @@ private:
     void handleNewConnection();
     void handleTextMessage(QWebSocket *socket, const QString &message);
     void handleBinaryMessage(QWebSocket *socket);
-    void handleStateChanged(const QString &reason, const QString &sinkId);
+    void handleStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId);
     void sendFullState(QWebSocket *socket);
-    void sendPatch(QWebSocket *socket, const QString &reason, const QString &sinkId);
+    void sendPatch(QWebSocket *socket, const QString &reason, const QString &sinkId, const QString &sourceId);
     void sendError(QWebSocket *socket, const QString &code, const QString &message, bool closeAfter);
 
     state::AudioStateStore *m_audioStateStore = nullptr;

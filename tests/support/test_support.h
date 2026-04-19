@@ -32,7 +32,10 @@ public:
 
     void setState(const AudioState &state, bool ready);
     void emitInitialStateReady(const AudioState &state);
-    void emitAudioStateChanged(const QString &reason, const QString &sinkId, const AudioState &state);
+    void emitAudioStateChanged(const QString &reason,
+                               const QString &sinkId,
+                               const QString &sourceId,
+                               const AudioState &state);
     void emitConnectionFailure(const QString &message);
     int startCount() const;
 

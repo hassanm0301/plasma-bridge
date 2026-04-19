@@ -2,7 +2,7 @@ openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
   version: 0.1.0
-  summary: Audio snapshot and volume-control endpoints for KDE Plasma output sinks.
+  summary: Audio snapshot endpoints plus sink volume-control endpoints for KDE Plasma.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -10,14 +10,14 @@ paths:
     get:
       operationId: getAudioSinksSnapshot
       summary: List audio sinks
-      description: Returns the current audio snapshot, including all KDE-visible output sinks and the current default sink id.
+      description: Returns the current output-device snapshot, including all KDE-visible output sinks and the selected default sink id.
       responses:
         '200':
           description: Current audio sink snapshot.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AudioState'
+                $ref: '#/components/schemas/AudioOutputState'
               examples:
                 snapshot:
                   value:
@@ -60,7 +60,7 @@ paths:
                   value:
                     ok: false
                     code: not_ready
-                    message: Initial audio sink state is not ready yet.
+                    message: Initial audio state is not ready yet.
   /snapshot/audio/default-sink:
     get:
       operationId: getDefaultAudioSink
@@ -72,7 +72,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AudioSinkState'
+                $ref: '#/components/schemas/AudioDeviceState'
               examples:
                 defaultSink:
                   value:
@@ -108,30 +108,113 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                methodNotAllowed:
-                  value:
-                    ok: false
-                    code: method_not_allowed
-                    message: Only GET is supported for this endpoint.
         '503':
           description: Initial audio state is not ready yet.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /snapshot/audio/sources:
+    get:
+      operationId: getAudioSourcesSnapshot
+      summary: List audio sources
+      description: Returns the current input-device snapshot, including KDE-visible capture sources and the selected default source id.
+      responses:
+        '200':
+          description: Current audio source snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioInputState'
               examples:
-                notReady:
+                snapshot:
+                  value:
+                    sources:
+                      - id: alsa_input.usb-example.analog-stereo
+                        label: USB Microphone
+                        volume: 0.64
+                        muted: false
+                        available: true
+                        isDefault: true
+                        isVirtual: false
+                        backendApi: alsa
+                    selectedSourceId: alsa_input.usb-example.analog-stereo
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Initial audio state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /snapshot/audio/default-source:
+    get:
+      operationId: getDefaultAudioSource
+      summary: Get the default audio source
+      description: Returns the current default input source object.
+      responses:
+        '200':
+          description: Current default source.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioDeviceState'
+              examples:
+                defaultSource:
+                  value:
+                    id: alsa_input.usb-example.analog-stereo
+                    label: USB Microphone
+                    volume: 0.64
+                    muted: false
+                    available: true
+                    isDefault: true
+                    isVirtual: false
+                    backendApi: alsa
+        '404':
+          description: No default source is currently available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                notFound:
                   value:
                     ok: false
-                    code: not_ready
-                    message: Initial audio sink state is not ready yet.
+                    code: not_found
+                    message: No default audio source available.
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Initial audio state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /control/audio/sinks/{sinkId}/volume:
     post:
       operationId: setAudioSinkVolume
       summary: Set sink volume
-      description: >
-        Sets the target normalized sink volume. The controller preserves current behavior by clamping the applied target to the `[0.0, 1.0]` range.
+      description: Sets the target normalized sink volume. The controller preserves current behavior by clamping the applied target to the `[0.0, 1.0]` range.
       parameters:
         - $ref: '#/components/parameters/SinkId'
       requestBody:
@@ -151,14 +234,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VolumeChangeResult'
-              examples:
-                accepted:
-                  value:
-                    status: accepted
-                    sinkId: alsa_output.usb-example.analog-stereo
-                    requestedValue: 0.55
-                    targetValue: 0.55
-                    previousValue: 0.41
         '400':
           description: Invalid controller value response, malformed JSON body, missing `value`, or other bad request error.
           content:
@@ -186,14 +261,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VolumeChangeResult'
-              examples:
-                sinkNotFound:
-                  value:
-                    status: sink_not_found
-                    sinkId: missing-sink
-                    requestedValue: 0.55
-                    targetValue: null
-                    previousValue: null
         '405':
           description: Method not allowed.
           headers:
@@ -206,58 +273,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                methodNotAllowed:
-                  value:
-                    ok: false
-                    code: method_not_allowed
-                    message: Only POST is supported for this endpoint.
         '409':
           description: Sink exists but cannot be written to.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VolumeChangeResult'
-              examples:
-                sinkNotWritable:
-                  value:
-                    status: sink_not_writable
-                    sinkId: bluez_output.headset.1
-                    requestedValue: 0.55
-                    targetValue: null
-                    previousValue: 0.35
         '415':
           description: Request body content type is not supported for control endpoints.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                unsupportedMediaType:
-                  value:
-                    ok: false
-                    code: unsupported_media_type
-                    message: Content-Type must be application/json.
         '503':
           description: Volume control is not ready yet.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/VolumeChangeResult'
-              examples:
-                notReady:
-                  value:
-                    status: not_ready
-                    sinkId: alsa_output.usb-example.analog-stereo
-                    requestedValue: 0.55
-                    targetValue: null
-                    previousValue: 0.75
   /control/audio/sinks/{sinkId}/volume/increment:
     post:
       operationId: incrementAudioSinkVolume
       summary: Increment sink volume
-      description: >
-        Increases the normalized sink volume by a non-negative delta. The controller preserves current behavior by clamping the resulting target to the `[0.0, 1.0]` range.
+      description: Increases the normalized sink volume by a non-negative delta. The controller preserves current behavior by clamping the resulting target to the `[0.0, 1.0]` range.
       parameters:
         - $ref: '#/components/parameters/SinkId'
       requestBody:
@@ -269,7 +307,7 @@ paths:
             examples:
               incrementVolume:
                 value:
-                  value: 0.1
+                  value: 0.10
       responses:
         '200':
           description: Volume increment request accepted.
@@ -277,14 +315,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VolumeChangeResult'
-              examples:
-                accepted:
-                  value:
-                    status: accepted
-                    sinkId: alsa_output.usb-example.analog-stereo
-                    requestedValue: 0.1
-                    targetValue: 0.85
-                    previousValue: 0.75
         '400':
           description: Invalid controller value response, malformed JSON body, missing `value`, or other bad request error.
           content:
@@ -293,19 +323,6 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/VolumeChangeResult'
                   - $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                invalidValue:
-                  value:
-                    status: invalid_value
-                    sinkId: alsa_output.usb-example.analog-stereo
-                    requestedValue: -0.1
-                    targetValue: null
-                    previousValue: 0.75
-                badRequest:
-                  value:
-                    ok: false
-                    code: bad_request
-                    message: Request body must be valid JSON.
         '404':
           description: Requested sink was not found.
           content:
@@ -346,8 +363,7 @@ paths:
     post:
       operationId: decrementAudioSinkVolume
       summary: Decrement sink volume
-      description: >
-        Decreases the normalized sink volume by a non-negative delta. The controller preserves current behavior by clamping the resulting target to the `[0.0, 1.0]` range.
+      description: Decreases the normalized sink volume by a non-negative delta. The controller preserves current behavior by clamping the resulting target to the `[0.0, 1.0]` range.
       parameters:
         - $ref: '#/components/parameters/SinkId'
       requestBody:
@@ -367,14 +383,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VolumeChangeResult'
-              examples:
-                accepted:
-                  value:
-                    status: accepted
-                    sinkId: bluez_output.headset.1
-                    requestedValue: 0.15
-                    targetValue: 0.2
-                    previousValue: 0.35
         '400':
           description: Invalid controller value response, malformed JSON body, missing `value`, or other bad request error.
           content:
@@ -383,19 +391,6 @@ paths:
                 oneOf:
                   - $ref: '#/components/schemas/VolumeChangeResult'
                   - $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                invalidValue:
-                  value:
-                    status: invalid_value
-                    sinkId: bluez_output.headset.1
-                    requestedValue: -0.15
-                    targetValue: null
-                    previousValue: 0.35
-                badRequest:
-                  value:
-                    ok: false
-                    code: bad_request
-                    message: Request body is required.
         '404':
           description: Requested sink was not found.
           content:
@@ -442,7 +437,7 @@ components:
       schema:
         type: string
   schemas:
-    AudioSinkState:
+    AudioDeviceState:
       type: object
       additionalProperties: false
       required:
@@ -457,13 +452,13 @@ components:
       properties:
         id:
           type: string
-          description: Canonical sink identifier.
+          description: Canonical device identifier.
         label:
           type: string
-          description: Human-readable sink name.
+          description: Human-readable device name.
         volume:
           type: number
-          description: Normalized sink volume.
+          description: Normalized device volume.
           minimum: 0
         muted:
           type: boolean
@@ -477,8 +472,8 @@ components:
           type:
             - string
             - 'null'
-          description: Backend API reported by the sink, such as `alsa`.
-    AudioState:
+          description: Backend API reported by the device, such as `alsa`.
+    AudioOutputState:
       type: object
       additionalProperties: false
       required:
@@ -488,12 +483,53 @@ components:
         sinks:
           type: array
           items:
-            $ref: '#/components/schemas/AudioSinkState'
+            $ref: '#/components/schemas/AudioDeviceState'
         selectedSinkId:
           type:
             - string
             - 'null'
           description: Identifier of the current default output sink.
+    AudioInputState:
+      type: object
+      additionalProperties: false
+      required:
+        - sources
+        - selectedSourceId
+      properties:
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AudioDeviceState'
+        selectedSourceId:
+          type:
+            - string
+            - 'null'
+          description: Identifier of the current default input source.
+    AudioState:
+      type: object
+      additionalProperties: false
+      required:
+        - sinks
+        - selectedSinkId
+        - sources
+        - selectedSourceId
+      properties:
+        sinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AudioDeviceState'
+        selectedSinkId:
+          type:
+            - string
+            - 'null'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AudioDeviceState'
+        selectedSourceId:
+          type:
+            - string
+            - 'null'
     VolumeValueRequest:
       type: object
       additionalProperties: false
@@ -502,9 +538,7 @@ components:
       properties:
         value:
           type: number
-          description: >
-            Normalized volume value. For `/volume` requests this is the target level.
-            For `/volume/increment` and `/volume/decrement` requests this is the requested delta.
+          description: Normalized volume value. For `/volume` requests this is the target level. For `/volume/increment` and `/volume/decrement` requests this is the requested delta.
     VolumeChangeResult:
       type: object
       additionalProperties: false

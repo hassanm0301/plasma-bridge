@@ -48,7 +48,10 @@ QJsonObject buildFullStateMessage(const plasma_bridge::AudioState &state)
     return message;
 }
 
-QJsonObject buildPatchMessage(const QString &reason, const QString &sinkId, const plasma_bridge::AudioState &state)
+QJsonObject buildPatchMessage(const QString &reason,
+                              const QString &sinkId,
+                              const QString &sourceId,
+                              const plasma_bridge::AudioState &state)
 {
     QJsonObject change;
     change[QStringLiteral("path")] = QStringLiteral("audio");
@@ -61,6 +64,7 @@ QJsonObject buildPatchMessage(const QString &reason, const QString &sinkId, cons
     message[QStringLiteral("type")] = QStringLiteral("patch");
     message[QStringLiteral("reason")] = stringOrNull(reason);
     message[QStringLiteral("sinkId")] = stringOrNull(sinkId);
+    message[QStringLiteral("sourceId")] = stringOrNull(sourceId);
     message[QStringLiteral("changes")] = changes;
     return message;
 }
@@ -188,7 +192,7 @@ void AudioWebSocketServer::handleTextMessage(QWebSocket *socket, const QString &
     if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
         sendError(socket,
                   QStringLiteral("not_ready"),
-                  QStringLiteral("Initial audio sink state is not ready yet."),
+                  QStringLiteral("Initial audio state is not ready yet."),
                   false);
         return;
     }
@@ -208,7 +212,7 @@ void AudioWebSocketServer::handleBinaryMessage(QWebSocket *socket)
               true);
 }
 
-void AudioWebSocketServer::handleStateChanged(const QString &reason, const QString &sinkId)
+void AudioWebSocketServer::handleStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId)
 {
     if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
         return;
@@ -227,7 +231,7 @@ void AudioWebSocketServer::handleStateChanged(const QString &reason, const QStri
             continue;
         }
 
-        sendPatch(socket, reason, sinkId);
+        sendPatch(socket, reason, sinkId, sourceId);
     }
 }
 
@@ -241,13 +245,16 @@ void AudioWebSocketServer::sendFullState(QWebSocket *socket)
     m_clients[socket].fullStateSent = true;
 }
 
-void AudioWebSocketServer::sendPatch(QWebSocket *socket, const QString &reason, const QString &sinkId)
+void AudioWebSocketServer::sendPatch(QWebSocket *socket,
+                                     const QString &reason,
+                                     const QString &sinkId,
+                                     const QString &sourceId)
 {
     if (socket == nullptr || !m_clients.contains(socket) || m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
         return;
     }
 
-    socket->sendTextMessage(QJsonDocument(buildPatchMessage(reason, sinkId, m_audioStateStore->audioState()))
+    socket->sendTextMessage(QJsonDocument(buildPatchMessage(reason, sinkId, sourceId, m_audioStateStore->audioState()))
                                 .toJson(QJsonDocument::Compact));
 }
 

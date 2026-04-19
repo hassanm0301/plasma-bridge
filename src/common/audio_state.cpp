@@ -27,23 +27,58 @@ QString formatVolume(double normalizedVolume)
              QString::number(normalizedVolume * 100.0, 'f', 1));
 }
 
+void appendDevices(QTextStream &stream,
+                   const QString &title,
+                   const QList<plasma_bridge::AudioDeviceState> &devices)
+{
+    stream << title << " Count: " << devices.size() << '\n';
+
+    for (const plasma_bridge::AudioDeviceState &device : devices) {
+        stream << '\n';
+        stream << (device.isDefault ? "* " : "  ") << device.label << '\n';
+        stream << "  id: " << device.id << '\n';
+        stream << "  volume: " << formatVolume(device.volume) << '\n';
+        stream << "  muted: " << boolText(device.muted) << '\n';
+        stream << "  available: " << boolText(device.available) << '\n';
+        stream << "  virtual: " << boolText(device.isVirtual) << '\n';
+        stream << "  backendApi: "
+               << (device.backendApi.isEmpty() ? QStringLiteral("(none)") : device.backendApi) << '\n';
+    }
+}
+
 } // namespace
 
-QJsonObject toJsonObject(const AudioSinkState &sink)
+AudioOutputState toAudioOutputState(const AudioState &state)
+{
+    AudioOutputState outputState;
+    outputState.sinks = state.sinks;
+    outputState.selectedSinkId = state.selectedSinkId;
+    return outputState;
+}
+
+AudioInputState toAudioInputState(const AudioState &state)
+{
+    AudioInputState inputState;
+    inputState.sources = state.sources;
+    inputState.selectedSourceId = state.selectedSourceId;
+    return inputState;
+}
+
+QJsonObject toJsonObject(const AudioDeviceState &device)
 {
     QJsonObject json;
-    json[QStringLiteral("id")] = sink.id;
-    json[QStringLiteral("label")] = sink.label;
-    json[QStringLiteral("volume")] = sink.volume;
-    json[QStringLiteral("muted")] = sink.muted;
-    json[QStringLiteral("available")] = sink.available;
-    json[QStringLiteral("isDefault")] = sink.isDefault;
-    json[QStringLiteral("isVirtual")] = sink.isVirtual;
-    json[QStringLiteral("backendApi")] = stringOrNull(sink.backendApi);
+    json[QStringLiteral("id")] = device.id;
+    json[QStringLiteral("label")] = device.label;
+    json[QStringLiteral("volume")] = device.volume;
+    json[QStringLiteral("muted")] = device.muted;
+    json[QStringLiteral("available")] = device.available;
+    json[QStringLiteral("isDefault")] = device.isDefault;
+    json[QStringLiteral("isVirtual")] = device.isVirtual;
+    json[QStringLiteral("backendApi")] = stringOrNull(device.backendApi);
     return json;
 }
 
-QJsonObject toJsonObject(const AudioState &state)
+QJsonObject toJsonObject(const AudioOutputState &state)
 {
     QJsonArray sinks;
     for (const AudioSinkState &sink : state.sinks) {
@@ -56,17 +91,45 @@ QJsonObject toJsonObject(const AudioState &state)
     return json;
 }
 
-QJsonObject toJsonEventObject(const QString &reason, const QString &sinkId, const AudioState &state)
+QJsonObject toJsonObject(const AudioInputState &state)
+{
+    QJsonArray sources;
+    for (const AudioSourceState &source : state.sources) {
+        sources.append(toJsonObject(source));
+    }
+
+    QJsonObject json;
+    json[QStringLiteral("sources")] = sources;
+    json[QStringLiteral("selectedSourceId")] = stringOrNull(state.selectedSourceId);
+    return json;
+}
+
+QJsonObject toJsonObject(const AudioState &state)
+{
+    QJsonObject json = toJsonObject(toAudioOutputState(state));
+    json[QStringLiteral("sources")] = toJsonObject(toAudioInputState(state)).value(QStringLiteral("sources"));
+    json[QStringLiteral("selectedSourceId")] = stringOrNull(state.selectedSourceId);
+    return json;
+}
+
+QJsonObject toJsonEventObject(const QString &reason,
+                              const QString &sinkId,
+                              const QString &sourceId,
+                              const AudioState &state)
 {
     QJsonObject json;
     json[QStringLiteral("event")] = QStringLiteral("audioState");
     json[QStringLiteral("reason")] = reason;
     json[QStringLiteral("sinkId")] = stringOrNull(sinkId);
+    json[QStringLiteral("sourceId")] = stringOrNull(sourceId);
     json[QStringLiteral("state")] = toJsonObject(state);
     return json;
 }
 
-QString formatHumanReadableEvent(const QString &reason, const QString &sinkId, const AudioState &state)
+QString formatHumanReadableEvent(const QString &reason,
+                                 const QString &sinkId,
+                                 const QString &sourceId,
+                                 const AudioState &state)
 {
     QString output;
     QTextStream stream(&output);
@@ -74,21 +137,15 @@ QString formatHumanReadableEvent(const QString &reason, const QString &sinkId, c
     stream << "Event: audioState\n";
     stream << "Reason: " << reason << '\n';
     stream << "Sink: " << (sinkId.isEmpty() ? QStringLiteral("(none)") : sinkId) << '\n';
+    stream << "Source: " << (sourceId.isEmpty() ? QStringLiteral("(none)") : sourceId) << '\n';
     stream << "Selected Sink: "
            << (state.selectedSinkId.isEmpty() ? QStringLiteral("(none)") : state.selectedSinkId) << '\n';
-    stream << "Sink Count: " << state.sinks.size() << '\n';
+    stream << "Selected Source: "
+           << (state.selectedSourceId.isEmpty() ? QStringLiteral("(none)") : state.selectedSourceId) << '\n';
 
-    for (const AudioSinkState &sink : state.sinks) {
-        stream << '\n';
-        stream << (sink.isDefault ? "* " : "  ") << sink.label << '\n';
-        stream << "  id: " << sink.id << '\n';
-        stream << "  volume: " << formatVolume(sink.volume) << '\n';
-        stream << "  muted: " << boolText(sink.muted) << '\n';
-        stream << "  available: " << boolText(sink.available) << '\n';
-        stream << "  virtual: " << boolText(sink.isVirtual) << '\n';
-        stream << "  backendApi: "
-               << (sink.backendApi.isEmpty() ? QStringLiteral("(none)") : sink.backendApi) << '\n';
-    }
+    appendDevices(stream, QStringLiteral("Sink"), state.sinks);
+    stream << '\n';
+    appendDevices(stream, QStringLiteral("Source"), state.sources);
 
     return output;
 }

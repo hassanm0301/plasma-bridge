@@ -1,4 +1,4 @@
-#include "adapters/audio/pulse_audio_sink_observer.h"
+#include "adapters/audio/pulse_audio_state_observer.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
 #include "api/audio_websocket_server.h"
 #include "api/snapshot_http_server.h"
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Serve audio sink state over HTTP and WebSocket."));
+    parser.setApplicationDescription(QStringLiteral("Serve audio sink and source state over HTTP and WebSocket."));
     parser.addHelpOption();
     parser.addVersionOption();
 
@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 
     PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.plasma_bridge"));
 
-    plasma_bridge::audio::PulseAudioSinkObserver observer;
+    plasma_bridge::audio::PulseAudioStateObserver observer;
     plasma_bridge::audio::PulseAudioVolumeController volumeController;
     plasma_bridge::state::AudioStateStore audioStateStore;
     audioStateStore.attachObserver(&observer);
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    QObject::connect(&observer, &plasma_bridge::audio::PulseAudioSinkObserver::connectionFailed, &app, [](const QString &message) {
+    QObject::connect(&observer, &plasma_bridge::audio::PulseAudioStateObserver::connectionFailed, &app, [](const QString &message) {
         QTextStream error(stderr);
         error << message << Qt::endl;
     });

@@ -11,17 +11,18 @@ namespace PulseAudioQt
 class Context;
 class Server;
 class Sink;
+class Source;
 }
 
 namespace plasma_bridge::audio
 {
 
-class PulseAudioSinkObserver final : public QObject
+class PulseAudioStateObserver final : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit PulseAudioSinkObserver(QObject *parent = nullptr);
+    explicit PulseAudioStateObserver(QObject *parent = nullptr);
 
     void start();
 
@@ -32,20 +33,21 @@ public:
 
 signals:
     void initialStateReady();
-    void audioStateChanged(const QString &reason, const QString &sinkId);
+    void audioStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId);
     void connectionFailed(const QString &message);
 
 private:
     void attachSink(PulseAudioQt::Sink *sink);
+    void attachSource(PulseAudioQt::Source *source);
     void scheduleInitialPublish();
-    void refreshAndEmit(const QString &reason, const QString &sinkId = {});
+    void refreshAndEmit(const QString &reason, const QString &sinkId = {}, const QString &sourceId = {});
     plasma_bridge::AudioState buildState() const;
     void handleContextStateChanged();
 
     PulseAudioQt::Context *m_context = nullptr;
     PulseAudioQt::Server *m_server = nullptr;
     plasma_bridge::AudioState m_state;
-    QSet<const QObject *> m_attachedSinks;
+    QSet<const QObject *> m_attachedDevices;
     QTimer m_initialPublishTimer;
     bool m_started = false;
     bool m_initialStatePublished = false;

@@ -1,6 +1,6 @@
 #include "tools/probes/audio_probe/audio_probe_runner.h"
 
-#include "adapters/audio/pulse_audio_sink_observer.h"
+#include "adapters/audio/pulse_audio_state_observer.h"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -19,12 +19,12 @@ public:
     explicit Impl(PulseAudioProbeSource *owner)
         : QObject(owner)
     {
-        connect(&m_observer, &audio::PulseAudioSinkObserver::initialStateReady, owner, &AudioProbeSource::initialStateReady);
-        connect(&m_observer, &audio::PulseAudioSinkObserver::audioStateChanged, owner, &AudioProbeSource::audioStateChanged);
-        connect(&m_observer, &audio::PulseAudioSinkObserver::connectionFailed, owner, &AudioProbeSource::connectionFailed);
+        connect(&m_observer, &audio::PulseAudioStateObserver::initialStateReady, owner, &AudioProbeSource::initialStateReady);
+        connect(&m_observer, &audio::PulseAudioStateObserver::audioStateChanged, owner, &AudioProbeSource::audioStateChanged);
+        connect(&m_observer, &audio::PulseAudioStateObserver::connectionFailed, owner, &AudioProbeSource::connectionFailed);
     }
 
-    audio::PulseAudioSinkObserver m_observer;
+    audio::PulseAudioStateObserver m_observer;
 };
 
 PulseAudioProbeSource::PulseAudioProbeSource(QObject *parent)
@@ -67,7 +67,7 @@ AudioProbeRunner::AudioProbeRunner(AudioProbeSource *source,
     connect(m_startupTimer, &QTimer::timeout, this, [this]() {
         if (m_source != nullptr && !m_source->hasInitialState()) {
             if (m_error != nullptr) {
-                *m_error << "Timed out waiting for PulseAudioQt sink state." << Qt::endl;
+                *m_error << "Timed out waiting for PulseAudioQt audio state." << Qt::endl;
             }
             finish(1);
         }
@@ -90,12 +90,15 @@ AudioProbeRunner::AudioProbeRunner(AudioProbeSource *source,
         publishInitialState();
     });
 
-    connect(m_source, &AudioProbeSource::audioStateChanged, this, [this](const QString &reason, const QString &sinkId) {
+    connect(m_source,
+            &AudioProbeSource::audioStateChanged,
+            this,
+            [this](const QString &reason, const QString &sinkId, const QString &sourceId) {
         if (!m_options.watchMode || m_source == nullptr) {
             return;
         }
 
-        printEvent(reason, sinkId, m_options.jsonOutput);
+        printEvent(reason, sinkId, sourceId, m_options.jsonOutput);
     });
 }
 
@@ -138,25 +141,28 @@ void AudioProbeRunner::publishInitialState()
 
     m_initialStatePublished = true;
     m_startupTimer->stop();
-    printEvent(QStringLiteral("initial"), QString(), m_options.watchMode);
+    printEvent(QStringLiteral("initial"), QString(), QString(), m_options.watchMode);
 
     if (!m_options.watchMode) {
         finish(0);
     }
 }
 
-void AudioProbeRunner::printEvent(const QString &reason, const QString &sinkId, const bool compactOutput) const
+void AudioProbeRunner::printEvent(const QString &reason,
+                                  const QString &sinkId,
+                                  const QString &sourceId,
+                                  const bool compactOutput) const
 {
     if (m_output == nullptr || m_source == nullptr) {
         return;
     }
 
     if (m_options.jsonOutput) {
-        *m_output << formatJsonEventBytes(reason, sinkId, m_source->currentState(), compactOutput) << Qt::endl;
+        *m_output << formatJsonEventBytes(reason, sinkId, sourceId, m_source->currentState(), compactOutput) << Qt::endl;
         return;
     }
 
-    *m_output << formatHumanEventText(reason, sinkId, m_source->currentState()) << Qt::endl;
+    *m_output << formatHumanEventText(reason, sinkId, sourceId, m_source->currentState()) << Qt::endl;
 }
 
 void configureParser(QCommandLineParser &parser)
@@ -164,7 +170,7 @@ void configureParser(QCommandLineParser &parser)
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption(QCommandLineOption(QStringLiteral("watch"),
-                                        QStringLiteral("Keep running and print live sink updates.")));
+                                        QStringLiteral("Keep running and print live audio updates.")));
     parser.addOption(QCommandLineOption(QStringLiteral("json"),
                                         QStringLiteral("Print machine-readable JSON output.")));
 }
@@ -179,18 +185,20 @@ AudioProbeOptions optionsFromParser(const QCommandLineParser &parser)
 
 QByteArray formatJsonEventBytes(const QString &reason,
                                 const QString &sinkId,
+                                const QString &sourceId,
                                 const plasma_bridge::AudioState &state,
                                 const bool compactOutput)
 {
-    return QJsonDocument(plasma_bridge::toJsonEventObject(reason, sinkId, state))
+    return QJsonDocument(plasma_bridge::toJsonEventObject(reason, sinkId, sourceId, state))
         .toJson(compactOutput ? QJsonDocument::Compact : QJsonDocument::Indented);
 }
 
 QString formatHumanEventText(const QString &reason,
                              const QString &sinkId,
+                             const QString &sourceId,
                              const plasma_bridge::AudioState &state)
 {
-    return plasma_bridge::formatHumanReadableEvent(reason, sinkId, state);
+    return plasma_bridge::formatHumanReadableEvent(reason, sinkId, sourceId, state);
 }
 
 } // namespace plasma_bridge::tools::audio_probe

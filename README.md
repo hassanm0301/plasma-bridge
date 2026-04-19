@@ -4,11 +4,13 @@
 The current implementation is audio-first:
 
 - list all KDE-visible output sinks
+- list all KDE-visible input sources
 - report the current default output sink
-- report per-sink volume and mute state
+- report the current default input source
+- report per-device volume and mute state
 - serve audio snapshots over HTTP
 - set, increment, and decrement sink volume over HTTP
-- publish live audio updates over WebSocket
+- publish live sink and source updates over WebSocket
 
 Documentation:
 

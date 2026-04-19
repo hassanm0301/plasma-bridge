@@ -7,7 +7,7 @@
 namespace plasma_bridge
 {
 
-struct AudioSinkState {
+struct AudioDeviceState {
     QString id;
     QString label;
     double volume = 0.0;
@@ -18,15 +18,41 @@ struct AudioSinkState {
     QString backendApi;
 };
 
-struct AudioState {
+using AudioSinkState = AudioDeviceState;
+using AudioSourceState = AudioDeviceState;
+
+struct AudioOutputState {
     QList<AudioSinkState> sinks;
     QString selectedSinkId;
 };
 
-QJsonObject toJsonObject(const AudioSinkState &sink);
-QJsonObject toJsonObject(const AudioState &state);
-QJsonObject toJsonEventObject(const QString &reason, const QString &sinkId, const AudioState &state);
+struct AudioInputState {
+    QList<AudioSourceState> sources;
+    QString selectedSourceId;
+};
 
-QString formatHumanReadableEvent(const QString &reason, const QString &sinkId, const AudioState &state);
+struct AudioState {
+    QList<AudioSinkState> sinks;
+    QString selectedSinkId;
+    QList<AudioSourceState> sources;
+    QString selectedSourceId;
+};
+
+AudioOutputState toAudioOutputState(const AudioState &state);
+AudioInputState toAudioInputState(const AudioState &state);
+
+QJsonObject toJsonObject(const AudioDeviceState &device);
+QJsonObject toJsonObject(const AudioOutputState &state);
+QJsonObject toJsonObject(const AudioInputState &state);
+QJsonObject toJsonObject(const AudioState &state);
+QJsonObject toJsonEventObject(const QString &reason,
+                              const QString &sinkId,
+                              const QString &sourceId,
+                              const AudioState &state);
+
+QString formatHumanReadableEvent(const QString &reason,
+                                 const QString &sinkId,
+                                 const QString &sourceId,
+                                 const AudioState &state);
 
 } // namespace plasma_bridge

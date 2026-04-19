@@ -21,6 +21,8 @@ constexpr qsizetype kMaxRequestBytes = 16 * 1024;
 const QByteArray kHeaderDelimiter = QByteArrayLiteral("\r\n\r\n");
 const QString kSinksPath = QStringLiteral("/snapshot/audio/sinks");
 const QString kDefaultSinkPath = QStringLiteral("/snapshot/audio/default-sink");
+const QString kSourcesPath = QStringLiteral("/snapshot/audio/sources");
+const QString kDefaultSourcePath = QStringLiteral("/snapshot/audio/default-source");
 const QString kControlSinksPrefix = QStringLiteral("/control/audio/sinks/");
 const QString kVolumePathSuffix = QStringLiteral("/volume");
 const QString kVolumeIncrementPathSuffix = QStringLiteral("/volume/increment");
@@ -41,6 +43,14 @@ enum class VolumeControlOperation {
     Decrement,
 };
 
+enum class SnapshotRoute {
+    None,
+    Sinks,
+    DefaultSink,
+    Sources,
+    DefaultSource,
+};
+
 enum class ControlTargetMatch {
     NoMatch,
     Match,
@@ -56,6 +66,24 @@ struct ControlTargetParseResult {
     ControlTargetMatch match = ControlTargetMatch::NoMatch;
     ControlTarget target;
 };
+
+SnapshotRoute snapshotRouteForPath(const QString &path)
+{
+    if (path == kSinksPath) {
+        return SnapshotRoute::Sinks;
+    }
+    if (path == kDefaultSinkPath) {
+        return SnapshotRoute::DefaultSink;
+    }
+    if (path == kSourcesPath) {
+        return SnapshotRoute::Sources;
+    }
+    if (path == kDefaultSourcePath) {
+        return SnapshotRoute::DefaultSource;
+    }
+
+    return SnapshotRoute::None;
+}
 
 QString urlHost(const QString &host)
 {
@@ -633,8 +661,8 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
-    const bool knownSnapshotPath = path == kSinksPath || path == kDefaultSinkPath;
-    if (!knownSnapshotPath) {
+    const SnapshotRoute snapshotRoute = snapshotRouteForPath(path);
+    if (snapshotRoute == SnapshotRoute::None) {
         writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
                                QStringLiteral("Unknown path."));
         return;
@@ -652,24 +680,44 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
 
     if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
         writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
-                               QStringLiteral("Initial audio sink state is not ready yet."));
+                               QStringLiteral("Initial audio state is not ready yet."));
         return;
     }
 
-    if (path == kSinksPath) {
+    switch (snapshotRoute) {
+    case SnapshotRoute::Sinks:
         writeJsonResponse(socket, 200, QByteArrayLiteral("OK"),
-                          QJsonDocument(plasma_bridge::toJsonObject(m_audioStateStore->audioState())));
+                          QJsonDocument(plasma_bridge::toJsonObject(plasma_bridge::toAudioOutputState(m_audioStateStore->audioState()))));
+        return;
+    case SnapshotRoute::Sources:
+        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"),
+                          QJsonDocument(plasma_bridge::toJsonObject(plasma_bridge::toAudioInputState(m_audioStateStore->audioState()))));
+        return;
+    case SnapshotRoute::DefaultSink: {
+        const std::optional<plasma_bridge::AudioSinkState> defaultSink = m_audioStateStore->defaultSink();
+        if (!defaultSink.has_value()) {
+            writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
+                                   QStringLiteral("No default audio sink available."));
+            return;
+        }
+
+        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"), QJsonDocument(plasma_bridge::toJsonObject(*defaultSink)));
         return;
     }
+    case SnapshotRoute::DefaultSource: {
+        const std::optional<plasma_bridge::AudioSourceState> defaultSource = m_audioStateStore->defaultSource();
+        if (!defaultSource.has_value()) {
+            writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
+                                   QStringLiteral("No default audio source available."));
+            return;
+        }
 
-    const std::optional<plasma_bridge::AudioSinkState> defaultSink = m_audioStateStore->defaultSink();
-    if (!defaultSink.has_value()) {
-        writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
-                               QStringLiteral("No default audio sink available."));
+        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"), QJsonDocument(plasma_bridge::toJsonObject(*defaultSource)));
         return;
     }
-
-    writeJsonResponse(socket, 200, QByteArrayLiteral("OK"), QJsonDocument(plasma_bridge::toJsonObject(*defaultSink)));
+    case SnapshotRoute::None:
+        break;
+    }
 }
 
 void SnapshotHttpServer::writeByteResponse(QTcpSocket *socket,

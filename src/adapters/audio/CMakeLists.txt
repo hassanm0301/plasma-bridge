@@ -1,5 +1,5 @@
 add_library(plasma_bridge_audio_adapter STATIC
-    pulse_audio_sink_observer.cpp
+    pulse_audio_state_observer.cpp
 )
 
 add_library(plasma_bridge_audio_control_adapter STATIC

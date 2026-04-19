@@ -77,6 +77,7 @@ void AudioProbeRunnerTest::runnerPrintsHumanEventsInWatchMode()
         source.emitInitialStateReady(plasma_bridge::tests::sampleAudioState());
         source.emitAudioStateChanged(QStringLiteral("sink-updated"),
                                      QStringLiteral("bluez_output.headset.1"),
+                                     QString(),
                                      plasma_bridge::tests::alternateAudioState());
     });
 
@@ -85,6 +86,7 @@ void AudioProbeRunnerTest::runnerPrintsHumanEventsInWatchMode()
     QTRY_VERIFY(outputText.contains(QStringLiteral("Reason: initial")));
     QTRY_VERIFY(outputText.contains(QStringLiteral("Reason: sink-updated")));
     QVERIFY(outputText.contains(QStringLiteral("Sink: bluez_output.headset.1")));
+    QVERIFY(outputText.contains(QStringLiteral("Selected Source: bluez_input.headset.1")));
     QVERIFY(errorText.isEmpty());
 }
 
@@ -103,7 +105,7 @@ void AudioProbeRunnerTest::runnerTimesOutBeforeInitialState()
 
     QTRY_COMPARE(finishedSpy.count(), 1);
     QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
-    QVERIFY(errorText.contains(QStringLiteral("Timed out waiting for PulseAudioQt sink state.")));
+    QVERIFY(errorText.contains(QStringLiteral("Timed out waiting for PulseAudioQt audio state.")));
 }
 
 void AudioProbeRunnerTest::runnerFailsWhenConnectionBreaksBeforeReady()

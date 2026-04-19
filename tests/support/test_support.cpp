@@ -36,8 +36,30 @@ AudioState sampleAudioState()
     secondarySink.isVirtual = false;
     secondarySink.backendApi = QStringLiteral("bluez");
 
+    AudioSourceState defaultSource;
+    defaultSource.id = QStringLiteral("alsa_input.usb-default.analog-stereo");
+    defaultSource.label = QStringLiteral("USB Microphone");
+    defaultSource.volume = 0.64;
+    defaultSource.muted = false;
+    defaultSource.available = true;
+    defaultSource.isDefault = true;
+    defaultSource.isVirtual = false;
+    defaultSource.backendApi = QStringLiteral("alsa");
+
+    AudioSourceState secondarySource;
+    secondarySource.id = QStringLiteral("bluez_input.headset.1");
+    secondarySource.label = QStringLiteral("Headset Microphone");
+    secondarySource.volume = 0.28;
+    secondarySource.muted = true;
+    secondarySource.available = true;
+    secondarySource.isDefault = false;
+    secondarySource.isVirtual = false;
+    secondarySource.backendApi = QStringLiteral("bluez");
+
     state.sinks = {defaultSink, secondarySink};
     state.selectedSinkId = defaultSink.id;
+    state.sources = {defaultSource, secondarySource};
+    state.selectedSourceId = defaultSource.id;
     return state;
 }
 
@@ -50,6 +72,12 @@ AudioState alternateAudioState()
     state.sinks[1].isDefault = true;
     state.sinks[1].muted = false;
     state.sinks[1].volume = 0.9;
+    state.selectedSourceId = state.sources.at(1).id;
+    state.sources[0].isDefault = false;
+    state.sources[0].volume = 0.47;
+    state.sources[1].isDefault = true;
+    state.sources[1].muted = false;
+    state.sources[1].volume = 0.52;
     return state;
 }
 
@@ -109,10 +137,13 @@ void FakeAudioProbeSource::emitInitialStateReady(const AudioState &state)
     emit initialStateReady();
 }
 
-void FakeAudioProbeSource::emitAudioStateChanged(const QString &reason, const QString &sinkId, const AudioState &state)
+void FakeAudioProbeSource::emitAudioStateChanged(const QString &reason,
+                                                 const QString &sinkId,
+                                                 const QString &sourceId,
+                                                 const AudioState &state)
 {
     m_state = state;
-    emit audioStateChanged(reason, sinkId);
+    emit audioStateChanged(reason, sinkId, sourceId);
 }
 
 void FakeAudioProbeSource::emitConnectionFailure(const QString &message)

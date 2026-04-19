@@ -9,20 +9,23 @@
 The current implementation is intentionally narrow and audio-first:
 
 - observe all KDE-visible output sinks
+- observe all KDE-visible input sources
 - identify the current default output sink
-- report per-sink volume and mute state
+- identify the current default input source
+- report per-device volume and mute state
 - expose snapshot reads and volume control over HTTP
 - expose live updates over WebSocket
 
-Input devices, window state, media state, and broader control actions are not part of the current public runtime surface.
+Window state, media state, and broader control actions are not part of the current public runtime surface.
 
 ## System Flow
 
 The runtime has four main parts:
 
 1. An audio adapter reads sink data from the Plasma audio stack.
+   It also reads user-facing input sources and filters monitor sources from the public state.
 2. A shared in-memory state store keeps one canonical audio snapshot.
-3. An HTTP server serves snapshots of that state and forwards local volume-control requests.
+3. An HTTP server serves output and input snapshots from that state and forwards local sink volume-control requests.
 4. A WebSocket server streams the same state to connected clients as it changes.
 
 Both transports use the same underlying state so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP volume changes flow back through the observer and state store.
@@ -40,7 +43,7 @@ The current defaults are:
 
 - HTTP on `127.0.0.1:8080`
 - WebSocket on `ws://127.0.0.1:8081/ws/audio`
-- local audio snapshot and volume-control HTTP behavior
+- local audio sink/source snapshot and sink volume-control HTTP behavior
 - localhost binding unless the operator explicitly changes it
 - hosted docs on the HTTP listener under `/docs/`
 
@@ -48,6 +51,7 @@ The current defaults are:
 
 These areas are still outside the current public scope:
 
+- source-control actions
 - mute control, default-sink switching, and broader output-control actions
 - window discovery and active-window tracking
 - authentication and pairing

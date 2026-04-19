@@ -55,7 +55,7 @@ void CliBinariesFeatureTest::audioProbeHelpAndHermeticFailurePaths()
 
     const ProcessResult timeout = runProcess(fakeAudioProbeCliBin, {QStringLiteral("--scenario"), QStringLiteral("timeout")});
     QCOMPARE(timeout.exitCode, 1);
-    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for PulseAudioQt sink state.")));
+    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for PulseAudioQt audio state.")));
 
     const ProcessResult failure = runProcess(fakeAudioProbeCliBin, {QStringLiteral("--scenario"), QStringLiteral("failure")});
     QCOMPARE(failure.exitCode, 1);

@@ -2,7 +2,7 @@ asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
   version: 0.1.0
-  description: Live WebSocket monitoring for KDE Plasma. The current implemented endpoint is `/ws/audio`.
+  description: Live WebSocket monitoring for KDE Plasma sinks and sources. The implemented endpoint is `/ws/audio`.
 defaultContentType: application/json
 servers:
   local:
@@ -10,7 +10,7 @@ servers:
     pathname: /ws/audio
     protocol: ws
     title: Local WebSocket server
-    summary: WebSocket endpoint for live audio sink state.
+    summary: WebSocket endpoint for live audio sink and source state.
 channels:
   wsAudio:
     address: /ws/audio
@@ -46,7 +46,7 @@ operations:
     channel:
       $ref: '#/channels/wsAudio'
     title: Send patch
-    summary: Send an audio update after sink or default-sink changes.
+    summary: Send an audio update after sink, source, or default-device changes.
     description: Each patch replaces the full `audio` subtree.
     messages:
       - $ref: '#/channels/wsAudio/messages/patch'
@@ -61,7 +61,7 @@ operations:
       - $ref: '#/channels/wsAudio/messages/error'
 components:
   schemas:
-    AudioSinkState:
+    AudioDeviceState:
       type: object
       additionalProperties: false
       required:
@@ -99,12 +99,22 @@ components:
       required:
         - sinks
         - selectedSinkId
+        - sources
+        - selectedSourceId
       properties:
         sinks:
           type: array
           items:
-            $ref: '#/components/schemas/AudioSinkState'
+            $ref: '#/components/schemas/AudioDeviceState'
         selectedSinkId:
+          type:
+            - string
+            - 'null'
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AudioDeviceState'
+        selectedSourceId:
           type:
             - string
             - 'null'
@@ -160,6 +170,7 @@ components:
         - type
         - reason
         - sinkId
+        - sourceId
         - changes
       properties:
         type:
@@ -170,6 +181,10 @@ components:
             - string
             - 'null'
         sinkId:
+          type:
+            - string
+            - 'null'
+        sourceId:
           type:
             - string
             - 'null'
@@ -225,6 +240,16 @@ components:
                     isVirtual: false
                     backendApi: alsa
                 selectedSinkId: alsa_output.usb-example.analog-stereo
+                sources:
+                  - id: alsa_input.usb-example.analog-stereo
+                    label: USB Microphone
+                    volume: 0.64
+                    muted: false
+                    available: true
+                    isDefault: true
+                    isVirtual: false
+                    backendApi: alsa
+                selectedSourceId: alsa_input.usb-example.analog-stereo
     Patch:
       name: patch
       title: Patch
@@ -236,6 +261,7 @@ components:
             type: patch
             reason: sink-updated
             sinkId: alsa_output.usb-example.analog-stereo
+            sourceId: null
             changes:
               - path: audio
                 value:
@@ -249,6 +275,44 @@ components:
                       isVirtual: false
                       backendApi: alsa
                   selectedSinkId: alsa_output.usb-example.analog-stereo
+                  sources:
+                    - id: alsa_input.usb-example.analog-stereo
+                      label: USB Microphone
+                      volume: 0.64
+                      muted: false
+                      available: true
+                      isDefault: true
+                      isVirtual: false
+                      backendApi: alsa
+                  selectedSourceId: alsa_input.usb-example.analog-stereo
+        - payload:
+            type: patch
+            reason: source-updated
+            sinkId: null
+            sourceId: alsa_input.usb-example.analog-stereo
+            changes:
+              - path: audio
+                value:
+                  sinks:
+                    - id: alsa_output.usb-example.analog-stereo
+                      label: USB Audio
+                      volume: 0.75
+                      muted: false
+                      available: true
+                      isDefault: true
+                      isVirtual: false
+                      backendApi: alsa
+                  selectedSinkId: alsa_output.usb-example.analog-stereo
+                  sources:
+                    - id: alsa_input.usb-example.analog-stereo
+                      label: USB Microphone
+                      volume: 0.70
+                      muted: false
+                      available: true
+                      isDefault: true
+                      isVirtual: false
+                      backendApi: alsa
+                  selectedSourceId: alsa_input.usb-example.analog-stereo
     Error:
       name: error
       title: Error
@@ -259,4 +323,4 @@ components:
         - payload:
             type: error
             code: not_ready
-            message: Initial audio sink state is not ready yet.
+            message: Initial audio state is not ready yet.

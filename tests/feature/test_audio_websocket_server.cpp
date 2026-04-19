@@ -72,7 +72,11 @@ void AudioWebSocketServerFeatureTest::ignoresStateChangesUntilHello()
 
     socket.sendTextMessage(QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":1}"));
     QTRY_COMPARE(messageSpy.count(), 1);
-    QCOMPARE(takeMessage(messageSpy).value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    const QJsonObject fullState = takeMessage(messageSpy);
+    QCOMPARE(fullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    const QJsonObject audio = fullState.value(QStringLiteral("state")).toObject().value(QStringLiteral("audio")).toObject();
+    QCOMPARE(audio.value(QStringLiteral("sources")).toArray().size(), store.audioState().sources.size());
+    QCOMPARE(audio.value(QStringLiteral("selectedSourceId")).toString(), store.audioState().selectedSourceId);
 
     socket.close();
     QTRY_COMPARE(disconnectedSpy.count(), 1);
@@ -163,7 +167,11 @@ void AudioWebSocketServerFeatureTest::sendsNotReadyThenFullStateAfterReadiness()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     QTRY_COMPARE(messageSpy.count(), 1);
-    QCOMPARE(takeMessage(messageSpy).value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    const QJsonObject fullState = takeMessage(messageSpy);
+    QCOMPARE(fullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    const QJsonObject audio = fullState.value(QStringLiteral("state")).toObject().value(QStringLiteral("audio")).toObject();
+    QCOMPARE(audio.value(QStringLiteral("sources")).toArray().size(), store.audioState().sources.size());
+    QCOMPARE(audio.value(QStringLiteral("selectedSourceId")).toString(), store.audioState().selectedSourceId);
 
     socket.close();
     QTRY_COMPARE(disconnectedSpy.count(), 1);
@@ -196,13 +204,20 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
 
     QTRY_COMPARE(firstMessageSpy.count(), 1);
     QTRY_COMPARE(secondMessageSpy.count(), 1);
-    QCOMPARE(takeMessage(firstMessageSpy).value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
-    QCOMPARE(takeMessage(secondMessageSpy).value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    const QJsonObject firstFullState = takeMessage(firstMessageSpy);
+    const QJsonObject secondFullState = takeMessage(secondMessageSpy);
+    QCOMPARE(firstFullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    QCOMPARE(secondFullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    QCOMPARE(firstFullState.value(QStringLiteral("state")).toObject().value(QStringLiteral("audio")).toObject().value(QStringLiteral("selectedSourceId")).toString(),
+             store.audioState().selectedSourceId);
+    QCOMPARE(secondFullState.value(QStringLiteral("state")).toObject().value(QStringLiteral("audio")).toObject().value(QStringLiteral("sources")).toArray().size(),
+             store.audioState().sources.size());
 
     store.updateAudioState(plasma_bridge::tests::alternateAudioState(),
                            true,
                            QStringLiteral("sink-updated"),
-                           QStringLiteral("bluez_output.headset.1"));
+                           QStringLiteral("bluez_output.headset.1"),
+                           QString());
 
     QTRY_COMPARE(firstMessageSpy.count(), 1);
     QTRY_COMPARE(secondMessageSpy.count(), 1);
@@ -213,14 +228,42 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QCOMPARE(secondPatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
     QCOMPARE(firstPatch.value(QStringLiteral("reason")).toString(), QStringLiteral("sink-updated"));
     QCOMPARE(secondPatch.value(QStringLiteral("reason")).toString(), QStringLiteral("sink-updated"));
+    QCOMPARE(firstPatch.value(QStringLiteral("sinkId")).toString(), QStringLiteral("bluez_output.headset.1"));
+    QVERIFY(firstPatch.value(QStringLiteral("sourceId")).isNull());
+    QVERIFY(secondPatch.value(QStringLiteral("sourceId")).isNull());
+
+    plasma_bridge::AudioState sourceUpdatedState = plasma_bridge::tests::alternateAudioState();
+    sourceUpdatedState.sources[1].volume = 0.77;
+    store.updateAudioState(sourceUpdatedState,
+                           true,
+                           QStringLiteral("source-updated"),
+                           QString(),
+                           QStringLiteral("bluez_input.headset.1"));
+
+    QTRY_COMPARE(firstMessageSpy.count(), 1);
+    QTRY_COMPARE(secondMessageSpy.count(), 1);
+
+    const QJsonObject firstSourcePatch = takeMessage(firstMessageSpy);
+    const QJsonObject secondSourcePatch = takeMessage(secondMessageSpy);
+    QCOMPARE(firstSourcePatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QCOMPARE(secondSourcePatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QCOMPARE(firstSourcePatch.value(QStringLiteral("reason")).toString(), QStringLiteral("source-updated"));
+    QVERIFY(firstSourcePatch.value(QStringLiteral("sinkId")).isNull());
+    QCOMPARE(firstSourcePatch.value(QStringLiteral("sourceId")).toString(), QStringLiteral("bluez_input.headset.1"));
+    QCOMPARE(secondSourcePatch.value(QStringLiteral("sourceId")).toString(), QStringLiteral("bluez_input.headset.1"));
 
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(),
                            true,
-                           QStringLiteral("default-sink-changed"),
-                           QStringLiteral("alsa_output.usb-default.analog-stereo"));
+                           QStringLiteral("default-source-changed"),
+                           QString(),
+                           QStringLiteral("alsa_input.usb-default.analog-stereo"));
 
     QTRY_COMPARE(firstMessageSpy.count(), 1);
-    QCOMPARE(takeMessage(firstMessageSpy).value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    const QJsonObject defaultSourcePatch = takeMessage(firstMessageSpy);
+    QCOMPARE(defaultSourcePatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QCOMPARE(defaultSourcePatch.value(QStringLiteral("reason")).toString(), QStringLiteral("default-source-changed"));
+    QVERIFY(defaultSourcePatch.value(QStringLiteral("sinkId")).isNull());
+    QCOMPARE(defaultSourcePatch.value(QStringLiteral("sourceId")).toString(), QStringLiteral("alsa_input.usb-default.analog-stereo"));
 
     QSignalSpy firstDisconnectedSpy(&firstSocket, &QWebSocket::disconnected);
     QSignalSpy secondDisconnectedSpy(&secondSocket, &QWebSocket::disconnected);

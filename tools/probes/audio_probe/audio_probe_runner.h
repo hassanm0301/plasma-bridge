@@ -30,7 +30,7 @@ public:
 
 signals:
     void initialStateReady();
-    void audioStateChanged(const QString &reason, const QString &sinkId);
+    void audioStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId);
     void connectionFailed(const QString &message);
 };
 
@@ -70,7 +70,7 @@ signals:
 private:
     void finish(int exitCode);
     void publishInitialState();
-    void printEvent(const QString &reason, const QString &sinkId, bool compactOutput) const;
+    void printEvent(const QString &reason, const QString &sinkId, const QString &sourceId, bool compactOutput) const;
 
     AudioProbeSource *m_source = nullptr;
     AudioProbeOptions m_options;
@@ -86,10 +86,12 @@ void configureParser(QCommandLineParser &parser);
 AudioProbeOptions optionsFromParser(const QCommandLineParser &parser);
 QByteArray formatJsonEventBytes(const QString &reason,
                                 const QString &sinkId,
+                                const QString &sourceId,
                                 const plasma_bridge::AudioState &state,
                                 bool compactOutput);
 QString formatHumanEventText(const QString &reason,
                              const QString &sinkId,
+                             const QString &sourceId,
                              const plasma_bridge::AudioState &state);
 
 } // namespace plasma_bridge::tools::audio_probe

@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Observe KDE-visible audio sinks through KF6PulseAudioQt."));
+    parser.setApplicationDescription(QStringLiteral("Observe KDE-visible audio sinks and sources through KF6PulseAudioQt."));
     plasma_bridge::tools::audio_probe::configureParser(parser);
     parser.process(app);
 

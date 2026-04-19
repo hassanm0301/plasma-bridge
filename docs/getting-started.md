@@ -30,7 +30,7 @@ The repository includes automated unit tests and feature tests built with Qt Tes
 The default test suite is hermetic:
 
 - no live KDE Plasma session is required
-- no real PulseAudio sink changes are made
+- no real PulseAudio audio device changes are made
 - HTTP and WebSocket feature tests bind only to localhost
 
 Configure and build with testing enabled:
@@ -58,7 +58,7 @@ Current coverage includes:
 - unit tests for volume-control result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
-- feature tests for the HTTP snapshot and volume-control server
+- feature tests for the HTTP snapshot, source, and volume-control server
 - feature tests for the WebSocket server
 - CLI coverage for `plasma_bridge`, `audio_probe`, and `audio_control_probe`
 
@@ -103,6 +103,8 @@ SINK_ID='alsa_output.usb-default.analog-stereo'
 
 curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
+curl http://127.0.0.1:8080/snapshot/audio/sources
+curl http://127.0.0.1:8080/snapshot/audio/default-source
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume \
   -H 'Content-Type: application/json' \
   -d '{"value":0.55}'
@@ -128,7 +130,8 @@ For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws/audio` and send:
 { "type": "hello", "protocolVersion": 1 }
 ```
 
-You should receive one `fullState` message followed by `patch` messages as sink state changes.
+You should receive one `fullState` message followed by `patch` messages as sink or source state changes.
+The `state.audio` object now includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
 Connections to `/` and other non-audio WebSocket paths are rejected.
 
 Repo API specs:
