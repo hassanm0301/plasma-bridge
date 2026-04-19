@@ -13,6 +13,7 @@ class QTcpSocket;
 
 namespace plasma_bridge::control
 {
+class AudioDeviceController;
 class AudioVolumeController;
 }
 
@@ -31,6 +32,7 @@ class SnapshotHttpServer final : public QObject
 public:
     explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                 control::AudioVolumeController *audioVolumeController,
+                                control::AudioDeviceController *audioDeviceController,
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
                                 quint16 documentationWsPort,
@@ -65,6 +67,7 @@ private:
 
     state::AudioStateStore *m_audioStateStore = nullptr;
     control::AudioVolumeController *m_audioVolumeController = nullptr;
+    control::AudioDeviceController *m_audioDeviceController = nullptr;
     QString m_documentationHost;
     quint16 m_documentationHttpPort = 0;
     quint16 m_documentationWsPort = 0;

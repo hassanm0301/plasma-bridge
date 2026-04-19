@@ -1,3 +1,4 @@
+#include "adapters/audio/pulse_audio_device_controller.h"
 #include "adapters/audio/pulse_audio_state_observer.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
 #include "api/audio_websocket_server.h"
@@ -100,11 +101,13 @@ int main(int argc, char *argv[])
 
     plasma_bridge::audio::PulseAudioStateObserver observer;
     plasma_bridge::audio::PulseAudioVolumeController volumeController;
+    plasma_bridge::audio::PulseAudioDeviceController deviceController;
     plasma_bridge::state::AudioStateStore audioStateStore;
     audioStateStore.attachObserver(&observer);
 
     plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore,
                                                       &volumeController,
+                                                      &deviceController,
                                                       parser.value(hostOption),
                                                       port,
                                                       wsPort);

@@ -3,6 +3,7 @@ add_library(plasma_bridge_audio_adapter STATIC
 )
 
 add_library(plasma_bridge_audio_control_adapter STATIC
+    pulse_audio_device_controller.cpp
     pulse_audio_volume_controller.cpp
 )
 

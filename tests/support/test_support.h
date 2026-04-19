@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/audio_state.h"
+#include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "tools/probes/audio_control_probe/audio_control_probe_runner.h"
 #include "tools/probes/audio_probe/audio_probe_runner.h"
@@ -89,6 +90,44 @@ private:
     Operation m_lastOperation = Operation::None;
     QString m_lastSinkId;
     double m_lastValue = 0.0;
+    int m_callCount = 0;
+};
+
+class FakeAudioDeviceController final : public control::AudioDeviceController
+{
+public:
+    enum class Operation {
+        None,
+        SetDefaultSink,
+        SetDefaultSource,
+        SetSinkMute,
+        SetSourceMute,
+    };
+
+    void setDefaultResult(Operation operation, const control::DefaultDeviceChangeResult &result);
+    void setMuteResult(Operation operation, const control::MuteChangeResult &result);
+
+    control::DefaultDeviceChangeResult setDefaultSink(const QString &sinkId) override;
+    control::DefaultDeviceChangeResult setDefaultSource(const QString &sourceId) override;
+    control::MuteChangeResult setSinkMuted(const QString &sinkId, bool muted) override;
+    control::MuteChangeResult setSourceMuted(const QString &sourceId, bool muted) override;
+
+    Operation lastOperation() const;
+    QString lastDeviceId() const;
+    std::optional<bool> lastMuted() const;
+    int callCount() const;
+
+private:
+    control::DefaultDeviceChangeResult invokeDefault(Operation operation, const QString &deviceId);
+    control::MuteChangeResult invokeMute(Operation operation, const QString &deviceId, bool muted);
+
+    control::DefaultDeviceChangeResult m_setDefaultSinkResult;
+    control::DefaultDeviceChangeResult m_setDefaultSourceResult;
+    control::MuteChangeResult m_setSinkMuteResult;
+    control::MuteChangeResult m_setSourceMuteResult;
+    Operation m_lastOperation = Operation::None;
+    QString m_lastDeviceId;
+    std::optional<bool> m_lastMuted;
     int m_callCount = 0;
 };
 

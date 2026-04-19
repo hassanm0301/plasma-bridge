@@ -249,4 +249,118 @@ control::VolumeChangeResult FakeAudioVolumeController::invoke(const Operation op
     return {};
 }
 
+void FakeAudioDeviceController::setDefaultResult(const Operation operation, const control::DefaultDeviceChangeResult &result)
+{
+    switch (operation) {
+    case Operation::SetDefaultSink:
+        m_setDefaultSinkResult = result;
+        break;
+    case Operation::SetDefaultSource:
+        m_setDefaultSourceResult = result;
+        break;
+    case Operation::None:
+    case Operation::SetSinkMute:
+    case Operation::SetSourceMute:
+        break;
+    }
+}
+
+void FakeAudioDeviceController::setMuteResult(const Operation operation, const control::MuteChangeResult &result)
+{
+    switch (operation) {
+    case Operation::SetSinkMute:
+        m_setSinkMuteResult = result;
+        break;
+    case Operation::SetSourceMute:
+        m_setSourceMuteResult = result;
+        break;
+    case Operation::None:
+    case Operation::SetDefaultSink:
+    case Operation::SetDefaultSource:
+        break;
+    }
+}
+
+control::DefaultDeviceChangeResult FakeAudioDeviceController::setDefaultSink(const QString &sinkId)
+{
+    return invokeDefault(Operation::SetDefaultSink, sinkId);
+}
+
+control::DefaultDeviceChangeResult FakeAudioDeviceController::setDefaultSource(const QString &sourceId)
+{
+    return invokeDefault(Operation::SetDefaultSource, sourceId);
+}
+
+control::MuteChangeResult FakeAudioDeviceController::setSinkMuted(const QString &sinkId, const bool muted)
+{
+    return invokeMute(Operation::SetSinkMute, sinkId, muted);
+}
+
+control::MuteChangeResult FakeAudioDeviceController::setSourceMuted(const QString &sourceId, const bool muted)
+{
+    return invokeMute(Operation::SetSourceMute, sourceId, muted);
+}
+
+FakeAudioDeviceController::Operation FakeAudioDeviceController::lastOperation() const
+{
+    return m_lastOperation;
+}
+
+QString FakeAudioDeviceController::lastDeviceId() const
+{
+    return m_lastDeviceId;
+}
+
+std::optional<bool> FakeAudioDeviceController::lastMuted() const
+{
+    return m_lastMuted;
+}
+
+int FakeAudioDeviceController::callCount() const
+{
+    return m_callCount;
+}
+
+control::DefaultDeviceChangeResult FakeAudioDeviceController::invokeDefault(const Operation operation, const QString &deviceId)
+{
+    m_lastOperation = operation;
+    m_lastDeviceId = deviceId;
+    m_lastMuted.reset();
+    ++m_callCount;
+
+    switch (operation) {
+    case Operation::SetDefaultSink:
+        return m_setDefaultSinkResult;
+    case Operation::SetDefaultSource:
+        return m_setDefaultSourceResult;
+    case Operation::None:
+    case Operation::SetSinkMute:
+    case Operation::SetSourceMute:
+        break;
+    }
+
+    return {};
+}
+
+control::MuteChangeResult FakeAudioDeviceController::invokeMute(const Operation operation, const QString &deviceId, const bool muted)
+{
+    m_lastOperation = operation;
+    m_lastDeviceId = deviceId;
+    m_lastMuted = muted;
+    ++m_callCount;
+
+    switch (operation) {
+    case Operation::SetSinkMute:
+        return m_setSinkMuteResult;
+    case Operation::SetSourceMute:
+        return m_setSourceMuteResult;
+    case Operation::None:
+    case Operation::SetDefaultSink:
+    case Operation::SetDefaultSource:
+        break;
+    }
+
+    return {};
+}
+
 } // namespace plasma_bridge::tests

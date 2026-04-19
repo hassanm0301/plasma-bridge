@@ -2,7 +2,7 @@ openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
   version: 0.1.0
-  summary: Audio snapshot endpoints plus sink volume-control endpoints for KDE Plasma.
+  summary: Audio snapshot endpoints plus local sink/source control endpoints for KDE Plasma.
 servers:
   - url: http://127.0.0.1:8080
 paths:
@@ -210,6 +210,238 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /control/audio/sinks/{sinkId}/default:
+    post:
+      operationId: setDefaultAudioSink
+      summary: Set the default audio sink
+      description: Sets the current default output sink.
+      parameters:
+        - $ref: '#/components/parameters/SinkId'
+      responses:
+        '200':
+          description: Default sink change request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Requested sink was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Sink exists but cannot be selected as default.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+        '503':
+          description: Audio device control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+  /control/audio/sources/{sourceId}/default:
+    post:
+      operationId: setDefaultAudioSource
+      summary: Set the default audio source
+      description: Sets the current default input source.
+      parameters:
+        - $ref: '#/components/parameters/SourceId'
+      responses:
+        '200':
+          description: Default source change request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Requested source was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Source exists but cannot be selected as default.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+        '503':
+          description: Audio device control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+  /control/audio/sinks/{sinkId}/mute:
+    post:
+      operationId: setAudioSinkMuted
+      summary: Set sink mute state
+      description: Sets the mute state for the requested output sink.
+      parameters:
+        - $ref: '#/components/parameters/SinkId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MuteValueRequest'
+            examples:
+              muteSink:
+                value:
+                  muted: true
+      responses:
+        '200':
+          description: Sink mute change request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+        '400':
+          description: Malformed JSON body, missing `muted`, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Requested sink was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Sink exists but cannot be muted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+        '415':
+          description: Request body content type is not supported for control endpoints.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Audio device control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+  /control/audio/sources/{sourceId}/mute:
+    post:
+      operationId: setAudioSourceMuted
+      summary: Set source mute state
+      description: Sets the mute state for the requested input source.
+      parameters:
+        - $ref: '#/components/parameters/SourceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MuteValueRequest'
+            examples:
+              muteSource:
+                value:
+                  muted: false
+      responses:
+        '200':
+          description: Source mute change request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+        '400':
+          description: Malformed JSON body, missing `muted`, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Requested source was not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Source exists but cannot be muted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
+        '415':
+          description: Request body content type is not supported for control endpoints.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Audio device control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MuteChangeResult'
   /control/audio/sinks/{sinkId}/volume:
     post:
       operationId: setAudioSinkVolume
@@ -436,6 +668,13 @@ components:
       description: URL-decoded sink identifier. Encoded slashes are not supported.
       schema:
         type: string
+    SourceId:
+      name: sourceId
+      in: path
+      required: true
+      description: URL-decoded source identifier. Encoded slashes are not supported.
+      schema:
+        type: string
   schemas:
     AudioDeviceState:
       type: object
@@ -539,6 +778,66 @@ components:
         value:
           type: number
           description: Normalized volume value. For `/volume` requests this is the target level. For `/volume/increment` and `/volume/decrement` requests this is the requested delta.
+    MuteValueRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - muted
+      properties:
+        muted:
+          type: boolean
+          description: Target mute state to apply.
+    DefaultDeviceChangeResult:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - deviceId
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+            - not_ready
+            - sink_not_found
+            - source_not_found
+            - sink_not_writable
+            - source_not_writable
+        deviceId:
+          type: string
+    MuteChangeResult:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - deviceId
+        - requestedMuted
+        - targetMuted
+        - previousMuted
+      properties:
+        status:
+          type: string
+          enum:
+            - accepted
+            - not_ready
+            - sink_not_found
+            - source_not_found
+            - sink_not_writable
+            - source_not_writable
+        deviceId:
+          type: string
+        requestedMuted:
+          type:
+            - boolean
+            - 'null'
+        targetMuted:
+          type:
+            - boolean
+            - 'null'
+        previousMuted:
+          type:
+            - boolean
+            - 'null'
     VolumeChangeResult:
       type: object
       additionalProperties: false

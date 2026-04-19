@@ -1,4 +1,5 @@
 add_library(plasma_bridge_control STATIC
+    audio_device_controller.cpp
     audio_volume_controller.cpp
 )
 

@@ -25,8 +25,11 @@ private slots:
     void reportsNotReadyAndMissingDefaultSink();
     void servesVolumeControlEndpoints();
     void mapsVolumeControlFailures();
+    void servesDeviceControlEndpoints();
+    void mapsDeviceControlFailures();
     void handlesMethodNotAllowedAndUnknownPath();
     void rejectsInvalidVolumeControlRequests();
+    void rejectsInvalidDeviceControlRequests();
     void rejectsMalformedAndOversizedRequests();
     void servesDocsAndRewritesSpecHosts();
 
@@ -94,7 +97,7 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     const plasma_bridge::AudioState state = plasma_bridge::tests::sampleAudioState();
     store.updateAudioState(state, true, QStringLiteral("initial"));
 
-    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -145,7 +148,8 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     QNetworkAccessManager manager;
 
     plasma_bridge::state::AudioStateStore notReadyStore;
-    plasma_bridge::api::SnapshotHttpServer notReadyServer(&notReadyStore, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer notReadyServer(&notReadyStore, nullptr, nullptr, QStringLiteral("127.0.0.1"), 18080,
+                                                          18081);
     QVERIFY(notReadyServer.listen(bindAddress(), 0));
 
     QNetworkReply *notReadyReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(notReadyServer.serverPort(),
@@ -173,7 +177,11 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     state.sinks[1].isDefault = false;
     missingDefaultStore.updateAudioState(state, true, QStringLiteral("initial"));
 
-    plasma_bridge::api::SnapshotHttpServer missingDefaultServer(&missingDefaultStore, nullptr, QStringLiteral("127.0.0.1"), 18080,
+    plasma_bridge::api::SnapshotHttpServer missingDefaultServer(&missingDefaultStore,
+                                                                nullptr,
+                                                                nullptr,
+                                                                QStringLiteral("127.0.0.1"),
+                                                                18080,
                                                                 18081);
     QVERIFY(missingDefaultServer.listen(bindAddress(), 0));
 
@@ -194,6 +202,7 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     missingDefaultSourceStore.updateAudioState(state, true, QStringLiteral("initial"));
 
     plasma_bridge::api::SnapshotHttpServer missingDefaultSourceServer(&missingDefaultSourceStore,
+                                                                      nullptr,
                                                                       nullptr,
                                                                       QStringLiteral("127.0.0.1"),
                                                                       18080,
@@ -245,7 +254,7 @@ void SnapshotHttpServerFeatureTest::servesVolumeControlEndpoints()
     decrementResult.previousValue = 0.35;
     controller.setResult(Operation::Decrement, decrementResult);
 
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -320,7 +329,7 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -410,13 +419,248 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     invalidValueReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::servesDeviceControlEndpoints()
+{
+    using Operation = plasma_bridge::tests::FakeAudioDeviceController::Operation;
+    using Status = plasma_bridge::control::AudioDeviceChangeStatus;
+
+    plasma_bridge::state::AudioStateStore store;
+    store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAudioDeviceController controller;
+
+    plasma_bridge::control::DefaultDeviceChangeResult defaultSinkResult;
+    defaultSinkResult.status = Status::Accepted;
+    defaultSinkResult.deviceId = QStringLiteral("sink with space");
+    controller.setDefaultResult(Operation::SetDefaultSink, defaultSinkResult);
+
+    plasma_bridge::control::DefaultDeviceChangeResult defaultSourceResult;
+    defaultSourceResult.status = Status::Accepted;
+    defaultSourceResult.deviceId = QStringLiteral("source with space");
+    controller.setDefaultResult(Operation::SetDefaultSource, defaultSourceResult);
+
+    plasma_bridge::control::MuteChangeResult sinkMuteResult;
+    sinkMuteResult.status = Status::Accepted;
+    sinkMuteResult.deviceId = QStringLiteral("bluez_output.headset.1");
+    sinkMuteResult.requestedMuted = false;
+    sinkMuteResult.targetMuted = false;
+    sinkMuteResult.previousMuted = true;
+    controller.setMuteResult(Operation::SetSinkMute, sinkMuteResult);
+
+    plasma_bridge::control::MuteChangeResult sourceMuteResult;
+    sourceMuteResult.status = Status::Accepted;
+    sourceMuteResult.deviceId = QStringLiteral("alsa_input.usb-default.analog-stereo");
+    sourceMuteResult.requestedMuted = true;
+    sourceMuteResult.targetMuted = true;
+    sourceMuteResult.previousMuted = false;
+    controller.setMuteResult(Operation::SetSourceMute, sourceMuteResult);
+
+    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkRequest setDefaultSinkRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/sink%20with%20space/default")));
+    QNetworkReply *setDefaultSinkReply = manager.post(setDefaultSinkRequest, QByteArray());
+    QSignalSpy setDefaultSinkSpy(setDefaultSinkReply, &QNetworkReply::finished);
+    QVERIFY(setDefaultSinkSpy.wait());
+    QCOMPARE(setDefaultSinkReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(setDefaultSinkReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("sink with space"));
+        QCOMPARE(controller.lastOperation(), Operation::SetDefaultSink);
+        QCOMPARE(controller.lastDeviceId(), QStringLiteral("sink with space"));
+        QCOMPARE(controller.callCount(), 1);
+    }
+    setDefaultSinkReply->deleteLater();
+
+    QNetworkRequest setDefaultSourceRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/source%20with%20space/default")));
+    QNetworkReply *setDefaultSourceReply = manager.post(setDefaultSourceRequest, QByteArray());
+    QSignalSpy setDefaultSourceSpy(setDefaultSourceReply, &QNetworkReply::finished);
+    QVERIFY(setDefaultSourceSpy.wait());
+    QCOMPARE(setDefaultSourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(setDefaultSourceReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("source with space"));
+        QCOMPARE(controller.lastOperation(), Operation::SetDefaultSource);
+        QCOMPARE(controller.lastDeviceId(), QStringLiteral("source with space"));
+        QCOMPARE(controller.callCount(), 2);
+    }
+    setDefaultSourceReply->deleteLater();
+
+    QNetworkReply *sinkMuteReply = postJson(
+        &manager,
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/bluez_output.headset.1/mute")),
+        QJsonObject{{QStringLiteral("muted"), false}});
+    QSignalSpy sinkMuteSpy(sinkMuteReply, &QNetworkReply::finished);
+    QVERIFY(sinkMuteSpy.wait());
+    QCOMPARE(sinkMuteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkMuteReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("bluez_output.headset.1"));
+        QCOMPARE(body.value(QStringLiteral("requestedMuted")).toBool(), false);
+        QCOMPARE(body.value(QStringLiteral("targetMuted")).toBool(), false);
+        QCOMPARE(body.value(QStringLiteral("previousMuted")).toBool(), true);
+        QCOMPARE(controller.lastOperation(), Operation::SetSinkMute);
+        QCOMPARE(controller.lastDeviceId(), QStringLiteral("bluez_output.headset.1"));
+        QVERIFY(controller.lastMuted().has_value());
+        QCOMPARE(*controller.lastMuted(), false);
+        QCOMPARE(controller.callCount(), 3);
+    }
+    sinkMuteReply->deleteLater();
+
+    QNetworkReply *sourceMuteReply = postJson(
+        &manager,
+        plasma_bridge::tests::httpUrl(server.serverPort(),
+                                      QStringLiteral("/control/audio/sources/alsa_input.usb-default.analog-stereo/mute")),
+        QJsonObject{{QStringLiteral("muted"), true}});
+    QSignalSpy sourceMuteSpy(sourceMuteReply, &QNetworkReply::finished);
+    QVERIFY(sourceMuteSpy.wait());
+    QCOMPARE(sourceMuteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceMuteReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("alsa_input.usb-default.analog-stereo"));
+        QCOMPARE(body.value(QStringLiteral("requestedMuted")).toBool(), true);
+        QCOMPARE(body.value(QStringLiteral("targetMuted")).toBool(), true);
+        QCOMPARE(body.value(QStringLiteral("previousMuted")).toBool(), false);
+        QCOMPARE(controller.lastOperation(), Operation::SetSourceMute);
+        QCOMPARE(controller.lastDeviceId(), QStringLiteral("alsa_input.usb-default.analog-stereo"));
+        QVERIFY(controller.lastMuted().has_value());
+        QCOMPARE(*controller.lastMuted(), true);
+        QCOMPARE(controller.callCount(), 4);
+    }
+    sourceMuteReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
+{
+    using Operation = plasma_bridge::tests::FakeAudioDeviceController::Operation;
+    using Status = plasma_bridge::control::AudioDeviceChangeStatus;
+
+    plasma_bridge::state::AudioStateStore store;
+    store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAudioDeviceController controller;
+    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    plasma_bridge::control::DefaultDeviceChangeResult sinkNotFoundResult;
+    sinkNotFoundResult.status = Status::SinkNotFound;
+    sinkNotFoundResult.deviceId = QStringLiteral("missing-sink");
+    controller.setDefaultResult(Operation::SetDefaultSink, sinkNotFoundResult);
+
+    QNetworkRequest sinkNotFoundRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/missing-sink/default")));
+    QNetworkReply *sinkNotFoundReply = manager.post(sinkNotFoundRequest, QByteArray());
+    QSignalSpy sinkNotFoundSpy(sinkNotFoundReply, &QNetworkReply::finished);
+    QVERIFY(sinkNotFoundSpy.wait());
+    QCOMPARE(sinkNotFoundReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkNotFoundReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("sink_not_found"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sinkNotFoundResult.deviceId);
+    }
+    sinkNotFoundReply->deleteLater();
+
+    plasma_bridge::control::DefaultDeviceChangeResult sourceNotFoundResult;
+    sourceNotFoundResult.status = Status::SourceNotFound;
+    sourceNotFoundResult.deviceId = QStringLiteral("missing-source");
+    controller.setDefaultResult(Operation::SetDefaultSource, sourceNotFoundResult);
+
+    QNetworkRequest sourceNotFoundRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/missing-source/default")));
+    QNetworkReply *sourceNotFoundReply = manager.post(sourceNotFoundRequest, QByteArray());
+    QSignalSpy sourceNotFoundSpy(sourceNotFoundReply, &QNetworkReply::finished);
+    QVERIFY(sourceNotFoundSpy.wait());
+    QCOMPARE(sourceNotFoundReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceNotFoundReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("source_not_found"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sourceNotFoundResult.deviceId);
+    }
+    sourceNotFoundReply->deleteLater();
+
+    plasma_bridge::control::DefaultDeviceChangeResult defaultNotReadyResult;
+    defaultNotReadyResult.status = Status::NotReady;
+    defaultNotReadyResult.deviceId = QStringLiteral("source-1");
+    controller.setDefaultResult(Operation::SetDefaultSource, defaultNotReadyResult);
+
+    QNetworkRequest defaultNotReadyRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/source-1/default")));
+    QNetworkReply *defaultNotReadyReply = manager.post(defaultNotReadyRequest, QByteArray());
+    QSignalSpy defaultNotReadySpy(defaultNotReadyReply, &QNetworkReply::finished);
+    QVERIFY(defaultNotReadySpy.wait());
+    QCOMPARE(defaultNotReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultNotReadyReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("not_ready"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), defaultNotReadyResult.deviceId);
+    }
+    defaultNotReadyReply->deleteLater();
+
+    plasma_bridge::control::MuteChangeResult sinkNotWritableResult;
+    sinkNotWritableResult.status = Status::SinkNotWritable;
+    sinkNotWritableResult.deviceId = QStringLiteral("bluez_output.headset.1");
+    sinkNotWritableResult.requestedMuted = true;
+    sinkNotWritableResult.targetMuted = false;
+    sinkNotWritableResult.previousMuted = false;
+    controller.setMuteResult(Operation::SetSinkMute, sinkNotWritableResult);
+
+    QNetworkReply *sinkNotWritableReply = postJson(
+        &manager,
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/bluez_output.headset.1/mute")),
+        QJsonObject{{QStringLiteral("muted"), true}});
+    QSignalSpy sinkNotWritableSpy(sinkNotWritableReply, &QNetworkReply::finished);
+    QVERIFY(sinkNotWritableSpy.wait());
+    QCOMPARE(sinkNotWritableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkNotWritableReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("sink_not_writable"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sinkNotWritableResult.deviceId);
+    }
+    sinkNotWritableReply->deleteLater();
+
+    plasma_bridge::control::MuteChangeResult sourceNotWritableResult;
+    sourceNotWritableResult.status = Status::SourceNotWritable;
+    sourceNotWritableResult.deviceId = QStringLiteral("alsa_input.usb-default.analog-stereo");
+    sourceNotWritableResult.requestedMuted = false;
+    sourceNotWritableResult.targetMuted = true;
+    sourceNotWritableResult.previousMuted = true;
+    controller.setMuteResult(Operation::SetSourceMute, sourceNotWritableResult);
+
+    QNetworkReply *sourceNotWritableReply = postJson(
+        &manager,
+        plasma_bridge::tests::httpUrl(server.serverPort(),
+                                      QStringLiteral("/control/audio/sources/alsa_input.usb-default.analog-stereo/mute")),
+        QJsonObject{{QStringLiteral("muted"), false}});
+    QSignalSpy sourceNotWritableSpy(sourceNotWritableReply, &QNetworkReply::finished);
+    QVERIFY(sourceNotWritableSpy.wait());
+    QCOMPARE(sourceNotWritableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceNotWritableReply));
+        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("source_not_writable"));
+        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sourceNotWritableResult.deviceId);
+    }
+    sourceNotWritableReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::tests::FakeAudioDeviceController deviceController;
+    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, &deviceController, QStringLiteral("127.0.0.1"), 18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -451,6 +695,26 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
              QStringLiteral("method_not_allowed"));
     controlGetReply->deleteLater();
 
+    QNetworkReply *defaultGetReply = manager.get(QNetworkRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/sink-1/default"))));
+    QSignalSpy defaultGetSpy(defaultGetReply, &QNetworkReply::finished);
+    QVERIFY(defaultGetSpy.wait());
+    QCOMPARE(defaultGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
+    QCOMPARE(defaultGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(defaultGetReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("method_not_allowed"));
+    defaultGetReply->deleteLater();
+
+    QNetworkReply *muteGetReply = manager.get(QNetworkRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/source-1/mute"))));
+    QSignalSpy muteGetSpy(muteGetReply, &QNetworkReply::finished);
+    QVERIFY(muteGetSpy.wait());
+    QCOMPARE(muteGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
+    QCOMPARE(muteGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(muteGetReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("method_not_allowed"));
+    muteGetReply->deleteLater();
+
     QNetworkReply *notFoundReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
                                                                                              QStringLiteral("/unknown"))));
     QSignalSpy notFoundSpy(notFoundReply, &QNetworkReply::finished);
@@ -467,7 +731,7 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -536,13 +800,87 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     encodedSlashReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
+{
+    plasma_bridge::state::AudioStateStore store;
+    store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAudioDeviceController controller;
+    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *wrongContentTypeReply =
+        postBytes(&manager,
+                  plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/sink-1/mute")),
+                  QByteArrayLiteral("{\"muted\":true}"),
+                  QByteArrayLiteral("text/plain"));
+    QSignalSpy wrongContentTypeSpy(wrongContentTypeReply, &QNetworkReply::finished);
+    QVERIFY(wrongContentTypeSpy.wait());
+    QCOMPARE(wrongContentTypeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 415);
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(wrongContentTypeReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("unsupported_media_type"));
+    QCOMPARE(controller.callCount(), 0);
+    wrongContentTypeReply->deleteLater();
+
+    QNetworkReply *malformedJsonReply =
+        postBytes(&manager,
+                  plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/source-1/mute")),
+                  QByteArrayLiteral("{"),
+                  QByteArrayLiteral("application/json"));
+    QSignalSpy malformedJsonSpy(malformedJsonReply, &QNetworkReply::finished);
+    QVERIFY(malformedJsonSpy.wait());
+    QCOMPARE(malformedJsonReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(malformedJsonReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("bad_request"));
+    QCOMPARE(controller.callCount(), 0);
+    malformedJsonReply->deleteLater();
+
+    QNetworkReply *missingMutedReply =
+        postJson(&manager,
+                 plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/source-1/mute")),
+                 QJsonObject{});
+    QSignalSpy missingMutedSpy(missingMutedReply, &QNetworkReply::finished);
+    QVERIFY(missingMutedSpy.wait());
+    QCOMPARE(missingMutedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(missingMutedReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("bad_request"));
+    QCOMPARE(controller.callCount(), 0);
+    missingMutedReply->deleteLater();
+
+    QNetworkRequest defaultRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/sink-1/default")));
+    defaultRequest.setRawHeader("Content-Type", QByteArrayLiteral("application/json"));
+    QNetworkReply *unexpectedBodyReply = manager.post(defaultRequest, QByteArrayLiteral("{}"));
+    QSignalSpy unexpectedBodySpy(unexpectedBodyReply, &QNetworkReply::finished);
+    QVERIFY(unexpectedBodySpy.wait());
+    QCOMPARE(unexpectedBodyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(unexpectedBodyReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("bad_request"));
+    QCOMPARE(controller.callCount(), 0);
+    unexpectedBodyReply->deleteLater();
+
+    QNetworkReply *encodedSlashReply =
+        postJson(&manager,
+                 plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sources/source%2Fpart/mute")),
+                 QJsonObject{{QStringLiteral("muted"), true}});
+    QSignalSpy encodedSlashSpy(encodedSlashReply, &QNetworkReply::finished);
+    QVERIFY(encodedSlashSpy.wait());
+    QCOMPARE(encodedSlashReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(encodedSlashReply)).value(QStringLiteral("code")).toString(),
+             QStringLiteral("bad_request"));
+    QCOMPARE(controller.callCount(), 0);
+    encodedSlashReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::rejectsMalformedAndOversizedRequests()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     InMemoryTcpSocket malformedSocket;
@@ -593,7 +931,7 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
-    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, QStringLiteral("localhost"), 19080, 19081);
+    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, nullptr, QStringLiteral("localhost"), 19080, 19081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -634,6 +972,10 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/volume")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/volume/increment")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/volume/decrement")));
+    QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/default")));
+    QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/default")));
+    QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/mute")));
+    QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/mute")));
     openApiReply->deleteLater();
 
     QNetworkReply *asyncApiReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),

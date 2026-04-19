@@ -3,6 +3,8 @@
 
 - HTTP endpoint to list available audio sources
 - HTTP endpoint to list the default audio source
+- HTTP endpoints to set the default sink and default source
+- HTTP endpoints to mute and unmute sinks and sources
 - WebSocket source-state coverage on `/ws/audio`, including source-aware patch metadata
 
 ### Fixed
@@ -12,8 +14,8 @@
 ### Changed
 
 - Shared audio state and observer flow now track both sinks and sources
-- API docs and getting-started examples now document audio source snapshots and the expanded WebSocket payload
-- Automated tests now cover source HTTP snapshots and source WebSocket updates
+- API docs and getting-started examples now document audio source snapshots plus sink/source default and mute controls
+- Automated tests now cover source HTTP snapshots, sink/source control endpoints, and source WebSocket updates
 
 ### Removed
 

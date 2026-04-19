@@ -1,6 +1,8 @@
 #include "api/snapshot_http_server.h"
 
+#include "api/audio_control_http_helpers.h"
 #include "common/audio_state.h"
+#include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "state/audio_state_store.h"
 
@@ -23,10 +25,6 @@ const QString kSinksPath = QStringLiteral("/snapshot/audio/sinks");
 const QString kDefaultSinkPath = QStringLiteral("/snapshot/audio/default-sink");
 const QString kSourcesPath = QStringLiteral("/snapshot/audio/sources");
 const QString kDefaultSourcePath = QStringLiteral("/snapshot/audio/default-source");
-const QString kControlSinksPrefix = QStringLiteral("/control/audio/sinks/");
-const QString kVolumePathSuffix = QStringLiteral("/volume");
-const QString kVolumeIncrementPathSuffix = QStringLiteral("/volume/increment");
-const QString kVolumeDecrementPathSuffix = QStringLiteral("/volume/decrement");
 const QString kDocsRootPath = QStringLiteral("/docs/");
 const QString kDocsRootNoSlashPath = QStringLiteral("/docs");
 const QString kDocsHttpPath = QStringLiteral("/docs/http");
@@ -37,34 +35,12 @@ const QString kDocsNoticesPath = QStringLiteral("/docs/assets/THIRD_PARTY_NOTICE
 const QString kDefaultOpenApiServerUrl = QStringLiteral("http://127.0.0.1:8080");
 const QString kDefaultAsyncApiHost = QStringLiteral("127.0.0.1:8081");
 
-enum class VolumeControlOperation {
-    Set,
-    Increment,
-    Decrement,
-};
-
 enum class SnapshotRoute {
     None,
     Sinks,
     DefaultSink,
     Sources,
     DefaultSource,
-};
-
-enum class ControlTargetMatch {
-    NoMatch,
-    Match,
-    InvalidSinkId,
-};
-
-struct ControlTarget {
-    VolumeControlOperation operation = VolumeControlOperation::Set;
-    QString sinkId;
-};
-
-struct ControlTargetParseResult {
-    ControlTargetMatch match = ControlTargetMatch::NoMatch;
-    ControlTarget target;
 };
 
 SnapshotRoute snapshotRouteForPath(const QString &path)
@@ -242,93 +218,6 @@ bool isJsonContentType(const QByteArray &contentType)
     return mediaType == QByteArrayLiteral("application/json");
 }
 
-ControlTargetParseResult parseControlTarget(const QString &path)
-{
-    ControlTargetParseResult result;
-    if (!path.startsWith(kControlSinksPrefix)) {
-        return result;
-    }
-
-    const auto trySuffix = [&](const QString &suffix, const VolumeControlOperation operation) -> bool {
-        if (!path.endsWith(suffix)) {
-            return false;
-        }
-
-        const qsizetype encodedSinkIdLength = path.size() - kControlSinksPrefix.size() - suffix.size();
-        if (encodedSinkIdLength <= 0) {
-            return false;
-        }
-
-        const QString encodedSinkId = path.mid(kControlSinksPrefix.size(), encodedSinkIdLength);
-        if (encodedSinkId.contains(QLatin1Char('/'))) {
-            return false;
-        }
-
-        const QString sinkId = QUrl::fromPercentEncoding(encodedSinkId.toUtf8());
-        if (sinkId.isEmpty() || sinkId.contains(QLatin1Char('/'))) {
-            result.match = ControlTargetMatch::InvalidSinkId;
-            return true;
-        }
-
-        result.match = ControlTargetMatch::Match;
-        result.target.operation = operation;
-        result.target.sinkId = sinkId;
-        return true;
-    };
-
-    if (trySuffix(kVolumeIncrementPathSuffix, VolumeControlOperation::Increment)) {
-        return result;
-    }
-    if (trySuffix(kVolumeDecrementPathSuffix, VolumeControlOperation::Decrement)) {
-        return result;
-    }
-    if (trySuffix(kVolumePathSuffix, VolumeControlOperation::Set)) {
-        return result;
-    }
-
-    return result;
-}
-
-int httpStatusCodeForVolumeChangeStatus(const control::VolumeChangeStatus status)
-{
-    switch (status) {
-    case control::VolumeChangeStatus::Accepted:
-        return 200;
-    case control::VolumeChangeStatus::InvalidValue:
-        return 400;
-    case control::VolumeChangeStatus::SinkNotFound:
-        return 404;
-    case control::VolumeChangeStatus::SinkNotWritable:
-        return 409;
-    case control::VolumeChangeStatus::NotReady:
-        return 503;
-    }
-
-    return 400;
-}
-
-QByteArray reasonPhraseForStatusCode(const int statusCode)
-{
-    switch (statusCode) {
-    case 200:
-        return QByteArrayLiteral("OK");
-    case 400:
-        return QByteArrayLiteral("Bad Request");
-    case 404:
-        return QByteArrayLiteral("Not Found");
-    case 405:
-        return QByteArrayLiteral("Method Not Allowed");
-    case 409:
-        return QByteArrayLiteral("Conflict");
-    case 415:
-        return QByteArrayLiteral("Unsupported Media Type");
-    case 503:
-        return QByteArrayLiteral("Service Unavailable");
-    default:
-        return QByteArrayLiteral("Bad Request");
-    }
-}
-
 QByteArray buildHttpResponse(int statusCode,
                              const QByteArray &reasonPhrase,
                              const QByteArray &contentType,
@@ -354,6 +243,7 @@ QByteArray buildHttpResponse(int statusCode,
 
 SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        control::AudioVolumeController *audioVolumeController,
+                                       control::AudioDeviceController *audioDeviceController,
                                        const QString &documentationHost,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
@@ -361,6 +251,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
     : QObject(parent)
     , m_audioStateStore(audioStateStore)
     , m_audioVolumeController(audioVolumeController)
+    , m_audioDeviceController(audioDeviceController)
     , m_documentationHost(documentationHost)
     , m_documentationHttpPort(documentationHttpPort)
     , m_documentationWsPort(documentationWsPort)
@@ -573,14 +464,61 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
-    const ControlTargetParseResult controlTarget = parseControlTarget(path);
-    if (controlTarget.match == ControlTargetMatch::InvalidSinkId) {
+    const auto requireJsonObjectBody = [&](QJsonObject *outObject) -> bool {
+        if (!hasContentLength) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Content-Length is required for POST requests."));
+            return false;
+        }
+
+        if (!isJsonContentType(headers.value(QByteArrayLiteral("content-type")))) {
+            writeJsonErrorResponse(socket,
+                                   415,
+                                   QByteArrayLiteral("Unsupported Media Type"),
+                                   QStringLiteral("unsupported_media_type"),
+                                   QStringLiteral("Content-Type must be application/json."));
+            return false;
+        }
+
+        if (body.isEmpty()) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Request body is required."));
+            return false;
+        }
+
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(body, &parseError);
+        if (parseError.error != QJsonParseError::NoError) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Request body must be valid JSON."));
+            return false;
+        }
+
+        if (!document.isObject()) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Request body must be a JSON object."));
+            return false;
+        }
+
+        if (outObject != nullptr) {
+            *outObject = document.object();
+        }
+        return true;
+    };
+
+    const AudioControlRouteParseResult controlRoute = parseAudioControlRoute(path);
+    if (controlRoute.match == AudioControlRouteMatch::InvalidSinkId) {
         writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
                                QStringLiteral("Sink id must be a single path segment."));
         return;
     }
+    if (controlRoute.match == AudioControlRouteMatch::InvalidSourceId) {
+        writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                               QStringLiteral("Source id must be a single path segment."));
+        return;
+    }
 
-    if (controlTarget.match == ControlTargetMatch::Match) {
+    if (controlRoute.match == AudioControlRouteMatch::Match) {
         if (method != QByteArrayLiteral("POST")) {
             writeJsonErrorResponse(socket,
                                    405,
@@ -591,74 +529,127 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
 
-        if (m_audioVolumeController == nullptr) {
-            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
-                                   QStringLiteral("Audio volume control is not available."));
+        switch (controlRoute.route.operation) {
+        case AudioControlOperation::SetVolume:
+        case AudioControlOperation::IncrementVolume:
+        case AudioControlOperation::DecrementVolume: {
+            if (m_audioVolumeController == nullptr) {
+                writeJsonErrorResponse(socket,
+                                       503,
+                                       QByteArrayLiteral("Service Unavailable"),
+                                       QStringLiteral("not_ready"),
+                                       QStringLiteral("Audio volume control is not available."));
+                return;
+            }
+
+            QJsonObject object;
+            if (!requireJsonObjectBody(&object)) {
+                return;
+            }
+
+            const QJsonValue valueField = object.value(QStringLiteral("value"));
+            if (!valueField.isDouble()) {
+                writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                       QStringLiteral("Request body must contain a numeric value field."));
+                return;
+            }
+
+            control::VolumeChangeResult result;
+            switch (controlRoute.route.operation) {
+            case AudioControlOperation::SetVolume:
+                result = m_audioVolumeController->setVolume(controlRoute.route.deviceId, valueField.toDouble());
+                break;
+            case AudioControlOperation::IncrementVolume:
+                result = m_audioVolumeController->incrementVolume(controlRoute.route.deviceId, valueField.toDouble());
+                break;
+            case AudioControlOperation::DecrementVolume:
+                result = m_audioVolumeController->decrementVolume(controlRoute.route.deviceId, valueField.toDouble());
+                break;
+            case AudioControlOperation::SetDefault:
+            case AudioControlOperation::SetMute:
+                break;
+            }
+
+            const int statusCode = httpStatusCodeForVolumeChangeStatus(result.status);
+            writeJsonResponse(socket,
+                              statusCode,
+                              reasonPhraseForStatusCode(statusCode),
+                              QJsonDocument(control::toJsonObject(result)));
             return;
         }
+        case AudioControlOperation::SetDefault: {
+            if (m_audioDeviceController == nullptr) {
+                writeJsonErrorResponse(socket,
+                                       503,
+                                       QByteArrayLiteral("Service Unavailable"),
+                                       QStringLiteral("not_ready"),
+                                       QStringLiteral("Audio device control is not available."));
+                return;
+            }
 
-        if (!hasContentLength) {
-            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
-                                   QStringLiteral("Content-Length is required for POST requests."));
+            if (contentLength > 0) {
+                writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                       QStringLiteral("Request body is not supported for this endpoint."));
+                return;
+            }
+
+            control::DefaultDeviceChangeResult result;
+            switch (controlRoute.route.targetKind) {
+            case AudioControlTargetKind::Sink:
+                result = m_audioDeviceController->setDefaultSink(controlRoute.route.deviceId);
+                break;
+            case AudioControlTargetKind::Source:
+                result = m_audioDeviceController->setDefaultSource(controlRoute.route.deviceId);
+                break;
+            }
+
+            const int statusCode = httpStatusCodeForAudioDeviceChangeStatus(result.status);
+            writeJsonResponse(socket,
+                              statusCode,
+                              reasonPhraseForStatusCode(statusCode),
+                              QJsonDocument(control::toJsonObject(result)));
             return;
         }
+        case AudioControlOperation::SetMute: {
+            if (m_audioDeviceController == nullptr) {
+                writeJsonErrorResponse(socket,
+                                       503,
+                                       QByteArrayLiteral("Service Unavailable"),
+                                       QStringLiteral("not_ready"),
+                                       QStringLiteral("Audio device control is not available."));
+                return;
+            }
 
-        if (!isJsonContentType(headers.value(QByteArrayLiteral("content-type")))) {
-            writeJsonErrorResponse(socket,
-                                   415,
-                                   QByteArrayLiteral("Unsupported Media Type"),
-                                   QStringLiteral("unsupported_media_type"),
-                                   QStringLiteral("Content-Type must be application/json."));
+            QJsonObject object;
+            if (!requireJsonObjectBody(&object)) {
+                return;
+            }
+
+            const QJsonValue mutedField = object.value(QStringLiteral("muted"));
+            if (!mutedField.isBool()) {
+                writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                       QStringLiteral("Request body must contain a boolean muted field."));
+                return;
+            }
+
+            control::MuteChangeResult result;
+            switch (controlRoute.route.targetKind) {
+            case AudioControlTargetKind::Sink:
+                result = m_audioDeviceController->setSinkMuted(controlRoute.route.deviceId, mutedField.toBool());
+                break;
+            case AudioControlTargetKind::Source:
+                result = m_audioDeviceController->setSourceMuted(controlRoute.route.deviceId, mutedField.toBool());
+                break;
+            }
+
+            const int statusCode = httpStatusCodeForAudioDeviceChangeStatus(result.status);
+            writeJsonResponse(socket,
+                              statusCode,
+                              reasonPhraseForStatusCode(statusCode),
+                              QJsonDocument(control::toJsonObject(result)));
             return;
         }
-
-        if (body.isEmpty()) {
-            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
-                                   QStringLiteral("Request body is required."));
-            return;
         }
-
-        QJsonParseError parseError;
-        const QJsonDocument document = QJsonDocument::fromJson(body, &parseError);
-        if (parseError.error != QJsonParseError::NoError) {
-            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
-                                   QStringLiteral("Request body must be valid JSON."));
-            return;
-        }
-
-        if (!document.isObject()) {
-            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
-                                   QStringLiteral("Request body must be a JSON object."));
-            return;
-        }
-
-        const QJsonObject object = document.object();
-        const QJsonValue valueField = object.value(QStringLiteral("value"));
-        if (!valueField.isDouble()) {
-            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
-                                   QStringLiteral("Request body must contain a numeric value field."));
-            return;
-        }
-
-        control::VolumeChangeResult result;
-        switch (controlTarget.target.operation) {
-        case VolumeControlOperation::Set:
-            result = m_audioVolumeController->setVolume(controlTarget.target.sinkId, valueField.toDouble());
-            break;
-        case VolumeControlOperation::Increment:
-            result = m_audioVolumeController->incrementVolume(controlTarget.target.sinkId, valueField.toDouble());
-            break;
-        case VolumeControlOperation::Decrement:
-            result = m_audioVolumeController->decrementVolume(controlTarget.target.sinkId, valueField.toDouble());
-            break;
-        }
-
-        const int statusCode = httpStatusCodeForVolumeChangeStatus(result.status);
-        writeJsonResponse(socket,
-                          statusCode,
-                          reasonPhraseForStatusCode(statusCode),
-                          QJsonDocument(control::toJsonObject(result)));
-        return;
     }
 
     const SnapshotRoute snapshotRoute = snapshotRouteForPath(path);

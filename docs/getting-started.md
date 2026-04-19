@@ -18,10 +18,10 @@ cmake --build build --target plasma_bridge
 
 The first build downloads the pinned Swagger UI and AsyncAPI browser assets into the build tree. Later builds reuse that local cache.
 
-The optional audio probe can be built from the same tree:
+The optional probe tools can be built from the same tree:
 
 ```bash
-cmake --build build --target audio_probe
+cmake --build build --target audio_probe audio_control_probe
 ```
 
 ## Test
@@ -55,10 +55,10 @@ ctest --test-dir build --output-on-failure -R test_audio_websocket_server
 Current coverage includes:
 
 - unit tests for common audio-state serialization and formatting
-- unit tests for volume-control result formatting
+- unit tests for volume and device-control result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
-- feature tests for the HTTP snapshot, source, and volume-control server
+- feature tests for the HTTP snapshot and control server
 - feature tests for the WebSocket server
 - CLI coverage for `plasma_bridge`, `audio_probe`, and `audio_control_probe`
 
@@ -100,11 +100,20 @@ Check the HTTP endpoints:
 
 ```bash
 SINK_ID='alsa_output.usb-default.analog-stereo'
+SOURCE_ID='alsa_input.usb-default.analog-stereo'
 
 curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
 curl http://127.0.0.1:8080/snapshot/audio/sources
 curl http://127.0.0.1:8080/snapshot/audio/default-source
+curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/default
+curl -X POST http://127.0.0.1:8080/control/audio/sources/${SOURCE_ID}/default
+curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/mute \
+  -H 'Content-Type: application/json' \
+  -d '{"muted":true}'
+curl -X POST http://127.0.0.1:8080/control/audio/sources/${SOURCE_ID}/mute \
+  -H 'Content-Type: application/json' \
+  -d '{"muted":false}'
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume \
   -H 'Content-Type: application/json' \
   -d '{"value":0.55}'
@@ -131,6 +140,7 @@ For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws/audio` and send:
 ```
 
 You should receive one `fullState` message followed by `patch` messages as sink or source state changes.
+Local HTTP default, mute, and volume-control writes will converge back through the same WebSocket state stream.
 The `state.audio` object now includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
 Connections to `/` and other non-audio WebSocket paths are rejected.
 

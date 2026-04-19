@@ -1,5 +1,6 @@
 #pragma once
 
+#include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 
 #include <QObject>
@@ -17,15 +18,20 @@ namespace plasma_bridge::tools::audio_control_probe
 inline constexpr int kDefaultStartupTimeoutMs = 5000;
 
 enum class Command {
-    Set,
-    Increment,
-    Decrement,
+    SetVolume,
+    IncrementVolume,
+    DecrementVolume,
+    SetDefaultSink,
+    SetDefaultSource,
+    SetSinkMute,
+    SetSourceMute,
 };
 
 struct AudioControlProbeOptions {
-    Command command = Command::Set;
-    QString sinkId;
-    double requestedValue = 0.0;
+    Command command = Command::SetVolume;
+    QString deviceId;
+    std::optional<double> requestedValue;
+    std::optional<bool> requestedMuted;
     int timeoutMs = kDefaultStartupTimeoutMs;
     bool jsonOutput = false;
 };
@@ -69,7 +75,8 @@ class AudioControlProbeRunner final : public QObject
     Q_OBJECT
 
 public:
-    explicit AudioControlProbeRunner(control::AudioVolumeController *controller,
+    explicit AudioControlProbeRunner(control::AudioVolumeController *volumeController,
+                                     control::AudioDeviceController *deviceController,
                                      AudioControlSubmissionGate *submissionGate,
                                      const AudioControlProbeOptions &options,
                                      QTextStream *output,
@@ -82,10 +89,13 @@ signals:
     void finished(int exitCode);
 
 private:
+    bool hasRequiredController() const;
+    QString unavailableControllerMessage() const;
     void finish(int exitCode);
     void submitRequest();
 
-    control::AudioVolumeController *m_controller = nullptr;
+    control::AudioVolumeController *m_volumeController = nullptr;
+    control::AudioDeviceController *m_deviceController = nullptr;
     AudioControlSubmissionGate *m_submissionGate = nullptr;
     AudioControlProbeOptions m_options;
     QTextStream *m_output = nullptr;
@@ -98,8 +108,15 @@ void configureParser(QCommandLineParser &parser);
 ParseOptionsResult parseOptions(const QCommandLineParser &parser);
 std::optional<Command> parseCommand(const QString &value);
 std::optional<double> parseRequestedValue(const QString &value);
+std::optional<bool> parseRequestedMuted(const QString &value);
 QByteArray formatJsonResultBytes(const control::VolumeChangeResult &result);
+QByteArray formatJsonResultBytes(const control::DefaultDeviceChangeResult &result);
+QByteArray formatJsonResultBytes(const control::MuteChangeResult &result);
 QString formatHumanResultText(const control::VolumeChangeResult &result);
+QString formatHumanResultText(const control::DefaultDeviceChangeResult &result);
+QString formatHumanResultText(const control::MuteChangeResult &result);
 int exitCodeForResult(const control::VolumeChangeResult &result);
+int exitCodeForResult(const control::DefaultDeviceChangeResult &result);
+int exitCodeForResult(const control::MuteChangeResult &result);
 
 } // namespace plasma_bridge::tools::audio_control_probe

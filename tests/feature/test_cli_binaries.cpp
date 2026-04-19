@@ -69,7 +69,8 @@ void CliBinariesFeatureTest::audioControlProbeHelpAndValidationErrors()
     const ProcessResult help = runProcess(audioControlProbeBin, {QStringLiteral("--help")});
     QCOMPARE(help.exitCode, 0);
     QVERIFY(help.standardOutput.contains(QStringLiteral("--timeout-ms")));
-    QVERIFY(help.standardOutput.contains(QStringLiteral("set, increment, decrement")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("set-default-sink")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("set-source-mute")));
 
     const ProcessResult invalidCommand = runProcess(audioControlProbeBin,
                                                     {QStringLiteral("nope"), QStringLiteral("sink-1"), QStringLiteral("0.5")});
@@ -89,6 +90,18 @@ void CliBinariesFeatureTest::audioControlProbeHelpAndValidationErrors()
                                                      QStringLiteral("0.5")});
     QCOMPARE(invalidTimeout.exitCode, 1);
     QVERIFY(invalidTimeout.standardError.contains(QStringLiteral("timeout-ms")));
+
+    const ProcessResult invalidMuted = runProcess(audioControlProbeBin,
+                                                  {QStringLiteral("set-sink-mute"),
+                                                   QStringLiteral("sink-1"),
+                                                   QStringLiteral("maybe")});
+    QCOMPARE(invalidMuted.exitCode, 1);
+    QVERIFY(invalidMuted.standardError.contains(QStringLiteral("Muted must be true or false")));
+
+    const ProcessResult missingArgs = runProcess(audioControlProbeBin,
+                                                 {QStringLiteral("set-default-source")});
+    QCOMPARE(missingArgs.exitCode, 1);
+    QVERIFY(missingArgs.standardError.contains(QStringLiteral("expects")));
 }
 
 CliBinariesFeatureTest::ProcessResult CliBinariesFeatureTest::runProcess(const QString &program,

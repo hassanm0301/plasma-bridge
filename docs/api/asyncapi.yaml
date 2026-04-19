@@ -2,7 +2,7 @@ asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
   version: 0.1.0
-  description: Live WebSocket monitoring for KDE Plasma sinks and sources. The implemented endpoint is `/ws/audio`.
+  description: Live WebSocket monitoring for KDE Plasma sinks and sources. The implemented endpoint is `/ws/audio`, and local HTTP default, mute, and volume-control writes converge back through this stream.
 defaultContentType: application/json
 servers:
   local:
@@ -47,7 +47,7 @@ operations:
       $ref: '#/channels/wsAudio'
     title: Send patch
     summary: Send an audio update after sink, source, or default-device changes.
-    description: Each patch replaces the full `audio` subtree.
+    description: Each patch replaces the full `audio` subtree. Local HTTP control writes may trigger the same patch stream after the observer republishes state.
     messages:
       - $ref: '#/channels/wsAudio/messages/patch'
   sendError:

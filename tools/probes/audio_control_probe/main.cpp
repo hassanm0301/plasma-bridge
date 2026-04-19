@@ -1,3 +1,4 @@
+#include "adapters/audio/pulse_audio_device_controller.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
 #include "tools/probes/audio_control_probe/audio_control_probe_runner.h"
 
@@ -14,13 +15,9 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Submit output sink volume changes through KF6PulseAudioQt."));
+    parser.setApplicationDescription(QStringLiteral("Submit audio control requests through KF6PulseAudioQt."));
     plasma_bridge::tools::audio_control_probe::configureParser(parser);
     parser.process(app);
-
-    if (parser.positionalArguments().size() != 3) {
-        parser.showHelp(1);
-    }
 
     PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.audio_control_probe"));
 
@@ -35,8 +32,10 @@ int main(int argc, char *argv[])
     }
 
     plasma_bridge::audio::PulseAudioVolumeController controller;
+    plasma_bridge::audio::PulseAudioDeviceController deviceController;
     plasma_bridge::tools::audio_control_probe::PulseAudioSubmissionGate submissionGate;
     plasma_bridge::tools::audio_control_probe::AudioControlProbeRunner runner(&controller,
+                                                                              &deviceController,
                                                                               &submissionGate,
                                                                               *optionsResult.options,
                                                                               &output,

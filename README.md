@@ -9,6 +9,8 @@ The current implementation is audio-first:
 - report the current default input source
 - report per-device volume and mute state
 - serve audio snapshots over HTTP
+- set sink and source defaults over HTTP
+- set sink and source mute state over HTTP
 - set, increment, and decrement sink volume over HTTP
 - publish live sink and source updates over WebSocket
 
