@@ -24,6 +24,44 @@ The optional audio probe can be built from the same tree:
 cmake --build build --target audio_probe
 ```
 
+## Test
+
+The repository includes automated unit tests and feature tests built with Qt Test and run through CTest.
+The default test suite is hermetic:
+
+- no live KDE Plasma session is required
+- no real PulseAudio sink changes are made
+- HTTP and WebSocket feature tests bind only to localhost
+
+Configure and build with testing enabled:
+
+```bash
+cmake -S . -B build -G Ninja -DBUILD_TESTING=ON
+cmake --build build
+```
+
+Run the full suite:
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+Run one test executable by name:
+
+```bash
+ctest --test-dir build --output-on-failure -R test_audio_websocket_server
+```
+
+Current coverage includes:
+
+- unit tests for common audio-state serialization and formatting
+- unit tests for volume-control result formatting
+- unit tests for audio state store behavior
+- unit tests for the `audio_probe` and `audio_control_probe` runner helpers
+- feature tests for the HTTP snapshot server
+- feature tests for the WebSocket server
+- CLI coverage for `plasma_bridge`, `audio_probe`, and `audio_control_probe`
+
 ## Run
 
 Start the service from a KDE Plasma user session:

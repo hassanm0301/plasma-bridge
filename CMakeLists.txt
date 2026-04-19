@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 
 project(plasma_bridge LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -13,5 +15,13 @@ set(CMAKE_AUTORCC OFF)
 find_package(Qt6 REQUIRED COMPONENTS Core Network WebSockets)
 find_package(KF6PulseAudioQt REQUIRED)
 
+if(BUILD_TESTING)
+    find_package(Qt6 REQUIRED COMPONENTS Test)
+endif()
+
 add_subdirectory(src)
 add_subdirectory(tools)
+
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()

@@ -61,8 +61,8 @@ private:
     QString m_documentationHost;
     quint16 m_documentationHttpPort = 0;
     quint16 m_documentationWsPort = 0;
-    QTcpServer m_server;
     QHash<QTcpSocket *, QByteArray> m_pendingRequests;
+    QTcpServer m_server;
 };
 
 } // namespace plasma_bridge::api

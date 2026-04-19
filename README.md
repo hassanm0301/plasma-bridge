@@ -14,3 +14,5 @@ Documentation:
 - [Getting Started](docs/getting-started.md)
 - [Architecture](docs/architecture.md)
 - [API Reference](docs/api/README.md)
+
+Automated tests use Qt Test and CTest. See [Getting Started](docs/getting-started.md) for how to build and run the unit and feature suites.

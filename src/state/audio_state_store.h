@@ -22,6 +22,7 @@ public:
     explicit AudioStateStore(QObject *parent = nullptr);
 
     void attachObserver(audio::PulseAudioSinkObserver *observer);
+    void updateAudioState(const plasma_bridge::AudioState &state, bool ready, const QString &reason, const QString &sinkId = {});
 
     bool isReady() const;
     const plasma_bridge::AudioState &audioState() const;
@@ -32,8 +33,6 @@ signals:
     void audioStateChanged(const QString &reason, const QString &sinkId);
 
 private:
-    void syncFromObserver(audio::PulseAudioSinkObserver *observer, const QString &reason, const QString &sinkId);
-
     plasma_bridge::AudioState m_audioState;
     bool m_ready = false;
 };

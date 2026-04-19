@@ -17,15 +17,31 @@ void AudioStateStore::attachObserver(audio::PulseAudioSinkObserver *observer)
     }
 
     connect(observer, &audio::PulseAudioSinkObserver::initialStateReady, this, [this, observer]() {
-        syncFromObserver(observer, QStringLiteral("initial"), QString());
+        updateAudioState(observer->currentState(), observer->hasInitialState(), QStringLiteral("initial"));
     });
     connect(observer, &audio::PulseAudioSinkObserver::audioStateChanged, this, [this, observer](const QString &reason, const QString &sinkId) {
-        syncFromObserver(observer, reason, sinkId);
+        updateAudioState(observer->currentState(), observer->hasInitialState(), reason, sinkId);
     });
 
     if (observer->hasInitialState()) {
-        syncFromObserver(observer, QStringLiteral("initial"), QString());
+        updateAudioState(observer->currentState(), observer->hasInitialState(), QStringLiteral("initial"));
     }
+}
+
+void AudioStateStore::updateAudioState(const plasma_bridge::AudioState &state,
+                                       const bool ready,
+                                       const QString &reason,
+                                       const QString &sinkId)
+{
+    const bool wasReady = m_ready;
+    m_audioState = state;
+    m_ready = ready;
+
+    if (wasReady != m_ready) {
+        emit readyChanged(m_ready);
+    }
+
+    emit audioStateChanged(reason, sinkId);
 }
 
 bool AudioStateStore::isReady() const
@@ -51,23 +67,6 @@ std::optional<plasma_bridge::AudioSinkState> AudioStateStore::defaultSink() cons
     }
 
     return std::nullopt;
-}
-
-void AudioStateStore::syncFromObserver(audio::PulseAudioSinkObserver *observer, const QString &reason, const QString &sinkId)
-{
-    if (observer == nullptr) {
-        return;
-    }
-
-    const bool wasReady = m_ready;
-    m_audioState = observer->currentState();
-    m_ready = observer->hasInitialState();
-
-    if (wasReady != m_ready) {
-        emit readyChanged(m_ready);
-    }
-
-    emit audioStateChanged(reason, sinkId);
 }
 
 } // namespace plasma_bridge::state

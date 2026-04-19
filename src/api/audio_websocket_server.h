@@ -46,8 +46,8 @@ private:
     void sendError(QWebSocket *socket, const QString &code, const QString &message, bool closeAfter);
 
     state::AudioStateStore *m_audioStateStore = nullptr;
-    QWebSocketServer m_server;
     QHash<QWebSocket *, ClientSession> m_clients;
+    QWebSocketServer m_server;
 };
 
 } // namespace plasma_bridge::api
