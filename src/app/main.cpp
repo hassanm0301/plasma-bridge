@@ -34,6 +34,11 @@ bool parseHostAddress(const QString &value, QHostAddress *outAddress)
     return true;
 }
 
+QString urlHost(const QString &host)
+{
+    return host.contains(QLatin1Char(':')) && !host.startsWith(QLatin1Char('[')) ? QStringLiteral("[%1]").arg(host) : host;
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -123,8 +128,15 @@ int main(int argc, char *argv[])
     observer.start();
 
     QTextStream output(stdout);
-    output << "Listening on http://" << parser.value(hostOption) << ':' << httpServer.serverPort() << Qt::endl;
-    output << "Listening on ws://" << parser.value(hostOption) << ':' << webSocketServer.serverPort() << Qt::endl;
+    const QString formattedHost = urlHost(parser.value(hostOption));
+    const QString httpBaseUrl = QStringLiteral("http://%1:%2").arg(formattedHost, QString::number(httpServer.serverPort()));
+    const QString wsBaseUrl = QStringLiteral("ws://%1:%2").arg(formattedHost, QString::number(webSocketServer.serverPort()));
+
+    output << "Listening on " << httpBaseUrl << Qt::endl;
+    output << "Listening on " << wsBaseUrl << Qt::endl;
+    output << "Docs index: " << httpBaseUrl << "/docs/" << Qt::endl;
+    output << "HTTP docs: " << httpBaseUrl << "/docs/http" << Qt::endl;
+    output << "WebSocket docs: " << httpBaseUrl << "/docs/ws" << Qt::endl;
 
     return app.exec();
 }
