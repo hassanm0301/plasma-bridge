@@ -5,7 +5,7 @@ The checked-in OpenAPI and AsyncAPI files are the source of truth. The interacti
 
 Repo files:
 
-- [OpenAPI](openapi.yaml): HTTP snapshot endpoints
+- [OpenAPI](openapi.yaml): HTTP snapshot and volume-control endpoints
 - [AsyncAPI](asyncapi.yaml): WebSocket protocol
 
 Hosted local docs from a running service:

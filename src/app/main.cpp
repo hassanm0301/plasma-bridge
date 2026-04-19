@@ -1,4 +1,5 @@
 #include "adapters/audio/pulse_audio_sink_observer.h"
+#include "adapters/audio/pulse_audio_volume_controller.h"
 #include "api/audio_websocket_server.h"
 #include "api/snapshot_http_server.h"
 #include "state/audio_state_store.h"
@@ -98,10 +99,12 @@ int main(int argc, char *argv[])
     PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.plasma_bridge"));
 
     plasma_bridge::audio::PulseAudioSinkObserver observer;
+    plasma_bridge::audio::PulseAudioVolumeController volumeController;
     plasma_bridge::state::AudioStateStore audioStateStore;
     audioStateStore.attachObserver(&observer);
 
     plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore,
+                                                      &volumeController,
                                                       parser.value(hostOption),
                                                       port,
                                                       wsPort);

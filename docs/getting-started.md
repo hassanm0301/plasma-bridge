@@ -58,7 +58,7 @@ Current coverage includes:
 - unit tests for volume-control result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
-- feature tests for the HTTP snapshot server
+- feature tests for the HTTP snapshot and volume-control server
 - feature tests for the WebSocket server
 - CLI coverage for `plasma_bridge`, `audio_probe`, and `audio_control_probe`
 
@@ -99,8 +99,19 @@ To list all available flags:
 Check the HTTP endpoints:
 
 ```bash
+SINK_ID='alsa_output.usb-default.analog-stereo'
+
 curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
+curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume \
+  -H 'Content-Type: application/json' \
+  -d '{"value":0.55}'
+curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/increment \
+  -H 'Content-Type: application/json' \
+  -d '{"value":0.10}'
+curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/decrement \
+  -H 'Content-Type: application/json' \
+  -d '{"value":0.15}'
 ```
 
 Hosted docs and runtime-served specs:
