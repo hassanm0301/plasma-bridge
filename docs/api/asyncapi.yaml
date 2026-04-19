@@ -2,7 +2,7 @@ asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
   version: 0.1.0
-  summary: Live audio sink monitoring for KDE Plasma.
+  description: Live audio sink monitoring for KDE Plasma.
 defaultContentType: application/json
 servers:
   local:
