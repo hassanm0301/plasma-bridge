@@ -130,13 +130,19 @@ int main(int argc, char *argv[])
     QTextStream output(stdout);
     const QString formattedHost = urlHost(parser.value(hostOption));
     const QString httpBaseUrl = QStringLiteral("http://%1:%2").arg(formattedHost, QString::number(httpServer.serverPort()));
-    const QString wsBaseUrl = QStringLiteral("ws://%1:%2").arg(formattedHost, QString::number(webSocketServer.serverPort()));
+    const QString wsEndpointUrl =
+        QStringLiteral("ws://%1:%2%3").arg(formattedHost,
+                                           QString::number(webSocketServer.serverPort()),
+                                           plasma_bridge::api::AudioWebSocketServer::endpointPath());
+    const QString docsIndexUrl = httpBaseUrl + QStringLiteral("/docs/");
+    const QString httpDocsUrl = httpBaseUrl + QStringLiteral("/docs/http");
+    const QString wsDocsUrl = httpBaseUrl + QStringLiteral("/docs/ws");
 
     output << "Listening on " << httpBaseUrl << Qt::endl;
-    output << "Listening on " << wsBaseUrl << Qt::endl;
-    output << "Docs index: " << httpBaseUrl << "/docs/" << Qt::endl;
-    output << "HTTP docs: " << httpBaseUrl << "/docs/http" << Qt::endl;
-    output << "WebSocket docs: " << httpBaseUrl << "/docs/ws" << Qt::endl;
+    output << "Listening on " << wsEndpointUrl << Qt::endl;
+    output << "Docs index: " << docsIndexUrl << Qt::endl;
+    output << "HTTP docs: " << httpDocsUrl << Qt::endl;
+    output << "WebSocket docs: " << wsDocsUrl << Qt::endl;
 
     return app.exec();
 }

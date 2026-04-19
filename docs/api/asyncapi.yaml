@@ -2,18 +2,18 @@ asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
   version: 0.1.0
-  description: Live audio sink monitoring for KDE Plasma.
+  description: Live WebSocket monitoring for KDE Plasma. The current implemented endpoint is `/ws/audio`.
 defaultContentType: application/json
 servers:
   local:
     host: 127.0.0.1:8081
-    pathname: /
+    pathname: /ws/audio
     protocol: ws
     title: Local WebSocket server
     summary: WebSocket endpoint for live audio sink state.
 channels:
-  root:
-    address: /
+  wsAudio:
+    address: /ws/audio
     messages:
       hello:
         $ref: '#/components/messages/Hello'
@@ -27,38 +27,38 @@ operations:
   receiveHello:
     action: receive
     channel:
-      $ref: '#/channels/root'
+      $ref: '#/channels/wsAudio'
     title: Receive hello
     summary: Accept the initial client hello message.
     description: The client must send this message before the service streams any state.
     messages:
-      - $ref: '#/channels/root/messages/hello'
+      - $ref: '#/channels/wsAudio/messages/hello'
   sendFullState:
     action: send
     channel:
-      $ref: '#/channels/root'
+      $ref: '#/channels/wsAudio'
     title: Send full state
     summary: Send the initial audio snapshot after a successful hello.
     messages:
-      - $ref: '#/channels/root/messages/fullState'
+      - $ref: '#/channels/wsAudio/messages/fullState'
   sendPatch:
     action: send
     channel:
-      $ref: '#/channels/root'
+      $ref: '#/channels/wsAudio'
     title: Send patch
     summary: Send an audio update after sink or default-sink changes.
     description: Each patch replaces the full `audio` subtree.
     messages:
-      - $ref: '#/channels/root/messages/patch'
+      - $ref: '#/channels/wsAudio/messages/patch'
   sendError:
     action: send
     channel:
-      $ref: '#/channels/root'
+      $ref: '#/channels/wsAudio'
     title: Send error
     summary: Send a protocol or readiness error to the client.
     description: Invalid JSON, unsupported protocol versions, and unsupported client messages return an `error` message and close the socket. A `not_ready` error may be sent before the initial audio state is available.
     messages:
-      - $ref: '#/channels/root/messages/error'
+      - $ref: '#/channels/wsAudio/messages/error'
 components:
   schemas:
     AudioSinkState:

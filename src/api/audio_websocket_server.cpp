@@ -18,6 +18,16 @@ namespace
 
 constexpr int kProtocolVersion = 1;
 
+QString requestPath(const QWebSocket *socket)
+{
+    if (socket == nullptr) {
+        return QStringLiteral("/");
+    }
+
+    const QString path = socket->requestUrl().path();
+    return path.isEmpty() ? QStringLiteral("/") : path;
+}
+
 QJsonValue stringOrNull(const QString &value)
 {
     return value.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(value);
@@ -101,9 +111,25 @@ quint16 AudioWebSocketServer::serverPort() const
     return m_server.serverPort();
 }
 
+QString AudioWebSocketServer::endpointPath()
+{
+    return QString::fromUtf8(kAudioWebSocketPath);
+}
+
 void AudioWebSocketServer::handleNewConnection()
 {
     while (QWebSocket *socket = m_server.nextPendingConnection()) {
+        connect(socket, &QWebSocket::disconnected, socket, &QWebSocket::deleteLater);
+
+        if (requestPath(socket) != endpointPath()) {
+            sendError(socket,
+                      QStringLiteral("unknown_endpoint"),
+                      QStringLiteral("Unknown WebSocket endpoint \"%1\". Connect to %2.")
+                          .arg(requestPath(socket), endpointPath()),
+                      true);
+            continue;
+        }
+
         m_clients.insert(socket, ClientSession{});
 
         connect(socket, &QWebSocket::textMessageReceived, this, [this, socket](const QString &message) {
@@ -114,7 +140,6 @@ void AudioWebSocketServer::handleNewConnection()
         });
         connect(socket, &QWebSocket::disconnected, this, [this, socket]() {
             m_clients.remove(socket);
-            socket->deleteLater();
         });
     }
 }

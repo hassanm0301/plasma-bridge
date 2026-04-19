@@ -16,6 +16,8 @@ class AudioStateStore;
 namespace plasma_bridge::api
 {
 
+inline constexpr auto kAudioWebSocketPath = "/ws/audio";
+
 class AudioWebSocketServer final : public QObject
 {
     Q_OBJECT
@@ -27,6 +29,7 @@ public:
     QString errorString() const;
     QHostAddress serverAddress() const;
     quint16 serverPort() const;
+    static QString endpointPath();
 
 private:
     struct ClientSession {

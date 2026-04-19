@@ -35,7 +35,7 @@ Start the service from a KDE Plasma user session:
 Default addresses:
 
 - HTTP: `http://127.0.0.1:8080`
-- WebSocket: `ws://127.0.0.1:8081`
+- WebSocket: `ws://127.0.0.1:8081/ws/audio`
 
 Supported flags:
 
@@ -73,13 +73,14 @@ Hosted docs and runtime-served specs:
 - `http://127.0.0.1:8080/docs/openapi.yaml`
 - `http://127.0.0.1:8080/docs/asyncapi.yaml`
 
-For WebSocket monitoring, connect to `ws://127.0.0.1:8081` and send:
+For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws/audio` and send:
 
 ```json
 { "type": "hello", "protocolVersion": 1 }
 ```
 
 You should receive one `fullState` message followed by `patch` messages as sink state changes.
+Connections to `/` and other non-audio WebSocket paths are rejected.
 
 Repo API specs:
 

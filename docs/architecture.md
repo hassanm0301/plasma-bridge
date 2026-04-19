@@ -39,7 +39,7 @@ The current build targets KDE Plasma on Linux and reads audio state from the Pla
 The current defaults are:
 
 - HTTP on `127.0.0.1:8080`
-- WebSocket on `127.0.0.1:8081`
+- WebSocket on `ws://127.0.0.1:8081/ws/audio`
 - read-only API behavior
 - localhost binding unless the operator explicitly changes it
 - hosted docs on the HTTP listener under `/docs/`
