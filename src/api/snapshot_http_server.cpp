@@ -4,6 +4,7 @@
 #include "common/audio_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "plasma_bridge_build_config.h"
 #include "state/audio_state_store.h"
 
 #include <QFile>
@@ -32,8 +33,12 @@ const QString kDocsWsPath = QStringLiteral("/docs/ws");
 const QString kDocsOpenApiPath = QStringLiteral("/docs/openapi.yaml");
 const QString kDocsAsyncApiPath = QStringLiteral("/docs/asyncapi.yaml");
 const QString kDocsNoticesPath = QStringLiteral("/docs/assets/THIRD_PARTY_NOTICES.txt");
-const QString kDefaultOpenApiServerUrl = QStringLiteral("http://127.0.0.1:8080");
-const QString kDefaultAsyncApiHost = QStringLiteral("127.0.0.1:8081");
+const QString kDefaultOpenApiServerUrl =
+    QStringLiteral("http://%1:%2").arg(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                        QString::number(PLASMA_BRIDGE_DEFAULT_HTTP_PORT));
+const QString kDefaultAsyncApiHost =
+    QStringLiteral("%1:%2").arg(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                 QString::number(PLASMA_BRIDGE_DEFAULT_WS_PORT));
 
 enum class SnapshotRoute {
     None,

@@ -1,3 +1,4 @@
+#include "plasma_bridge_build_config.h"
 #include "adapters/audio/pulse_audio_device_controller.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
 #include "tools/probes/audio_control_probe/audio_control_probe_runner.h"
@@ -12,14 +13,14 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("audio_control_probe"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(PLASMA_BRIDGE_VERSION));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Submit audio control requests through KF6PulseAudioQt."));
     plasma_bridge::tools::audio_control_probe::configureParser(parser);
     parser.process(app);
 
-    PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.audio_control_probe"));
+    PulseAudioQt::Context::setApplicationId(QStringLiteral(PLASMA_BRIDGE_AUDIO_CONTROL_PROBE_APP_ID));
 
     QTextStream output(stdout);
     QTextStream error(stderr);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "plasma_bridge_build_config.h"
 #include "common/audio_state.h"
 
 #include <QObject>
@@ -59,7 +60,7 @@ public:
                               const AudioProbeOptions &options,
                               QTextStream *output,
                               QTextStream *error,
-                              int startupTimeoutMs = 5000,
+                              int startupTimeoutMs = PLASMA_BRIDGE_DEFAULT_PROBE_STARTUP_TIMEOUT_MS,
                               QObject *parent = nullptr);
 
     void start();

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "plasma_bridge_build_config.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 
@@ -15,7 +16,7 @@ class QTimer;
 namespace plasma_bridge::tools::audio_control_probe
 {
 
-inline constexpr int kDefaultStartupTimeoutMs = 5000;
+inline constexpr int kDefaultStartupTimeoutMs = PLASMA_BRIDGE_DEFAULT_PROBE_STARTUP_TIMEOUT_MS;
 
 enum class Command {
     SetVolume,

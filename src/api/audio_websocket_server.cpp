@@ -16,8 +16,6 @@ namespace plasma_bridge::api
 namespace
 {
 
-constexpr int kProtocolVersion = 1;
-
 QString requestPath(const QWebSocket *socket)
 {
     if (socket == nullptr) {
@@ -120,6 +118,11 @@ QString AudioWebSocketServer::endpointPath()
     return QString::fromUtf8(kAudioWebSocketPath);
 }
 
+int AudioWebSocketServer::protocolVersion()
+{
+    return kAudioWebSocketProtocolVersion;
+}
+
 void AudioWebSocketServer::handleNewConnection()
 {
     while (QWebSocket *socket = m_server.nextPendingConnection()) {
@@ -179,10 +182,10 @@ void AudioWebSocketServer::handleTextMessage(QWebSocket *socket, const QString &
         return;
     }
 
-    if (object.value(QStringLiteral("protocolVersion")).toInt(-1) != kProtocolVersion) {
+    if (object.value(QStringLiteral("protocolVersion")).toInt(-1) != protocolVersion()) {
         sendError(socket,
                   QStringLiteral("unsupported_protocol_version"),
-                  QStringLiteral("Only protocolVersion 1 is supported."),
+                  QStringLiteral("Only protocolVersion %1 is supported.").arg(QString::number(protocolVersion())),
                   true);
         return;
     }

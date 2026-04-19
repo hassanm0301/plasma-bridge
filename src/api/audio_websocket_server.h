@@ -1,5 +1,7 @@
 #pragma once
 
+#include "plasma_bridge_build_config.h"
+
 #include <QHash>
 #include <QObject>
 #include <QString>
@@ -16,7 +18,8 @@ class AudioStateStore;
 namespace plasma_bridge::api
 {
 
-inline constexpr auto kAudioWebSocketPath = "/ws/audio";
+inline constexpr auto kAudioWebSocketPath = PLASMA_BRIDGE_AUDIO_WS_PATH;
+inline constexpr int kAudioWebSocketProtocolVersion = PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION;
 
 class AudioWebSocketServer final : public QObject
 {
@@ -30,6 +33,7 @@ public:
     QHostAddress serverAddress() const;
     quint16 serverPort() const;
     static QString endpointPath();
+    static int protocolVersion();
 
 private:
     struct ClientSession {

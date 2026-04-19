@@ -1,6 +1,23 @@
 ## [Unreleased]
 ### Added
 
+- Nothing
+
+### Fixed
+
+- Nothing
+
+### Changed
+
+- Nothing
+
+### Removed
+
+- Nothing
+
+## [0.2.0] - 2026-04-20
+### Added
+
 - HTTP endpoint to list available audio sources
 - HTTP endpoint to list the default audio source
 - HTTP endpoints to set the default sink and default source

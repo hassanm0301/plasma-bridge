@@ -1,5 +1,7 @@
 #include "tests/support/test_support.h"
 
+#include "plasma_bridge_build_config.h"
+
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QResource>
@@ -97,12 +99,12 @@ QJsonObject parseJsonObject(const QByteArray &json)
 
 QUrl httpUrl(const quint16 port, const QString &path)
 {
-    return QUrl(QStringLiteral("http://127.0.0.1:%1%2").arg(QString::number(port), path));
+    return QUrl(QStringLiteral("http://%1:%2%3").arg(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST), QString::number(port), path));
 }
 
 QUrl wsUrl(const quint16 port, const QString &path)
 {
-    return QUrl(QStringLiteral("ws://127.0.0.1:%1%2").arg(QString::number(port), path));
+    return QUrl(QStringLiteral("ws://%1:%2%3").arg(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST), QString::number(port), path));
 }
 
 FakeAudioProbeSource::FakeAudioProbeSource(QObject *parent)

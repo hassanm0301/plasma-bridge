@@ -1,3 +1,4 @@
+#include "plasma_bridge_build_config.h"
 #include "adapters/audio/pulse_audio_device_controller.h"
 #include "adapters/audio/pulse_audio_state_observer.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
@@ -49,7 +50,7 @@ int main(int argc, char *argv[])
 
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("plasma_bridge"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(PLASMA_BRIDGE_VERSION));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Serve audio sink and source state over HTTP and WebSocket."));
@@ -57,17 +58,20 @@ int main(int argc, char *argv[])
     parser.addVersionOption();
 
     QCommandLineOption hostOption(QStringLiteral("host"),
-                                  QStringLiteral("Host address to bind. Defaults to 127.0.0.1."),
+                                  QStringLiteral("Host address to bind. Defaults to %1.")
+                                      .arg(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST)),
                                   QStringLiteral("host"),
-                                  QStringLiteral("127.0.0.1"));
+                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST));
     QCommandLineOption portOption(QStringLiteral("port"),
-                                  QStringLiteral("TCP port to bind. Defaults to 8080."),
+                                  QStringLiteral("TCP port to bind. Defaults to %1.")
+                                      .arg(QString::number(PLASMA_BRIDGE_DEFAULT_HTTP_PORT)),
                                   QStringLiteral("port"),
-                                  QStringLiteral("8080"));
+                                  QString::number(PLASMA_BRIDGE_DEFAULT_HTTP_PORT));
     QCommandLineOption wsPortOption(QStringLiteral("ws-port"),
-                                    QStringLiteral("WebSocket port to bind. Defaults to 8081."),
+                                    QStringLiteral("WebSocket port to bind. Defaults to %1.")
+                                        .arg(QString::number(PLASMA_BRIDGE_DEFAULT_WS_PORT)),
                                     QStringLiteral("ws-port"),
-                                    QStringLiteral("8081"));
+                                    QString::number(PLASMA_BRIDGE_DEFAULT_WS_PORT));
 
     parser.addOption(hostOption);
     parser.addOption(portOption);
@@ -97,7 +101,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.plasma_bridge"));
+    PulseAudioQt::Context::setApplicationId(QStringLiteral(PLASMA_BRIDGE_APP_ID));
 
     plasma_bridge::audio::PulseAudioStateObserver observer;
     plasma_bridge::audio::PulseAudioVolumeController volumeController;

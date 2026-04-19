@@ -1,19 +1,19 @@
 asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
-  version: 0.1.0
-  description: Live WebSocket monitoring for KDE Plasma sinks and sources. The implemented endpoint is `/ws/audio`, and local HTTP default, mute, and volume-control writes converge back through this stream.
+  version: '@PLASMA_BRIDGE_VERSION@'
+  description: Live WebSocket monitoring for KDE Plasma sinks and sources. The implemented endpoint is `@PLASMA_BRIDGE_AUDIO_WS_PATH@`, and local HTTP default, mute, and volume-control writes converge back through this stream.
 defaultContentType: application/json
 servers:
   local:
-    host: 127.0.0.1:8081
-    pathname: /ws/audio
+    host: '@PLASMA_BRIDGE_DEFAULT_WS_HOSTPORT@'
+    pathname: '@PLASMA_BRIDGE_AUDIO_WS_PATH@'
     protocol: ws
     title: Local WebSocket server
     summary: WebSocket endpoint for live audio sink and source state.
 channels:
   wsAudio:
-    address: /ws/audio
+    address: '@PLASMA_BRIDGE_AUDIO_WS_PATH@'
     messages:
       hello:
         $ref: '#/components/messages/Hello'
@@ -150,7 +150,7 @@ components:
           const: hello
         protocolVersion:
           type: integer
-          const: 1
+          const: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
     FullStatePayload:
       type: object
       additionalProperties: false
@@ -218,7 +218,7 @@ components:
       examples:
         - payload:
             type: hello
-            protocolVersion: 1
+            protocolVersion: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
     FullState:
       name: fullState
       title: Full state

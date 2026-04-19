@@ -2,6 +2,8 @@
 #include "state/audio_state_store.h"
 #include "tests/support/test_support.h"
 
+#include "plasma_bridge_build_config.h"
+
 #include <QHostAddress>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -23,6 +25,7 @@ private slots:
 
 private:
     static QHostAddress bindAddress();
+    static QString helloMessage(int protocolVersion = plasma_bridge::api::AudioWebSocketServer::protocolVersion());
     static QJsonObject takeMessage(QSignalSpy &spy, int index = 0);
 };
 
@@ -70,7 +73,7 @@ void AudioWebSocketServerFeatureTest::ignoresStateChangesUntilHello()
     QTest::qWait(50);
     QCOMPARE(messageSpy.count(), 0);
 
-    socket.sendTextMessage(QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":1}"));
+    socket.sendTextMessage(helloMessage());
     QTRY_COMPARE(messageSpy.count(), 1);
     const QJsonObject fullState = takeMessage(messageSpy);
     QCOMPARE(fullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
@@ -127,7 +130,7 @@ void AudioWebSocketServerFeatureTest::rejectsUnsupportedProtocolVersionAndBinary
     QSignalSpy versionDisconnectedSpy(&versionSocket, &QWebSocket::disconnected);
     versionSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
     QTRY_COMPARE(versionConnectedSpy.count(), 1);
-    versionSocket.sendTextMessage(QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":2}"));
+    versionSocket.sendTextMessage(helloMessage(plasma_bridge::api::AudioWebSocketServer::protocolVersion() + 1));
     QTRY_COMPARE(versionMessageSpy.count(), 1);
     QTRY_COMPARE(versionDisconnectedSpy.count(), 1);
     QCOMPARE(takeMessage(versionMessageSpy).value(QStringLiteral("code")).toString(),
@@ -158,7 +161,7 @@ void AudioWebSocketServerFeatureTest::sendsNotReadyThenFullStateAfterReadiness()
 
     socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
     QTRY_COMPARE(connectedSpy.count(), 1);
-    socket.sendTextMessage(QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":1}"));
+    socket.sendTextMessage(helloMessage());
 
     QTRY_COMPARE(messageSpy.count(), 1);
     QCOMPARE(takeMessage(messageSpy).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
@@ -199,8 +202,8 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QTRY_COMPARE(firstConnectedSpy.count(), 1);
     QTRY_COMPARE(secondConnectedSpy.count(), 1);
 
-    firstSocket.sendTextMessage(QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":1}"));
-    secondSocket.sendTextMessage(QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":1}"));
+    firstSocket.sendTextMessage(helloMessage());
+    secondSocket.sendTextMessage(helloMessage());
 
     QTRY_COMPARE(firstMessageSpy.count(), 1);
     QTRY_COMPARE(secondMessageSpy.count(), 1);
@@ -280,7 +283,12 @@ QJsonObject AudioWebSocketServerFeatureTest::takeMessage(QSignalSpy &spy, const 
 
 QHostAddress AudioWebSocketServerFeatureTest::bindAddress()
 {
-    return QHostAddress(QStringLiteral("127.0.0.1"));
+    return QHostAddress(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST));
+}
+
+QString AudioWebSocketServerFeatureTest::helloMessage(const int protocolVersion)
+{
+    return QStringLiteral("{\"type\":\"hello\",\"protocolVersion\":%1}").arg(QString::number(protocolVersion));
 }
 
 QTEST_GUILESS_MAIN(AudioWebSocketServerFeatureTest)

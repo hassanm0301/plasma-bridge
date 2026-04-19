@@ -9,6 +9,8 @@
 
 #include <cstring>
 
+#include "plasma_bridge_build_config.h"
+
 #define private public
 #include "api/snapshot_http_server.h"
 #undef private
@@ -97,7 +99,12 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     const plasma_bridge::AudioState state = plasma_bridge::tests::sampleAudioState();
     store.updateAudioState(state, true, QStringLiteral("initial"));
 
-    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  nullptr,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -148,7 +155,11 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     QNetworkAccessManager manager;
 
     plasma_bridge::state::AudioStateStore notReadyStore;
-    plasma_bridge::api::SnapshotHttpServer notReadyServer(&notReadyStore, nullptr, nullptr, QStringLiteral("127.0.0.1"), 18080,
+    plasma_bridge::api::SnapshotHttpServer notReadyServer(&notReadyStore,
+                                                          nullptr,
+                                                          nullptr,
+                                                          QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                          18080,
                                                           18081);
     QVERIFY(notReadyServer.listen(bindAddress(), 0));
 
@@ -180,7 +191,7 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     plasma_bridge::api::SnapshotHttpServer missingDefaultServer(&missingDefaultStore,
                                                                 nullptr,
                                                                 nullptr,
-                                                                QStringLiteral("127.0.0.1"),
+                                                                QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
                                                                 18080,
                                                                 18081);
     QVERIFY(missingDefaultServer.listen(bindAddress(), 0));
@@ -204,7 +215,7 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     plasma_bridge::api::SnapshotHttpServer missingDefaultSourceServer(&missingDefaultSourceStore,
                                                                       nullptr,
                                                                       nullptr,
-                                                                      QStringLiteral("127.0.0.1"),
+                                                                      QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
                                                                       18080,
                                                                       18081);
     QVERIFY(missingDefaultSourceServer.listen(bindAddress(), 0));
@@ -254,7 +265,12 @@ void SnapshotHttpServerFeatureTest::servesVolumeControlEndpoints()
     decrementResult.previousValue = 0.35;
     controller.setResult(Operation::Decrement, decrementResult);
 
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  &controller,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -329,7 +345,12 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  &controller,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -455,7 +476,12 @@ void SnapshotHttpServerFeatureTest::servesDeviceControlEndpoints()
     sourceMuteResult.previousMuted = false;
     controller.setMuteResult(Operation::SetSourceMute, sourceMuteResult);
 
-    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -547,7 +573,12 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioDeviceController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -659,7 +690,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
     plasma_bridge::tests::FakeAudioDeviceController deviceController;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, &deviceController, QStringLiteral("127.0.0.1"), 18080,
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  &controller,
+                                                  &deviceController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
                                                   18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
@@ -731,7 +766,12 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  &controller,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -806,7 +846,12 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioDeviceController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, &controller, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -880,7 +925,12 @@ void SnapshotHttpServerFeatureTest::rejectsMalformedAndOversizedRequests()
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
-    plasma_bridge::api::SnapshotHttpServer server(&store, &controller, nullptr, QStringLiteral("127.0.0.1"), 18080, 18081);
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  &controller,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
     QVERIFY(server.listen(bindAddress(), 0));
 
     InMemoryTcpSocket malformedSocket;
@@ -990,7 +1040,7 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
 
 QHostAddress SnapshotHttpServerFeatureTest::bindAddress()
 {
-    return QHostAddress(QStringLiteral("127.0.0.1"));
+    return QHostAddress(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST));
 }
 
 QByteArray SnapshotHttpServerFeatureTest::readReplyBody(QNetworkReply *reply)

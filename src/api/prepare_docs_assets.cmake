@@ -11,6 +11,29 @@ foreach(required_var
     endif()
 endforeach()
 
+if(NOT DEFINED STAGED_OPENAPI_SPEC OR "${STAGED_OPENAPI_SPEC}" STREQUAL "")
+    message(FATAL_ERROR "Missing required variable: STAGED_OPENAPI_SPEC")
+endif()
+
+if(NOT DEFINED STAGED_ASYNCAPI_SPEC OR "${STAGED_ASYNCAPI_SPEC}" STREQUAL "")
+    message(FATAL_ERROR "Missing required variable: STAGED_ASYNCAPI_SPEC")
+endif()
+
+if(NOT DEFINED PLASMA_BRIDGE_VERSION OR "${PLASMA_BRIDGE_VERSION}" STREQUAL "")
+    message(FATAL_ERROR "Missing required variable: PLASMA_BRIDGE_VERSION")
+endif()
+
+foreach(required_var
+        PLASMA_BRIDGE_DEFAULT_HOST
+        PLASMA_BRIDGE_DEFAULT_HTTP_PORT
+        PLASMA_BRIDGE_DEFAULT_WS_PORT
+        PLASMA_BRIDGE_AUDIO_WS_PATH
+        PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION)
+    if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
+        message(FATAL_ERROR "Missing required variable: ${required_var}")
+    endif()
+endforeach()
+
 set(swagger_version "5.32.4")
 set(asyncapi_version "3.1.0")
 
@@ -75,6 +98,35 @@ function(copy_required source_file destination_file)
     file(COPY_FILE "${source_file}" "${destination_file}" ONLY_IF_DIFFERENT)
 endfunction()
 
+function(stage_versioned_spec source_file destination_file)
+    if(NOT EXISTS "${source_file}")
+        message(FATAL_ERROR "Expected file does not exist: ${source_file}")
+    endif()
+
+    file(READ "${source_file}" spec_content)
+    string(REPLACE "@PLASMA_BRIDGE_VERSION@" "${PLASMA_BRIDGE_VERSION}" spec_content "${spec_content}")
+    string(REPLACE
+        "@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@"
+        "http://${PLASMA_BRIDGE_DEFAULT_HOST}:${PLASMA_BRIDGE_DEFAULT_HTTP_PORT}"
+        spec_content
+        "${spec_content}")
+    string(REPLACE
+        "@PLASMA_BRIDGE_DEFAULT_WS_HOSTPORT@"
+        "${PLASMA_BRIDGE_DEFAULT_HOST}:${PLASMA_BRIDGE_DEFAULT_WS_PORT}"
+        spec_content
+        "${spec_content}")
+    string(REPLACE "@PLASMA_BRIDGE_AUDIO_WS_PATH@" "${PLASMA_BRIDGE_AUDIO_WS_PATH}" spec_content "${spec_content}")
+    string(REPLACE
+        "@PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@"
+        "${PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION}"
+        spec_content
+        "${spec_content}")
+
+    get_filename_component(destination_dir "${destination_file}" DIRECTORY)
+    file(MAKE_DIRECTORY "${destination_dir}")
+    file(WRITE "${destination_file}" "${spec_content}")
+endfunction()
+
 file(MAKE_DIRECTORY "${DOCS_STAGE_DIR}/cache")
 file(MAKE_DIRECTORY "${DOCS_STAGE_DIR}/assets")
 
@@ -96,6 +148,9 @@ copy_required("${asyncapi_extract_dir}/package/styles/default.min.css" "${asynca
 copy_required("${asyncapi_extract_dir}/package/browser/standalone/index.js" "${asyncapi_stage_dir}/asyncapi-standalone.js")
 copy_required("${asyncapi_extract_dir}/package/LICENSE" "${asyncapi_stage_dir}/LICENSE")
 copy_required("${asyncapi_extract_dir}/package/browser/standalone/index.js.LICENSE.txt" "${asyncapi_stage_dir}/asyncapi-standalone.js.LICENSE.txt")
+
+stage_versioned_spec("${PROJECT_SOURCE_DIR}/docs/api/openapi.yaml" "${STAGED_OPENAPI_SPEC}")
+stage_versioned_spec("${PROJECT_SOURCE_DIR}/docs/api/asyncapi.yaml" "${STAGED_ASYNCAPI_SPEC}")
 
 string(CONCAT notices_content
     "Hosted documentation assets bundled with plasma_bridge\n"
@@ -136,8 +191,8 @@ string(APPEND qrc_content "  <qresource prefix=\"/\">\n")
 string(APPEND qrc_content "    <file alias=\"docs/index.html\">${SOURCE_DIR}/docs_assets/index.html</file>\n")
 string(APPEND qrc_content "    <file alias=\"docs/http.html\">${SOURCE_DIR}/docs_assets/http.html</file>\n")
 string(APPEND qrc_content "    <file alias=\"docs/ws.html\">${SOURCE_DIR}/docs_assets/ws.html</file>\n")
-string(APPEND qrc_content "    <file alias=\"docs/specs/openapi.yaml\">${PROJECT_SOURCE_DIR}/docs/api/openapi.yaml</file>\n")
-string(APPEND qrc_content "    <file alias=\"docs/specs/asyncapi.yaml\">${PROJECT_SOURCE_DIR}/docs/api/asyncapi.yaml</file>\n")
+string(APPEND qrc_content "    <file alias=\"docs/specs/openapi.yaml\">${STAGED_OPENAPI_SPEC}</file>\n")
+string(APPEND qrc_content "    <file alias=\"docs/specs/asyncapi.yaml\">${STAGED_ASYNCAPI_SPEC}</file>\n")
 string(APPEND qrc_content "    <file alias=\"docs/assets/THIRD_PARTY_NOTICES.txt\">${notices_file}</file>\n")
 string(APPEND qrc_content "    <file alias=\"docs/assets/swagger-ui/swagger-ui.css\">${swagger_stage_dir}/swagger-ui.css</file>\n")
 string(APPEND qrc_content "    <file alias=\"docs/assets/swagger-ui/swagger-ui-bundle.js\">${swagger_stage_dir}/swagger-ui-bundle.js</file>\n")

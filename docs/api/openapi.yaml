@@ -1,10 +1,10 @@
 openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
-  version: 0.1.0
+  version: '@PLASMA_BRIDGE_VERSION@'
   summary: Audio snapshot endpoints plus local sink/source control endpoints for KDE Plasma.
 servers:
-  - url: http://127.0.0.1:8080
+  - url: '@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@'
 paths:
   /snapshot/audio/sinks:
     get:

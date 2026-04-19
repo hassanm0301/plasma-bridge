@@ -1,3 +1,4 @@
+#include "plasma_bridge_build_config.h"
 #include "tools/probes/audio_probe/audio_probe_runner.h"
 
 #include <PulseAudioQt/Context>
@@ -10,14 +11,14 @@ int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("audio_probe"));
-    QCoreApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(PLASMA_BRIDGE_VERSION));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Observe KDE-visible audio sinks and sources through KF6PulseAudioQt."));
     plasma_bridge::tools::audio_probe::configureParser(parser);
     parser.process(app);
 
-    PulseAudioQt::Context::setApplicationId(QStringLiteral("org.plasma-remote-toolbar.audio_probe"));
+    PulseAudioQt::Context::setApplicationId(QStringLiteral(PLASMA_BRIDGE_AUDIO_PROBE_APP_ID));
 
     QTextStream output(stdout);
     QTextStream error(stderr);
