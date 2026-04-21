@@ -16,7 +16,8 @@ The current implementation is intentionally narrow and audio-first:
 - expose snapshot reads plus local default, mute, and sink-volume control over HTTP
 - expose live updates over WebSocket
 
-Window state, media state, and broader control actions are not part of the current public runtime surface.
+Window state, media state, and broader control actions are not part of the current public HTTP or WebSocket runtime surface.
+Window inspection is currently available only through optional snapshot probe tools such as `window_probe`.
 
 ## System Flow
 
@@ -53,7 +54,7 @@ These areas are still outside the current public scope:
 
 - source volume-control actions
 - broader output-control actions beyond default-device and mute changes
-- window discovery and active-window tracking
+- window discovery and active-window tracking in the long-running HTTP/WebSocket service surface
 - authentication and pairing
 - packaging and service installation workflow
 - cross-desktop support beyond KDE Plasma

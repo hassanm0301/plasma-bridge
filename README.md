@@ -14,6 +14,12 @@ The current implementation is audio-first:
 - set, increment, and decrement sink volume over HTTP
 - publish live sink and source updates over WebSocket
 
+Optional snapshot probe tools are also available for local inspection:
+
+- `audio_probe`
+- `audio_control_probe`
+- `window_probe` for Plasma Wayland window listing and active-window lookup
+
 Documentation:
 
 - [Getting Started](docs/getting-started.md)

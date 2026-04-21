@@ -83,6 +83,60 @@ AudioState alternateAudioState()
     return state;
 }
 
+WindowSnapshot sampleWindowSnapshot()
+{
+    WindowSnapshot snapshot;
+
+    WindowState editorWindow;
+    editorWindow.id = QStringLiteral("window-editor");
+    editorWindow.title = QStringLiteral("CHANGELOG.md - Kate");
+    editorWindow.appId = QStringLiteral("org.kde.kate");
+    editorWindow.pid = 4201;
+    editorWindow.isActive = true;
+    editorWindow.isMinimized = false;
+    editorWindow.isMaximized = true;
+    editorWindow.isFullscreen = false;
+    editorWindow.isOnAllDesktops = false;
+    editorWindow.skipTaskbar = false;
+    editorWindow.skipSwitcher = false;
+    editorWindow.geometry = {40, 30, 1440, 960};
+    editorWindow.clientGeometry = {40, 58, 1440, 932};
+    editorWindow.virtualDesktopIds = {QStringLiteral("desktop-1")};
+    editorWindow.activityIds = {QStringLiteral("activity-work")};
+    editorWindow.resourceName = QStringLiteral("kate");
+
+    WindowState terminalWindow;
+    terminalWindow.id = QStringLiteral("window-terminal");
+    terminalWindow.title = QStringLiteral("plasma-bridge - Konsole");
+    terminalWindow.appId = QStringLiteral("org.kde.konsole");
+    terminalWindow.pid = 4310;
+    terminalWindow.isActive = false;
+    terminalWindow.isMinimized = false;
+    terminalWindow.isMaximized = false;
+    terminalWindow.isFullscreen = false;
+    terminalWindow.isOnAllDesktops = false;
+    terminalWindow.skipTaskbar = false;
+    terminalWindow.skipSwitcher = false;
+    terminalWindow.geometry = {96, 120, 960, 640};
+    terminalWindow.clientGeometry = {96, 148, 960, 612};
+    terminalWindow.virtualDesktopIds = {QStringLiteral("desktop-1")};
+    terminalWindow.parentId = editorWindow.id;
+
+    snapshot.windows = {terminalWindow, editorWindow};
+    snapshot.activeWindowId = editorWindow.id;
+    return snapshot;
+}
+
+WindowSnapshot sampleWindowSnapshotWithoutActiveWindow()
+{
+    WindowSnapshot snapshot = sampleWindowSnapshot();
+    snapshot.activeWindowId.clear();
+    for (WindowState &window : snapshot.windows) {
+        window.isActive = false;
+    }
+    return snapshot;
+}
+
 void ensureDocsResourcesInitialized()
 {
     initDocsResources();
@@ -154,6 +208,53 @@ void FakeAudioProbeSource::emitConnectionFailure(const QString &message)
 }
 
 int FakeAudioProbeSource::startCount() const
+{
+    return m_startCount;
+}
+
+FakeWindowProbeSource::FakeWindowProbeSource(QObject *parent)
+    : WindowProbeSource(parent)
+{
+}
+
+void FakeWindowProbeSource::start()
+{
+    ++m_startCount;
+}
+
+const WindowSnapshot &FakeWindowProbeSource::currentSnapshot() const
+{
+    return m_snapshot;
+}
+
+bool FakeWindowProbeSource::hasInitialSnapshot() const
+{
+    return m_ready;
+}
+
+QString FakeWindowProbeSource::backendName() const
+{
+    return QStringLiteral("plasma-wayland");
+}
+
+void FakeWindowProbeSource::setSnapshot(const WindowSnapshot &snapshot, const bool ready)
+{
+    m_snapshot = snapshot;
+    m_ready = ready;
+}
+
+void FakeWindowProbeSource::emitInitialSnapshotReady(const WindowSnapshot &snapshot)
+{
+    setSnapshot(snapshot, true);
+    emit initialSnapshotReady();
+}
+
+void FakeWindowProbeSource::emitConnectionFailure(const QString &message)
+{
+    emit connectionFailed(message);
+}
+
+int FakeWindowProbeSource::startCount() const
 {
     return m_startCount;
 }

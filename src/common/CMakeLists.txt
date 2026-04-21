@@ -1,5 +1,6 @@
 add_library(plasma_bridge_common STATIC
     audio_state.cpp
+    window_state.cpp
 )
 
 target_include_directories(plasma_bridge_common

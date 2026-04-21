@@ -40,6 +40,7 @@ set(CMAKE_AUTORCC OFF)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Network WebSockets)
 find_package(KF6PulseAudioQt REQUIRED)
+find_package(KWayland REQUIRED)
 
 if(BUILD_TESTING)
     find_package(Qt6 REQUIRED COMPONENTS Test)

@@ -16,6 +16,7 @@ private slots:
     void plasmaBridgeHelpAndValidationErrors();
     void audioProbeHelpAndHermeticFailurePaths();
     void audioControlProbeHelpAndValidationErrors();
+    void windowProbeHelpAndHermeticPaths();
 
 private:
     static ProcessResult runProcess(const QString &program, const QStringList &arguments, int timeoutMs = 5000);
@@ -102,6 +103,48 @@ void CliBinariesFeatureTest::audioControlProbeHelpAndValidationErrors()
                                                  {QStringLiteral("set-default-source")});
     QCOMPARE(missingArgs.exitCode, 1);
     QVERIFY(missingArgs.standardError.contains(QStringLiteral("expects")));
+}
+
+void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
+{
+    const QString windowProbeBin = QString::fromUtf8(TEST_WINDOW_PROBE_BIN);
+    const QString fakeWindowProbeCliBin = QString::fromUtf8(TEST_FAKE_WINDOW_PROBE_CLI_BIN);
+
+    const ProcessResult help = runProcess(windowProbeBin, {QStringLiteral("--help")});
+    QCOMPARE(help.exitCode, 0);
+    QVERIFY(help.standardOutput.contains(QStringLiteral("--timeout-ms")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("list")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("active")));
+
+    const ProcessResult timeout = runProcess(fakeWindowProbeCliBin,
+                                             {QStringLiteral("--scenario"),
+                                              QStringLiteral("timeout"),
+                                              QStringLiteral("--timeout-ms"),
+                                              QStringLiteral("20"),
+                                              QStringLiteral("list")});
+    QCOMPARE(timeout.exitCode, 1);
+    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for Plasma Wayland window state.")));
+
+    const ProcessResult failure = runProcess(fakeWindowProbeCliBin,
+                                             {QStringLiteral("--scenario"), QStringLiteral("failure"), QStringLiteral("active")});
+    QCOMPARE(failure.exitCode, 1);
+    QVERIFY(failure.standardError.contains(QStringLiteral("Synthetic backend failure.")));
+
+    const ProcessResult list = runProcess(fakeWindowProbeCliBin,
+                                          {QStringLiteral("--scenario"),
+                                           QStringLiteral("list"),
+                                           QStringLiteral("--json"),
+                                           QStringLiteral("list")});
+    QCOMPARE(list.exitCode, 0);
+    QVERIFY(list.standardOutput.contains(QStringLiteral("\"activeWindowId\": \"window-editor\"")));
+
+    const ProcessResult noActive = runProcess(fakeWindowProbeCliBin,
+                                              {QStringLiteral("--scenario"),
+                                               QStringLiteral("no-active"),
+                                               QStringLiteral("--json"),
+                                               QStringLiteral("active")});
+    QCOMPARE(noActive.exitCode, 0);
+    QVERIFY(noActive.standardOutput.contains(QStringLiteral("\"window\": null")));
 }
 
 CliBinariesFeatureTest::ProcessResult CliBinariesFeatureTest::runProcess(const QString &program,

@@ -1,2 +1,3 @@
 add_subdirectory(audio_probe)
 add_subdirectory(audio_control_probe)
+add_subdirectory(window_probe)

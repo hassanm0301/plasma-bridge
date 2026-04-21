@@ -8,6 +8,7 @@ Build from the repository root.
 - Ninja
 - Qt 6 development packages for `Core`, `Network`, and `WebSockets`
 - `KF6PulseAudioQt` development package
+- `KWayland` development package
 
 ## Build
 
@@ -21,7 +22,7 @@ The first build downloads the pinned Swagger UI and AsyncAPI browser assets into
 The optional probe tools can be built from the same tree:
 
 ```bash
-cmake --build build --target audio_probe audio_control_probe
+cmake --build build --target audio_probe audio_control_probe window_probe
 ```
 
 ## Test
@@ -55,12 +56,14 @@ ctest --test-dir build --output-on-failure -R test_audio_websocket_server
 Current coverage includes:
 
 - unit tests for common audio-state serialization and formatting
+- unit tests for common window-state serialization and formatting
 - unit tests for volume and device-control result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
+- unit tests for the `window_probe` runner helper
 - feature tests for the HTTP snapshot and control server
 - feature tests for the WebSocket server
-- CLI coverage for `plasma_bridge`, `audio_probe`, and `audio_control_probe`
+- CLI coverage for `plasma_bridge`, `audio_probe`, `audio_control_probe`, and `window_probe`
 
 ## Run
 
@@ -92,6 +95,13 @@ To list all available flags:
 
 ```bash
 ./build/src/app/plasma_bridge -h
+```
+
+Optional Wayland window probe examples:
+
+```bash
+./build/tools/probes/window_probe/window_probe --json list
+./build/tools/probes/window_probe/window_probe --json active
 ```
 
 ## Verify

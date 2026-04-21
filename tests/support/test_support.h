@@ -1,10 +1,12 @@
 #pragma once
 
 #include "common/audio_state.h"
+#include "common/window_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "tools/probes/audio_control_probe/audio_control_probe_runner.h"
 #include "tools/probes/audio_probe/audio_probe_runner.h"
+#include "tools/probes/window_probe/window_probe_runner.h"
 
 #include <QJsonObject>
 #include <QObject>
@@ -15,6 +17,8 @@ namespace plasma_bridge::tests
 
 AudioState sampleAudioState();
 AudioState alternateAudioState();
+WindowSnapshot sampleWindowSnapshot();
+WindowSnapshot sampleWindowSnapshotWithoutActiveWindow();
 void ensureDocsResourcesInitialized();
 QJsonObject parseJsonObject(const QByteArray &json);
 QUrl httpUrl(quint16 port, const QString &path);
@@ -42,6 +46,29 @@ public:
 
 private:
     AudioState m_state;
+    bool m_ready = false;
+    int m_startCount = 0;
+};
+
+class FakeWindowProbeSource final : public tools::window_probe::WindowProbeSource
+{
+    Q_OBJECT
+
+public:
+    explicit FakeWindowProbeSource(QObject *parent = nullptr);
+
+    void start() override;
+    const WindowSnapshot &currentSnapshot() const override;
+    bool hasInitialSnapshot() const override;
+    QString backendName() const override;
+
+    void setSnapshot(const WindowSnapshot &snapshot, bool ready);
+    void emitInitialSnapshotReady(const WindowSnapshot &snapshot);
+    void emitConnectionFailure(const QString &message);
+    int startCount() const;
+
+private:
+    WindowSnapshot m_snapshot;
     bool m_ready = false;
     int m_startCount = 0;
 };
