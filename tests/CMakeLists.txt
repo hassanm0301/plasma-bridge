@@ -71,6 +71,11 @@ plasma_bridge_add_qt_test(test_audio_control_http_helpers
 )
 target_link_libraries(test_audio_control_http_helpers PRIVATE plasma_bridge_api)
 
+plasma_bridge_add_qt_test(test_json_envelope
+    unit/test_json_envelope.cpp
+)
+target_link_libraries(test_json_envelope PRIVATE plasma_bridge_api)
+
 plasma_bridge_add_qt_test(test_state
     unit/test_state.cpp
 )

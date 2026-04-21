@@ -1,5 +1,6 @@
 #include "api/audio_websocket_server.h"
 
+#include "api/json_envelope.h"
 #include "common/audio_state.h"
 #include "state/audio_state_store.h"
 
@@ -31,19 +32,16 @@ QJsonValue stringOrNull(const QString &value)
     return value.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(value);
 }
 
-QJsonObject buildAudioEnvelope(const plasma_bridge::AudioState &state)
+QJsonObject buildAudioPayload(const plasma_bridge::AudioState &state)
 {
-    QJsonObject audioEnvelope;
-    audioEnvelope[QStringLiteral("audio")] = plasma_bridge::toJsonObject(state);
-    return audioEnvelope;
+    QJsonObject payload;
+    payload[QStringLiteral("audio")] = plasma_bridge::toJsonObject(state);
+    return payload;
 }
 
 QJsonObject buildFullStateMessage(const plasma_bridge::AudioState &state)
 {
-    QJsonObject message;
-    message[QStringLiteral("type")] = QStringLiteral("fullState");
-    message[QStringLiteral("state")] = buildAudioEnvelope(state);
-    return message;
+    return buildWebSocketSuccessEnvelope(QStringLiteral("fullState"), buildAudioPayload(state));
 }
 
 QJsonObject buildPatchMessage(const QString &reason,
@@ -58,22 +56,17 @@ QJsonObject buildPatchMessage(const QString &reason,
     QJsonArray changes;
     changes.append(change);
 
-    QJsonObject message;
-    message[QStringLiteral("type")] = QStringLiteral("patch");
-    message[QStringLiteral("reason")] = stringOrNull(reason);
-    message[QStringLiteral("sinkId")] = stringOrNull(sinkId);
-    message[QStringLiteral("sourceId")] = stringOrNull(sourceId);
-    message[QStringLiteral("changes")] = changes;
-    return message;
+    QJsonObject payload;
+    payload[QStringLiteral("reason")] = stringOrNull(reason);
+    payload[QStringLiteral("sinkId")] = stringOrNull(sinkId);
+    payload[QStringLiteral("sourceId")] = stringOrNull(sourceId);
+    payload[QStringLiteral("changes")] = changes;
+    return buildWebSocketSuccessEnvelope(QStringLiteral("patch"), payload);
 }
 
 QJsonObject buildErrorMessage(const QString &code, const QString &message)
 {
-    QJsonObject error;
-    error[QStringLiteral("type")] = QStringLiteral("error");
-    error[QStringLiteral("code")] = code;
-    error[QStringLiteral("message")] = message;
-    return error;
+    return buildWebSocketErrorEnvelope(code, message);
 }
 
 } // namespace
@@ -174,15 +167,18 @@ void AudioWebSocketServer::handleTextMessage(QWebSocket *socket, const QString &
     }
 
     const QJsonObject object = document.object();
-    if (object.value(QStringLiteral("type")).toString() != QStringLiteral("hello")) {
+    if (object.value(QStringLiteral("type")).toString() != QStringLiteral("hello")
+        || !object.value(QStringLiteral("payload")).isObject()
+        || !object.value(QStringLiteral("error")).isNull()) {
         sendError(socket,
                   QStringLiteral("bad_request"),
-                  QStringLiteral("Expected a hello message as the first client message."),
+                  QStringLiteral("Expected a hello message with payload.protocolVersion as the first client message."),
                   true);
         return;
     }
 
-    if (object.value(QStringLiteral("protocolVersion")).toInt(-1) != protocolVersion()) {
+    const QJsonObject payload = object.value(QStringLiteral("payload")).toObject();
+    if (payload.value(QStringLiteral("protocolVersion")).toInt(-1) != protocolVersion()) {
         sendError(socket,
                   QStringLiteral("unsupported_protocol_version"),
                   QStringLiteral("Only protocolVersion %1 is supported.").arg(QString::number(protocolVersion())),

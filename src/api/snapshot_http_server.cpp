@@ -1,6 +1,7 @@
 #include "api/snapshot_http_server.h"
 
 #include "api/audio_control_http_helpers.h"
+#include "api/json_envelope.h"
 #include "common/audio_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
@@ -242,6 +243,112 @@ QByteArray buildHttpResponse(int statusCode,
     response += "\r\n";
     response += body;
     return response;
+}
+
+QString errorCodeForVolumeChangeStatus(const control::VolumeChangeStatus status)
+{
+    switch (status) {
+    case control::VolumeChangeStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::VolumeChangeStatus::NotReady:
+        return QStringLiteral("not_ready");
+    case control::VolumeChangeStatus::SinkNotFound:
+        return QStringLiteral("sink_not_found");
+    case control::VolumeChangeStatus::SinkNotWritable:
+        return QStringLiteral("sink_not_writable");
+    case control::VolumeChangeStatus::InvalidValue:
+        return QStringLiteral("invalid_value");
+    }
+
+    return QStringLiteral("invalid_value");
+}
+
+QString errorMessageForVolumeChangeStatus(const control::VolumeChangeStatus status)
+{
+    switch (status) {
+    case control::VolumeChangeStatus::Accepted:
+        return QStringLiteral("Volume change request accepted.");
+    case control::VolumeChangeStatus::NotReady:
+        return QStringLiteral("Volume control is not ready yet.");
+    case control::VolumeChangeStatus::SinkNotFound:
+        return QStringLiteral("Requested sink was not found.");
+    case control::VolumeChangeStatus::SinkNotWritable:
+        return QStringLiteral("Sink exists but cannot be written to.");
+    case control::VolumeChangeStatus::InvalidValue:
+        return QStringLiteral("Requested volume value is invalid.");
+    }
+
+    return QStringLiteral("Requested volume value is invalid.");
+}
+
+QString errorCodeForAudioDeviceChangeStatus(const control::AudioDeviceChangeStatus status)
+{
+    switch (status) {
+    case control::AudioDeviceChangeStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::AudioDeviceChangeStatus::NotReady:
+        return QStringLiteral("not_ready");
+    case control::AudioDeviceChangeStatus::SinkNotFound:
+        return QStringLiteral("sink_not_found");
+    case control::AudioDeviceChangeStatus::SourceNotFound:
+        return QStringLiteral("source_not_found");
+    case control::AudioDeviceChangeStatus::SinkNotWritable:
+        return QStringLiteral("sink_not_writable");
+    case control::AudioDeviceChangeStatus::SourceNotWritable:
+        return QStringLiteral("source_not_writable");
+    }
+
+    return QStringLiteral("not_ready");
+}
+
+QString errorMessageForDefaultDeviceChangeStatus(const AudioControlTargetKind targetKind,
+                                                 const control::AudioDeviceChangeStatus status)
+{
+    switch (status) {
+    case control::AudioDeviceChangeStatus::Accepted:
+        return QStringLiteral("Default device change request accepted.");
+    case control::AudioDeviceChangeStatus::NotReady:
+        return QStringLiteral("Audio device control is not ready yet.");
+    case control::AudioDeviceChangeStatus::SinkNotFound:
+        return QStringLiteral("Requested sink was not found.");
+    case control::AudioDeviceChangeStatus::SourceNotFound:
+        return QStringLiteral("Requested source was not found.");
+    case control::AudioDeviceChangeStatus::SinkNotWritable:
+        return targetKind == AudioControlTargetKind::Sink
+            ? QStringLiteral("Sink exists but cannot be selected as default.")
+            : QStringLiteral("Requested sink was not found.");
+    case control::AudioDeviceChangeStatus::SourceNotWritable:
+        return targetKind == AudioControlTargetKind::Source
+            ? QStringLiteral("Source exists but cannot be selected as default.")
+            : QStringLiteral("Requested source was not found.");
+    }
+
+    return QStringLiteral("Audio device control is not ready yet.");
+}
+
+QString errorMessageForMuteChangeStatus(const AudioControlTargetKind targetKind,
+                                        const control::AudioDeviceChangeStatus status)
+{
+    switch (status) {
+    case control::AudioDeviceChangeStatus::Accepted:
+        return QStringLiteral("Mute change request accepted.");
+    case control::AudioDeviceChangeStatus::NotReady:
+        return QStringLiteral("Audio device control is not ready yet.");
+    case control::AudioDeviceChangeStatus::SinkNotFound:
+        return QStringLiteral("Requested sink was not found.");
+    case control::AudioDeviceChangeStatus::SourceNotFound:
+        return QStringLiteral("Requested source was not found.");
+    case control::AudioDeviceChangeStatus::SinkNotWritable:
+        return targetKind == AudioControlTargetKind::Sink
+            ? QStringLiteral("Sink exists but cannot be muted.")
+            : QStringLiteral("Requested sink was not found.");
+    case control::AudioDeviceChangeStatus::SourceNotWritable:
+        return targetKind == AudioControlTargetKind::Source
+            ? QStringLiteral("Source exists but cannot be muted.")
+            : QStringLiteral("Requested source was not found.");
+    }
+
+    return QStringLiteral("Audio device control is not ready yet.");
 }
 
 } // namespace
@@ -576,10 +683,21 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             }
 
             const int statusCode = httpStatusCodeForVolumeChangeStatus(result.status);
-            writeJsonResponse(socket,
-                              statusCode,
-                              reasonPhraseForStatusCode(statusCode),
-                              QJsonDocument(control::toJsonObject(result)));
+            if (result.status == control::VolumeChangeStatus::Accepted) {
+                writeJsonResponse(socket,
+                                  statusCode,
+                                  reasonPhraseForStatusCode(statusCode),
+                                  buildHttpSuccessEnvelope(buildVolumePayload(result)));
+                return;
+            }
+
+            writeJsonErrorResponse(socket,
+                                   statusCode,
+                                   reasonPhraseForStatusCode(statusCode),
+                                   errorCodeForVolumeChangeStatus(result.status),
+                                   errorMessageForVolumeChangeStatus(result.status),
+                                   {},
+                                   buildVolumeErrorDetails(result));
             return;
         }
         case AudioControlOperation::SetDefault: {
@@ -609,10 +727,21 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             }
 
             const int statusCode = httpStatusCodeForAudioDeviceChangeStatus(result.status);
-            writeJsonResponse(socket,
-                              statusCode,
-                              reasonPhraseForStatusCode(statusCode),
-                              QJsonDocument(control::toJsonObject(result)));
+            if (result.status == control::AudioDeviceChangeStatus::Accepted) {
+                writeJsonResponse(socket,
+                                  statusCode,
+                                  reasonPhraseForStatusCode(statusCode),
+                                  buildHttpSuccessEnvelope(buildDefaultDevicePayload(result)));
+                return;
+            }
+
+            writeJsonErrorResponse(socket,
+                                   statusCode,
+                                   reasonPhraseForStatusCode(statusCode),
+                                   errorCodeForAudioDeviceChangeStatus(result.status),
+                                   errorMessageForDefaultDeviceChangeStatus(controlRoute.route.targetKind, result.status),
+                                   {},
+                                   buildDefaultDeviceErrorDetails(result));
             return;
         }
         case AudioControlOperation::SetMute: {
@@ -648,10 +777,21 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             }
 
             const int statusCode = httpStatusCodeForAudioDeviceChangeStatus(result.status);
-            writeJsonResponse(socket,
-                              statusCode,
-                              reasonPhraseForStatusCode(statusCode),
-                              QJsonDocument(control::toJsonObject(result)));
+            if (result.status == control::AudioDeviceChangeStatus::Accepted) {
+                writeJsonResponse(socket,
+                                  statusCode,
+                                  reasonPhraseForStatusCode(statusCode),
+                                  buildHttpSuccessEnvelope(buildMutePayload(result)));
+                return;
+            }
+
+            writeJsonErrorResponse(socket,
+                                   statusCode,
+                                   reasonPhraseForStatusCode(statusCode),
+                                   errorCodeForAudioDeviceChangeStatus(result.status),
+                                   errorMessageForMuteChangeStatus(controlRoute.route.targetKind, result.status),
+                                   {},
+                                   buildMuteErrorDetails(result));
             return;
         }
         }
@@ -682,12 +822,18 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
 
     switch (snapshotRoute) {
     case SnapshotRoute::Sinks:
-        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"),
-                          QJsonDocument(plasma_bridge::toJsonObject(plasma_bridge::toAudioOutputState(m_audioStateStore->audioState()))));
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(
+                              plasma_bridge::toJsonObject(plasma_bridge::toAudioOutputState(m_audioStateStore->audioState()))));
         return;
     case SnapshotRoute::Sources:
-        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"),
-                          QJsonDocument(plasma_bridge::toJsonObject(plasma_bridge::toAudioInputState(m_audioStateStore->audioState()))));
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(
+                              plasma_bridge::toJsonObject(plasma_bridge::toAudioInputState(m_audioStateStore->audioState()))));
         return;
     case SnapshotRoute::DefaultSink: {
         const std::optional<plasma_bridge::AudioSinkState> defaultSink = m_audioStateStore->defaultSink();
@@ -697,7 +843,10 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
 
-        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"), QJsonDocument(plasma_bridge::toJsonObject(*defaultSink)));
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(*defaultSink)));
         return;
     }
     case SnapshotRoute::DefaultSource: {
@@ -708,7 +857,10 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
 
-        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"), QJsonDocument(plasma_bridge::toJsonObject(*defaultSource)));
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(*defaultSource)));
         return;
     }
     case SnapshotRoute::None:
@@ -751,14 +903,10 @@ void SnapshotHttpServer::writeJsonErrorResponse(QTcpSocket *socket,
                                                 const QByteArray &reasonPhrase,
                                                 const QString &code,
                                                 const QString &message,
-                                                const QList<QPair<QByteArray, QByteArray>> &extraHeaders)
+                                                const QList<QPair<QByteArray, QByteArray>> &extraHeaders,
+                                                QJsonObject details)
 {
-    QJsonObject body;
-    body[QStringLiteral("ok")] = false;
-    body[QStringLiteral("code")] = code;
-    body[QStringLiteral("message")] = message;
-
-    writeJsonResponse(socket, statusCode, reasonPhrase, QJsonDocument(body), extraHeaders);
+    writeJsonResponse(socket, statusCode, reasonPhrase, buildHttpErrorEnvelope(code, message, details), extraHeaders);
 }
 
 } // namespace plasma_bridge::api

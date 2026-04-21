@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QObject>
 #include <QHash>
 #include <QList>
@@ -63,7 +64,8 @@ private:
                                 const QByteArray &reasonPhrase,
                                 const QString &code,
                                 const QString &message,
-                                const QList<QPair<QByteArray, QByteArray>> &extraHeaders = {});
+                                const QList<QPair<QByteArray, QByteArray>> &extraHeaders = {},
+                                QJsonObject details = {});
 
     state::AudioStateStore *m_audioStateStore = nullptr;
     control::AudioVolumeController *m_audioVolumeController = nullptr;

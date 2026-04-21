@@ -125,6 +125,18 @@ curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/decreme
   -d '{"value":0.15}'
 ```
 
+HTTP JSON responses now use a consistent envelope:
+
+```json
+{ "payload": { ... }, "error": null }
+```
+
+or, on failure:
+
+```json
+{ "payload": null, "error": { "code": "bad_request", "message": "..." } }
+```
+
 Hosted docs and runtime-served specs:
 
 - `http://127.0.0.1:8080/docs/`
@@ -136,7 +148,17 @@ Hosted docs and runtime-served specs:
 For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws/audio` and send:
 
 ```json
-{ "type": "hello", "protocolVersion": 1 }
+{
+  "type": "hello",
+  "payload": { "protocolVersion": 2 },
+  "error": null
+}
+```
+
+Server messages use the same explicit contract:
+
+```json
+{ "type": "fullState", "payload": { ... }, "error": null }
 ```
 
 You should receive one `fullState` message followed by `patch` messages as sink or source state changes.

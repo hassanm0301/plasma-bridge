@@ -5,9 +5,22 @@ info:
   summary: Audio snapshot endpoints plus local sink/source control endpoints for KDE Plasma.
 servers:
   - url: '@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@'
+tags:
+  - name: Snapshots / Sinks
+    description: Read the current output-device snapshot and default sink.
+  - name: Snapshots / Sources
+    description: Read the current input-device snapshot and default source.
+  - name: Control / Defaults
+    description: Change the current default sink or source.
+  - name: Control / Mute
+    description: Change the mute state for a sink or source.
+  - name: Control / Sink Volume
+    description: Set or adjust normalized sink volume values.
 paths:
   /snapshot/audio/sinks:
     get:
+      tags:
+        - Snapshots / Sinks
       operationId: getAudioSinksSnapshot
       summary: List audio sinks
       description: Returns the current output-device snapshot, including all KDE-visible output sinks and the selected default sink id.
@@ -17,20 +30,22 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AudioOutputState'
+                $ref: '#/components/schemas/AudioOutputEnvelope'
               examples:
                 snapshot:
                   value:
-                    sinks:
-                      - id: alsa_output.usb-example.analog-stereo
-                        label: USB Audio
-                        volume: 0.75
-                        muted: false
-                        available: true
-                        isDefault: true
-                        isVirtual: false
-                        backendApi: alsa
-                    selectedSinkId: alsa_output.usb-example.analog-stereo
+                    payload:
+                      sinks:
+                        - id: sink-main
+                          label: Primary Speakers
+                          volume: 0.75
+                          muted: false
+                          available: true
+                          isDefault: true
+                          isVirtual: false
+                          backendApi: alsa
+                      selectedSinkId: sink-main
+                    error: null
         '405':
           description: Method not allowed.
           headers:
@@ -42,27 +57,31 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               examples:
                 methodNotAllowed:
                   value:
-                    ok: false
-                    code: method_not_allowed
-                    message: Only GET is supported for this endpoint.
+                    payload: null
+                    error:
+                      code: method_not_allowed
+                      message: Only GET is supported for this endpoint.
         '503':
           description: Initial audio state is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               examples:
                 notReady:
                   value:
-                    ok: false
-                    code: not_ready
-                    message: Initial audio state is not ready yet.
+                    payload: null
+                    error:
+                      code: not_ready
+                      message: Initial audio state is not ready yet.
   /snapshot/audio/default-sink:
     get:
+      tags:
+        - Snapshots / Sinks
       operationId: getDefaultAudioSink
       summary: Get the default audio sink
       description: Returns the current default output sink object.
@@ -72,30 +91,33 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AudioDeviceState'
+                $ref: '#/components/schemas/AudioDeviceEnvelope'
               examples:
                 defaultSink:
                   value:
-                    id: alsa_output.usb-example.analog-stereo
-                    label: USB Audio
-                    volume: 0.75
-                    muted: false
-                    available: true
-                    isDefault: true
-                    isVirtual: false
-                    backendApi: alsa
+                    payload:
+                      id: sink-main
+                      label: Primary Speakers
+                      volume: 0.75
+                      muted: false
+                      available: true
+                      isDefault: true
+                      isVirtual: false
+                      backendApi: alsa
+                    error: null
         '404':
           description: No default sink is currently available.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               examples:
                 notFound:
                   value:
-                    ok: false
-                    code: not_found
-                    message: No default audio sink available.
+                    payload: null
+                    error:
+                      code: not_found
+                      message: No default audio sink available.
         '405':
           description: Method not allowed.
           headers:
@@ -107,15 +129,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial audio state is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /snapshot/audio/sources:
     get:
+      tags:
+        - Snapshots / Sources
       operationId: getAudioSourcesSnapshot
       summary: List audio sources
       description: Returns the current input-device snapshot, including KDE-visible capture sources and the selected default source id.
@@ -125,20 +149,22 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AudioInputState'
+                $ref: '#/components/schemas/AudioInputEnvelope'
               examples:
                 snapshot:
                   value:
-                    sources:
-                      - id: alsa_input.usb-example.analog-stereo
-                        label: USB Microphone
-                        volume: 0.64
-                        muted: false
-                        available: true
-                        isDefault: true
-                        isVirtual: false
-                        backendApi: alsa
-                    selectedSourceId: alsa_input.usb-example.analog-stereo
+                    payload:
+                      sources:
+                        - id: source-main
+                          label: Primary Microphone
+                          volume: 0.64
+                          muted: false
+                          available: true
+                          isDefault: true
+                          isVirtual: false
+                          backendApi: alsa
+                      selectedSourceId: source-main
+                    error: null
         '405':
           description: Method not allowed.
           headers:
@@ -150,15 +176,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial audio state is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /snapshot/audio/default-source:
     get:
+      tags:
+        - Snapshots / Sources
       operationId: getDefaultAudioSource
       summary: Get the default audio source
       description: Returns the current default input source object.
@@ -168,30 +196,33 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AudioDeviceState'
+                $ref: '#/components/schemas/AudioDeviceEnvelope'
               examples:
                 defaultSource:
                   value:
-                    id: alsa_input.usb-example.analog-stereo
-                    label: USB Microphone
-                    volume: 0.64
-                    muted: false
-                    available: true
-                    isDefault: true
-                    isVirtual: false
-                    backendApi: alsa
+                    payload:
+                      id: source-main
+                      label: Primary Microphone
+                      volume: 0.64
+                      muted: false
+                      available: true
+                      isDefault: true
+                      isVirtual: false
+                      backendApi: alsa
+                    error: null
         '404':
           description: No default source is currently available.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               examples:
                 notFound:
                   value:
-                    ok: false
-                    code: not_found
-                    message: No default audio source available.
+                    payload: null
+                    error:
+                      code: not_found
+                      message: No default audio source available.
         '405':
           description: Method not allowed.
           headers:
@@ -203,15 +234,17 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial audio state is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sinks/{sinkId}/default:
     post:
+      tags:
+        - Control / Defaults
       operationId: setDefaultAudioSink
       summary: Set the default audio sink
       description: Sets the current default output sink.
@@ -223,19 +256,34 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/DefaultDeviceEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      deviceId: sink-main
+                    error: null
         '400':
           description: Unexpected request body or other bad request error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Requested sink was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                sinkNotFound:
+                  value:
+                    payload: null
+                    error:
+                      code: sink_not_found
+                      message: Requested sink was not found.
+                      details:
+                        deviceId: sink-main
         '405':
           description: Method not allowed.
           headers:
@@ -247,21 +295,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Sink exists but cannot be selected as default.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Audio device control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sources/{sourceId}/default:
     post:
+      tags:
+        - Control / Defaults
       operationId: setDefaultAudioSource
       summary: Set the default audio source
       description: Sets the current default input source.
@@ -273,19 +323,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/DefaultDeviceEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      deviceId: source-main
+                    error: null
         '400':
           description: Unexpected request body or other bad request error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Requested source was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '405':
           description: Method not allowed.
           headers:
@@ -297,21 +353,23 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Source exists but cannot be selected as default.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Audio device control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DefaultDeviceChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sinks/{sinkId}/mute:
     post:
+      tags:
+        - Control / Mute
       operationId: setAudioSinkMuted
       summary: Set sink mute state
       description: Sets the mute state for the requested output sink.
@@ -333,19 +391,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/MuteChangeEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      deviceId: sink-main
+                      requestedMuted: true
+                      targetMuted: true
+                      previousMuted: false
+                    error: null
         '400':
           description: Malformed JSON body, missing `muted`, or other bad request error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Requested sink was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '405':
           description: Method not allowed.
           headers:
@@ -357,27 +424,41 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Sink exists but cannot be muted.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                sinkNotWritable:
+                  value:
+                    payload: null
+                    error:
+                      code: sink_not_writable
+                      message: Sink exists but cannot be muted.
+                      details:
+                        deviceId: sink-main
+                        requestedMuted: true
+                        targetMuted: false
+                        previousMuted: false
         '415':
           description: Request body content type is not supported for control endpoints.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Audio device control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sources/{sourceId}/mute:
     post:
+      tags:
+        - Control / Mute
       operationId: setAudioSourceMuted
       summary: Set source mute state
       description: Sets the mute state for the requested input source.
@@ -399,19 +480,28 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/MuteChangeEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      deviceId: source-main
+                      requestedMuted: false
+                      targetMuted: false
+                      previousMuted: true
+                    error: null
         '400':
           description: Malformed JSON body, missing `muted`, or other bad request error.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Requested source was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '405':
           description: Method not allowed.
           headers:
@@ -423,27 +513,29 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Source exists but cannot be muted.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '415':
           description: Request body content type is not supported for control endpoints.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Audio device control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MuteChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sinks/{sinkId}/volume:
     post:
+      tags:
+        - Control / Sink Volume
       operationId: setAudioSinkVolume
       summary: Set sink volume
       description: Sets the target normalized sink volume. The controller preserves current behavior by clamping the applied target to the `[0.0, 1.0]` range.
@@ -465,34 +557,46 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/VolumeChangeEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      sinkId: sink-main
+                      requestedValue: 0.55
+                      targetValue: 0.55
+                      previousValue: 0.75
+                    error: null
         '400':
           description: Invalid controller value response, malformed JSON body, missing `value`, or other bad request error.
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/VolumeChangeResult'
-                  - $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
               examples:
                 invalidValue:
                   value:
-                    status: invalid_value
-                    sinkId: alsa_output.usb-example.analog-stereo
-                    requestedValue: 2.0
-                    targetValue: null
-                    previousValue: 0.75
+                    payload: null
+                    error:
+                      code: invalid_value
+                      message: Requested volume value is invalid.
+                      details:
+                        sinkId: sink-main
+                        requestedValue: 2.0
+                        targetValue: null
+                        previousValue: 0.75
                 badRequest:
                   value:
-                    ok: false
-                    code: bad_request
-                    message: Request body must contain a numeric value field.
+                    payload: null
+                    error:
+                      code: bad_request
+                      message: Request body must contain a numeric value field.
         '404':
           description: Requested sink was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '405':
           description: Method not allowed.
           headers:
@@ -504,27 +608,29 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Sink exists but cannot be written to.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '415':
           description: Request body content type is not supported for control endpoints.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Volume control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sinks/{sinkId}/volume/increment:
     post:
+      tags:
+        - Control / Sink Volume
       operationId: incrementAudioSinkVolume
       summary: Increment sink volume
       description: Increases the normalized sink volume by a non-negative delta. The controller preserves current behavior by clamping the resulting target to the `[0.0, 1.0]` range.
@@ -546,21 +652,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/VolumeChangeEnvelope'
         '400':
           description: Invalid controller value response, malformed JSON body, missing `value`, or other bad request error.
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/VolumeChangeResult'
-                  - $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Requested sink was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '405':
           description: Method not allowed.
           headers:
@@ -572,27 +676,29 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Sink exists but cannot be written to.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '415':
           description: Request body content type is not supported for control endpoints.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Volume control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
   /control/audio/sinks/{sinkId}/volume/decrement:
     post:
+      tags:
+        - Control / Sink Volume
       operationId: decrementAudioSinkVolume
       summary: Decrement sink volume
       description: Decreases the normalized sink volume by a non-negative delta. The controller preserves current behavior by clamping the resulting target to the `[0.0, 1.0]` range.
@@ -614,21 +720,19 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/VolumeChangeEnvelope'
         '400':
           description: Invalid controller value response, malformed JSON body, missing `value`, or other bad request error.
           content:
             application/json:
               schema:
-                oneOf:
-                  - $ref: '#/components/schemas/VolumeChangeResult'
-                  - $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '404':
           description: Requested sink was not found.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '405':
           description: Method not allowed.
           headers:
@@ -640,25 +744,25 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '409':
           description: Sink exists but cannot be written to.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '415':
           description: Request body content type is not supported for control endpoints.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Volume control is not ready yet.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VolumeChangeResult'
+                $ref: '#/components/schemas/ErrorEnvelope'
 components:
   parameters:
     SinkId:
@@ -666,6 +770,7 @@ components:
       in: path
       required: true
       description: URL-decoded sink identifier. Encoded slashes are not supported.
+      example: sink-main
       schema:
         type: string
     SourceId:
@@ -673,9 +778,12 @@ components:
       in: path
       required: true
       description: URL-decoded source identifier. Encoded slashes are not supported.
+      example: source-main
       schema:
         type: string
   schemas:
+    NullValue:
+      type: 'null'
     AudioDeviceState:
       type: object
       additionalProperties: false
@@ -744,31 +852,6 @@ components:
             - string
             - 'null'
           description: Identifier of the current default input source.
-    AudioState:
-      type: object
-      additionalProperties: false
-      required:
-        - sinks
-        - selectedSinkId
-        - sources
-        - selectedSourceId
-      properties:
-        sinks:
-          type: array
-          items:
-            $ref: '#/components/schemas/AudioDeviceState'
-        selectedSinkId:
-          type:
-            - string
-            - 'null'
-        sources:
-          type: array
-          items:
-            $ref: '#/components/schemas/AudioDeviceState'
-        selectedSourceId:
-          type:
-            - string
-            - 'null'
     VolumeValueRequest:
       type: object
       additionalProperties: false
@@ -787,43 +870,23 @@ components:
         muted:
           type: boolean
           description: Target mute state to apply.
-    DefaultDeviceChangeResult:
+    DefaultDevicePayload:
       type: object
       additionalProperties: false
       required:
-        - status
         - deviceId
       properties:
-        status:
-          type: string
-          enum:
-            - accepted
-            - not_ready
-            - sink_not_found
-            - source_not_found
-            - sink_not_writable
-            - source_not_writable
         deviceId:
           type: string
-    MuteChangeResult:
+    MuteChangePayload:
       type: object
       additionalProperties: false
       required:
-        - status
         - deviceId
         - requestedMuted
         - targetMuted
         - previousMuted
       properties:
-        status:
-          type: string
-          enum:
-            - accepted
-            - not_ready
-            - sink_not_found
-            - source_not_found
-            - sink_not_writable
-            - source_not_writable
         deviceId:
           type: string
         requestedMuted:
@@ -838,24 +901,15 @@ components:
           type:
             - boolean
             - 'null'
-    VolumeChangeResult:
+    VolumeChangePayload:
       type: object
       additionalProperties: false
       required:
-        - status
         - sinkId
         - requestedValue
         - targetValue
         - previousValue
       properties:
-        status:
-          type: string
-          enum:
-            - accepted
-            - not_ready
-            - sink_not_found
-            - sink_not_writable
-            - invalid_value
         sinkId:
           type: string
         requestedValue:
@@ -870,18 +924,97 @@ components:
           type:
             - number
             - 'null'
-    ErrorResponse:
+    ErrorObject:
       type: object
       additionalProperties: false
       required:
-        - ok
         - code
         - message
       properties:
-        ok:
-          type: boolean
-          const: false
         code:
           type: string
         message:
           type: string
+        details:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+          description: Optional structured context for endpoint-specific failures.
+    ErrorEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/NullValue'
+        error:
+          $ref: '#/components/schemas/ErrorObject'
+    AudioOutputEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/AudioOutputState'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    AudioInputEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/AudioInputState'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    AudioDeviceEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/AudioDeviceState'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    DefaultDeviceEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/DefaultDevicePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    MuteChangeEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/MuteChangePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    VolumeChangeEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/VolumeChangePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'

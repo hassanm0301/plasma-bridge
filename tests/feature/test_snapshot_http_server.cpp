@@ -88,6 +88,21 @@ private:
     QByteArray m_writtenData;
 };
 
+namespace
+{
+
+QJsonObject payloadObject(const QJsonObject &envelope)
+{
+    return envelope.value(QStringLiteral("payload")).toObject();
+}
+
+QJsonObject errorObject(const QJsonObject &envelope)
+{
+    return envelope.value(QStringLiteral("error")).toObject();
+}
+
+} // namespace
+
 void SnapshotHttpServerFeatureTest::initTestCase()
 {
     plasma_bridge::tests::ensureDocsResourcesInitialized();
@@ -114,7 +129,9 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     QSignalSpy sinksSpy(sinksReply, &QNetworkReply::finished);
     QVERIFY(sinksSpy.wait());
     QCOMPARE(sinksReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject sinksJson = plasma_bridge::tests::parseJsonObject(readReplyBody(sinksReply));
+    const QJsonObject sinksEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sinksReply));
+    QVERIFY(sinksEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject sinksJson = payloadObject(sinksEnvelope);
     QCOMPARE(sinksJson.value(QStringLiteral("selectedSinkId")).toString(), state.selectedSinkId);
     QCOMPARE(sinksJson.value(QStringLiteral("sinks")).toArray().size(), state.sinks.size());
     QVERIFY(!sinksJson.contains(QStringLiteral("sources")));
@@ -125,7 +142,9 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     QSignalSpy defaultSpy(defaultReply, &QNetworkReply::finished);
     QVERIFY(defaultSpy.wait());
     QCOMPARE(defaultReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject defaultJson = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultReply));
+    const QJsonObject defaultEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultReply));
+    QVERIFY(defaultEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject defaultJson = payloadObject(defaultEnvelope);
     QCOMPARE(defaultJson.value(QStringLiteral("id")).toString(), state.selectedSinkId);
     defaultReply->deleteLater();
 
@@ -134,7 +153,9 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     QSignalSpy sourcesSpy(sourcesReply, &QNetworkReply::finished);
     QVERIFY(sourcesSpy.wait());
     QCOMPARE(sourcesReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject sourcesJson = plasma_bridge::tests::parseJsonObject(readReplyBody(sourcesReply));
+    const QJsonObject sourcesEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sourcesReply));
+    QVERIFY(sourcesEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject sourcesJson = payloadObject(sourcesEnvelope);
     QCOMPARE(sourcesJson.value(QStringLiteral("selectedSourceId")).toString(), state.selectedSourceId);
     QCOMPARE(sourcesJson.value(QStringLiteral("sources")).toArray().size(), state.sources.size());
     QVERIFY(!sourcesJson.contains(QStringLiteral("sinks")));
@@ -145,7 +166,9 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     QSignalSpy defaultSourceSpy(defaultSourceReply, &QNetworkReply::finished);
     QVERIFY(defaultSourceSpy.wait());
     QCOMPARE(defaultSourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject defaultSourceJson = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultSourceReply));
+    const QJsonObject defaultSourceEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultSourceReply));
+    QVERIFY(defaultSourceEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject defaultSourceJson = payloadObject(defaultSourceEnvelope);
     QCOMPARE(defaultSourceJson.value(QStringLiteral("id")).toString(), state.selectedSourceId);
     defaultSourceReply->deleteLater();
 }
@@ -168,8 +191,11 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     QSignalSpy notReadySpy(notReadyReply, &QNetworkReply::finished);
     QVERIFY(notReadySpy.wait());
     QCOMPARE(notReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(notReadyReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("not_ready"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notReadyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
     notReadyReply->deleteLater();
 
     QNetworkReply *notReadySourceReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(notReadyServer.serverPort(),
@@ -177,8 +203,11 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     QSignalSpy notReadySourceSpy(notReadySourceReply, &QNetworkReply::finished);
     QVERIFY(notReadySourceSpy.wait());
     QCOMPARE(notReadySourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(notReadySourceReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("not_ready"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notReadySourceReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
     notReadySourceReply->deleteLater();
 
     plasma_bridge::state::AudioStateStore missingDefaultStore;
@@ -201,8 +230,11 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     QSignalSpy missingSpy(missingReply, &QNetworkReply::finished);
     QVERIFY(missingSpy.wait());
     QCOMPARE(missingReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(missingReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("not_found"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_found"));
+    }
     missingReply->deleteLater();
 
     plasma_bridge::state::AudioStateStore missingDefaultSourceStore;
@@ -226,8 +258,11 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
     QSignalSpy missingSourceSpy(missingSourceReply, &QNetworkReply::finished);
     QVERIFY(missingSourceSpy.wait());
     QCOMPARE(missingSourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(missingSourceReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("not_found"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingSourceReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_found"));
+    }
     missingSourceReply->deleteLater();
 }
 
@@ -283,8 +318,9 @@ void SnapshotHttpServerFeatureTest::servesVolumeControlEndpoints()
     QSignalSpy setSpy(setReply, &QNetworkReply::finished);
     QVERIFY(setSpy.wait());
     QCOMPARE(setReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject setJson = plasma_bridge::tests::parseJsonObject(readReplyBody(setReply));
-    QCOMPARE(setJson.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+    const QJsonObject setEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(setReply));
+    QVERIFY(setEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject setJson = payloadObject(setEnvelope);
     QCOMPARE(setJson.value(QStringLiteral("sinkId")).toString(), QStringLiteral("sink with space"));
     QCOMPARE(setJson.value(QStringLiteral("requestedValue")).toDouble(), 0.55);
     QCOMPARE(setJson.value(QStringLiteral("targetValue")).toDouble(), 0.55);
@@ -303,8 +339,9 @@ void SnapshotHttpServerFeatureTest::servesVolumeControlEndpoints()
     QSignalSpy incrementSpy(incrementReply, &QNetworkReply::finished);
     QVERIFY(incrementSpy.wait());
     QCOMPARE(incrementReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject incrementJson = plasma_bridge::tests::parseJsonObject(readReplyBody(incrementReply));
-    QCOMPARE(incrementJson.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+    const QJsonObject incrementEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(incrementReply));
+    QVERIFY(incrementEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject incrementJson = payloadObject(incrementEnvelope);
     QCOMPARE(incrementJson.value(QStringLiteral("sinkId")).toString(), QStringLiteral("alsa_output.usb-default.analog-stereo"));
     QCOMPARE(incrementJson.value(QStringLiteral("requestedValue")).toDouble(), 0.1);
     QCOMPARE(incrementJson.value(QStringLiteral("targetValue")).toDouble(), 0.85);
@@ -323,8 +360,9 @@ void SnapshotHttpServerFeatureTest::servesVolumeControlEndpoints()
     QSignalSpy decrementSpy(decrementReply, &QNetworkReply::finished);
     QVERIFY(decrementSpy.wait());
     QCOMPARE(decrementReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
-    const QJsonObject decrementJson = plasma_bridge::tests::parseJsonObject(readReplyBody(decrementReply));
-    QCOMPARE(decrementJson.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+    const QJsonObject decrementEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(decrementReply));
+    QVERIFY(decrementEnvelope.value(QStringLiteral("error")).isNull());
+    const QJsonObject decrementJson = payloadObject(decrementEnvelope);
     QCOMPARE(decrementJson.value(QStringLiteral("sinkId")).toString(), QStringLiteral("bluez_output.headset.1"));
     QCOMPARE(decrementJson.value(QStringLiteral("requestedValue")).toDouble(), 0.15);
     QCOMPARE(decrementJson.value(QStringLiteral("targetValue")).toDouble(), 0.2);
@@ -370,8 +408,11 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     QCOMPARE(notFoundReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notFoundReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("sink_not_found"));
-        QCOMPARE(body.value(QStringLiteral("sinkId")).toString(), notFoundResult.sinkId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("sink_not_found"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("sinkId")).toString(), notFoundResult.sinkId);
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("requestedValue")).toDouble(), 0.25);
     }
     notFoundReply->deleteLater();
 
@@ -392,8 +433,11 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     QCOMPARE(notWritableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notWritableReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("sink_not_writable"));
-        QCOMPARE(body.value(QStringLiteral("sinkId")).toString(), notWritableResult.sinkId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("sink_not_writable"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("sinkId")).toString(), notWritableResult.sinkId);
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("previousValue")).toDouble(), 0.35);
     }
     notWritableReply->deleteLater();
 
@@ -413,8 +457,10 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     QCOMPARE(notReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notReadyReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("not_ready"));
-        QCOMPARE(body.value(QStringLiteral("sinkId")).toString(), notReadyResult.sinkId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("sinkId")).toString(), notReadyResult.sinkId);
     }
     notReadyReply->deleteLater();
 
@@ -434,8 +480,10 @@ void SnapshotHttpServerFeatureTest::mapsVolumeControlFailures()
     QCOMPARE(invalidValueReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(invalidValueReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("invalid_value"));
-        QCOMPARE(body.value(QStringLiteral("sinkId")).toString(), invalidValueResult.sinkId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("invalid_value"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("sinkId")).toString(), invalidValueResult.sinkId);
     }
     invalidValueReply->deleteLater();
 }
@@ -493,8 +541,9 @@ void SnapshotHttpServerFeatureTest::servesDeviceControlEndpoints()
     QVERIFY(setDefaultSinkSpy.wait());
     QCOMPARE(setDefaultSinkReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
     {
-        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(setDefaultSinkReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(setDefaultSinkReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
         QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("sink with space"));
         QCOMPARE(controller.lastOperation(), Operation::SetDefaultSink);
         QCOMPARE(controller.lastDeviceId(), QStringLiteral("sink with space"));
@@ -509,8 +558,9 @@ void SnapshotHttpServerFeatureTest::servesDeviceControlEndpoints()
     QVERIFY(setDefaultSourceSpy.wait());
     QCOMPARE(setDefaultSourceReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
     {
-        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(setDefaultSourceReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(setDefaultSourceReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
         QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("source with space"));
         QCOMPARE(controller.lastOperation(), Operation::SetDefaultSource);
         QCOMPARE(controller.lastDeviceId(), QStringLiteral("source with space"));
@@ -526,8 +576,9 @@ void SnapshotHttpServerFeatureTest::servesDeviceControlEndpoints()
     QVERIFY(sinkMuteSpy.wait());
     QCOMPARE(sinkMuteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
     {
-        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkMuteReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkMuteReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
         QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("bluez_output.headset.1"));
         QCOMPARE(body.value(QStringLiteral("requestedMuted")).toBool(), false);
         QCOMPARE(body.value(QStringLiteral("targetMuted")).toBool(), false);
@@ -549,8 +600,9 @@ void SnapshotHttpServerFeatureTest::servesDeviceControlEndpoints()
     QVERIFY(sourceMuteSpy.wait());
     QCOMPARE(sourceMuteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
     {
-        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceMuteReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("accepted"));
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceMuteReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
         QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), QStringLiteral("alsa_input.usb-default.analog-stereo"));
         QCOMPARE(body.value(QStringLiteral("requestedMuted")).toBool(), true);
         QCOMPARE(body.value(QStringLiteral("targetMuted")).toBool(), true);
@@ -596,8 +648,11 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     QCOMPARE(sinkNotFoundReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkNotFoundReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("sink_not_found"));
-        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sinkNotFoundResult.deviceId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("sink_not_found"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("deviceId")).toString(),
+                 sinkNotFoundResult.deviceId);
     }
     sinkNotFoundReply->deleteLater();
 
@@ -614,8 +669,11 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     QCOMPARE(sourceNotFoundReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceNotFoundReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("source_not_found"));
-        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sourceNotFoundResult.deviceId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("source_not_found"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("deviceId")).toString(),
+                 sourceNotFoundResult.deviceId);
     }
     sourceNotFoundReply->deleteLater();
 
@@ -632,8 +690,11 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     QCOMPARE(defaultNotReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultNotReadyReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("not_ready"));
-        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), defaultNotReadyResult.deviceId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("deviceId")).toString(),
+                 defaultNotReadyResult.deviceId);
     }
     defaultNotReadyReply->deleteLater();
 
@@ -654,8 +715,13 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     QCOMPARE(sinkNotWritableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sinkNotWritableReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("sink_not_writable"));
-        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sinkNotWritableResult.deviceId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("sink_not_writable"));
+        const QJsonObject details = error.value(QStringLiteral("details")).toObject();
+        QCOMPARE(details.value(QStringLiteral("deviceId")).toString(), sinkNotWritableResult.deviceId);
+        QCOMPARE(details.value(QStringLiteral("requestedMuted")).toBool(), true);
+        QCOMPARE(details.value(QStringLiteral("targetMuted")).toBool(), false);
     }
     sinkNotWritableReply->deleteLater();
 
@@ -677,8 +743,13 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     QCOMPARE(sourceNotWritableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
     {
         const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourceNotWritableReply));
-        QCOMPARE(body.value(QStringLiteral("status")).toString(), QStringLiteral("source_not_writable"));
-        QCOMPARE(body.value(QStringLiteral("deviceId")).toString(), sourceNotWritableResult.deviceId);
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("source_not_writable"));
+        const QJsonObject details = error.value(QStringLiteral("details")).toObject();
+        QCOMPARE(details.value(QStringLiteral("deviceId")).toString(), sourceNotWritableResult.deviceId);
+        QCOMPARE(details.value(QStringLiteral("requestedMuted")).toBool(), false);
+        QCOMPARE(details.value(QStringLiteral("targetMuted")).toBool(), true);
     }
     sourceNotWritableReply->deleteLater();
 }
@@ -706,8 +777,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     QVERIFY(snapshotPostSpy.wait());
     QCOMPARE(snapshotPostReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
     QCOMPARE(snapshotPostReply->rawHeader("Allow"), QByteArrayLiteral("GET"));
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(snapshotPostReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("method_not_allowed"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(snapshotPostReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
+    }
     snapshotPostReply->deleteLater();
 
     QNetworkRequest sourcesRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/audio/sources")));
@@ -716,8 +790,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     QVERIFY(sourcesPostSpy.wait());
     QCOMPARE(sourcesPostReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
     QCOMPARE(sourcesPostReply->rawHeader("Allow"), QByteArrayLiteral("GET"));
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(sourcesPostReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("method_not_allowed"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(sourcesPostReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
+    }
     sourcesPostReply->deleteLater();
 
     QNetworkReply *controlGetReply = manager.get(QNetworkRequest(
@@ -726,8 +803,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     QVERIFY(controlGetSpy.wait());
     QCOMPARE(controlGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
     QCOMPARE(controlGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(controlGetReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("method_not_allowed"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(controlGetReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
+    }
     controlGetReply->deleteLater();
 
     QNetworkReply *defaultGetReply = manager.get(QNetworkRequest(
@@ -736,8 +816,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     QVERIFY(defaultGetSpy.wait());
     QCOMPARE(defaultGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
     QCOMPARE(defaultGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(defaultGetReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("method_not_allowed"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(defaultGetReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
+    }
     defaultGetReply->deleteLater();
 
     QNetworkReply *muteGetReply = manager.get(QNetworkRequest(
@@ -746,8 +829,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     QVERIFY(muteGetSpy.wait());
     QCOMPARE(muteGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
     QCOMPARE(muteGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(muteGetReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("method_not_allowed"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(muteGetReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
+    }
     muteGetReply->deleteLater();
 
     QNetworkReply *notFoundReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
@@ -755,8 +841,11 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     QSignalSpy notFoundSpy(notFoundReply, &QNetworkReply::finished);
     QVERIFY(notFoundSpy.wait());
     QCOMPARE(notFoundReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(notFoundReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("not_found"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notFoundReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_found"));
+    }
     notFoundReply->deleteLater();
 }
 
@@ -784,8 +873,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     QSignalSpy wrongContentTypeSpy(wrongContentTypeReply, &QNetworkReply::finished);
     QVERIFY(wrongContentTypeSpy.wait());
     QCOMPARE(wrongContentTypeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 415);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(wrongContentTypeReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("unsupported_media_type"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(wrongContentTypeReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("unsupported_media_type"));
+    }
     QCOMPARE(controller.callCount(), 0);
     wrongContentTypeReply->deleteLater();
 
@@ -797,8 +889,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     QSignalSpy malformedJsonSpy(malformedJsonReply, &QNetworkReply::finished);
     QVERIFY(malformedJsonSpy.wait());
     QCOMPARE(malformedJsonReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(malformedJsonReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(malformedJsonReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     malformedJsonReply->deleteLater();
 
@@ -809,8 +904,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     QSignalSpy missingValueSpy(missingValueReply, &QNetworkReply::finished);
     QVERIFY(missingValueSpy.wait());
     QCOMPARE(missingValueReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(missingValueReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingValueReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     missingValueReply->deleteLater();
 
@@ -822,8 +920,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     QSignalSpy emptyBodySpy(emptyBodyReply, &QNetworkReply::finished);
     QVERIFY(emptyBodySpy.wait());
     QCOMPARE(emptyBodyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(emptyBodyReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(emptyBodyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     emptyBodyReply->deleteLater();
 
@@ -834,8 +935,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidVolumeControlRequests()
     QSignalSpy encodedSlashSpy(encodedSlashReply, &QNetworkReply::finished);
     QVERIFY(encodedSlashSpy.wait());
     QCOMPARE(encodedSlashReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(encodedSlashReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(encodedSlashReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     encodedSlashReply->deleteLater();
 }
@@ -864,8 +968,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     QSignalSpy wrongContentTypeSpy(wrongContentTypeReply, &QNetworkReply::finished);
     QVERIFY(wrongContentTypeSpy.wait());
     QCOMPARE(wrongContentTypeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 415);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(wrongContentTypeReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("unsupported_media_type"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(wrongContentTypeReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("unsupported_media_type"));
+    }
     QCOMPARE(controller.callCount(), 0);
     wrongContentTypeReply->deleteLater();
 
@@ -877,8 +984,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     QSignalSpy malformedJsonSpy(malformedJsonReply, &QNetworkReply::finished);
     QVERIFY(malformedJsonSpy.wait());
     QCOMPARE(malformedJsonReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(malformedJsonReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(malformedJsonReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     malformedJsonReply->deleteLater();
 
@@ -889,8 +999,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     QSignalSpy missingMutedSpy(missingMutedReply, &QNetworkReply::finished);
     QVERIFY(missingMutedSpy.wait());
     QCOMPARE(missingMutedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(missingMutedReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingMutedReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     missingMutedReply->deleteLater();
 
@@ -901,8 +1014,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     QSignalSpy unexpectedBodySpy(unexpectedBodyReply, &QNetworkReply::finished);
     QVERIFY(unexpectedBodySpy.wait());
     QCOMPARE(unexpectedBodyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(unexpectedBodyReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(unexpectedBodyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     unexpectedBodyReply->deleteLater();
 
@@ -913,8 +1029,11 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     QSignalSpy encodedSlashSpy(encodedSlashReply, &QNetworkReply::finished);
     QVERIFY(encodedSlashSpy.wait());
     QCOMPARE(encodedSlashReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
-    QCOMPARE(plasma_bridge::tests::parseJsonObject(readReplyBody(encodedSlashReply)).value(QStringLiteral("code")).toString(),
-             QStringLiteral("bad_request"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(encodedSlashReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
     QCOMPARE(controller.callCount(), 0);
     encodedSlashReply->deleteLater();
 }
@@ -1026,6 +1145,8 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/default")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/mute")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/mute")));
+    QVERIFY(openApiBody.contains(QStringLiteral("payload:")));
+    QVERIFY(openApiBody.contains(QStringLiteral("error:")));
     openApiReply->deleteLater();
 
     QNetworkReply *asyncApiReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
@@ -1035,6 +1156,9 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     QCOMPARE(asyncApiReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
     const QString asyncApiBody = QString::fromUtf8(readReplyBody(asyncApiReply));
     QVERIFY(asyncApiBody.contains(QStringLiteral("localhost:19081")));
+    QVERIFY(asyncApiBody.contains(QStringLiteral("protocolVersion: 2")));
+    QVERIFY(asyncApiBody.contains(QStringLiteral("payload:")));
+    QVERIFY(asyncApiBody.contains(QStringLiteral("error:")));
     asyncApiReply->deleteLater();
 }
 

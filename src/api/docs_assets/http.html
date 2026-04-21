@@ -34,14 +34,43 @@
   <script src="/docs/assets/swagger-ui/swagger-ui-bundle.js"></script>
   <script src="/docs/assets/swagger-ui/swagger-ui-standalone-preset.js"></script>
   <script>
+    const tagOrder = [
+      "Snapshots / Sinks",
+      "Snapshots / Sources",
+      "Control / Defaults",
+      "Control / Mute",
+      "Control / Sink Volume"
+    ];
+
+    function getTagName(tag) {
+      if (typeof tag === "string") {
+        return tag;
+      }
+      if (tag && typeof tag.get === "function") {
+        return tag.get("name") || String(tag);
+      }
+      return String(tag);
+    }
+
     window.ui = SwaggerUIBundle({
       url: "/docs/openapi.yaml",
       dom_id: "#swagger-ui",
       deepLinking: true,
+      docExpansion: "list",
       presets: [
         SwaggerUIBundle.presets.apis,
         SwaggerUIStandalonePreset
       ],
+      tagsSorter: (left, right) => {
+        const leftName = getTagName(left);
+        const rightName = getTagName(right);
+        const leftIndex = tagOrder.indexOf(leftName);
+        const rightIndex = tagOrder.indexOf(rightName);
+        const normalizedLeftIndex = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+        const normalizedRightIndex = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+
+        return normalizedLeftIndex - normalizedRightIndex || leftName.localeCompare(rightName);
+      },
       layout: "StandaloneLayout"
     });
   </script>

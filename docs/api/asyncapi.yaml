@@ -61,6 +61,8 @@ operations:
       - $ref: '#/channels/wsAudio/messages/error'
 components:
   schemas:
+    NullValue:
+      type: 'null'
     AudioDeviceState:
       type: object
       additionalProperties: false
@@ -118,7 +120,7 @@ components:
           type:
             - string
             - 'null'
-    AudioEnvelope:
+    AudioPayload:
       type: object
       additionalProperties: false
       required:
@@ -138,44 +140,24 @@ components:
           const: audio
         value:
           $ref: '#/components/schemas/AudioState'
-    HelloPayload:
+    HelloData:
       type: object
       additionalProperties: false
       required:
-        - type
         - protocolVersion
       properties:
-        type:
-          type: string
-          const: hello
         protocolVersion:
           type: integer
           const: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
-    FullStatePayload:
+    PatchData:
       type: object
       additionalProperties: false
       required:
-        - type
-        - state
-      properties:
-        type:
-          type: string
-          const: fullState
-        state:
-          $ref: '#/components/schemas/AudioEnvelope'
-    PatchPayload:
-      type: object
-      additionalProperties: false
-      required:
-        - type
         - reason
         - sinkId
         - sourceId
         - changes
       properties:
-        type:
-          type: string
-          const: patch
         reason:
           type:
             - string
@@ -193,134 +175,204 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/PatchChange'
-    ErrorPayload:
+    ErrorObject:
       type: object
       additionalProperties: false
       required:
-        - type
         - code
         - message
       properties:
-        type:
-          type: string
-          const: error
         code:
           type: string
         message:
           type: string
+        details:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+    HelloMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - payload
+        - error
+      properties:
+        type:
+          type: string
+          const: hello
+        payload:
+          $ref: '#/components/schemas/HelloData'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    FullStateMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - payload
+        - error
+      properties:
+        type:
+          type: string
+          const: fullState
+        payload:
+          $ref: '#/components/schemas/AudioPayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    PatchMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - payload
+        - error
+      properties:
+        type:
+          type: string
+          const: patch
+        payload:
+          $ref: '#/components/schemas/PatchData'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    ErrorMessage:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - payload
+        - error
+      properties:
+        type:
+          type: string
+          const: error
+        payload:
+          $ref: '#/components/schemas/NullValue'
+        error:
+          $ref: '#/components/schemas/ErrorObject'
   messages:
     Hello:
       name: hello
       title: Hello
       summary: Initial client hello message.
       payload:
-        $ref: '#/components/schemas/HelloPayload'
+        $ref: '#/components/schemas/HelloMessage'
       examples:
         - payload:
             type: hello
-            protocolVersion: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
+            payload:
+              protocolVersion: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
+            error: null
     FullState:
       name: fullState
       title: Full state
       summary: Initial audio snapshot sent after a successful hello.
       payload:
-        $ref: '#/components/schemas/FullStatePayload'
+        $ref: '#/components/schemas/FullStateMessage'
       examples:
         - payload:
             type: fullState
-            state:
+            payload:
               audio:
                 sinks:
-                  - id: alsa_output.usb-example.analog-stereo
-                    label: USB Audio
+                  - id: sink-main
+                    label: Primary Speakers
                     volume: 0.75
                     muted: false
                     available: true
                     isDefault: true
                     isVirtual: false
                     backendApi: alsa
-                selectedSinkId: alsa_output.usb-example.analog-stereo
+                selectedSinkId: sink-main
                 sources:
-                  - id: alsa_input.usb-example.analog-stereo
-                    label: USB Microphone
+                  - id: source-main
+                    label: Primary Microphone
                     volume: 0.64
                     muted: false
                     available: true
                     isDefault: true
                     isVirtual: false
                     backendApi: alsa
-                selectedSourceId: alsa_input.usb-example.analog-stereo
+                selectedSourceId: source-main
+            error: null
     Patch:
       name: patch
       title: Patch
       summary: Audio change event.
       payload:
-        $ref: '#/components/schemas/PatchPayload'
+        $ref: '#/components/schemas/PatchMessage'
       examples:
         - payload:
             type: patch
-            reason: sink-updated
-            sinkId: alsa_output.usb-example.analog-stereo
-            sourceId: null
-            changes:
-              - path: audio
-                value:
-                  sinks:
-                    - id: alsa_output.usb-example.analog-stereo
-                      label: USB Audio
-                      volume: 0.75
-                      muted: false
-                      available: true
-                      isDefault: true
-                      isVirtual: false
-                      backendApi: alsa
-                  selectedSinkId: alsa_output.usb-example.analog-stereo
-                  sources:
-                    - id: alsa_input.usb-example.analog-stereo
-                      label: USB Microphone
-                      volume: 0.64
-                      muted: false
-                      available: true
-                      isDefault: true
-                      isVirtual: false
-                      backendApi: alsa
-                  selectedSourceId: alsa_input.usb-example.analog-stereo
+            payload:
+              reason: sink-updated
+              sinkId: sink-main
+              sourceId: null
+              changes:
+                - path: audio
+                  value:
+                    sinks:
+                      - id: sink-main
+                        label: Primary Speakers
+                        volume: 0.75
+                        muted: false
+                        available: true
+                        isDefault: true
+                        isVirtual: false
+                        backendApi: alsa
+                    selectedSinkId: sink-main
+                    sources:
+                      - id: source-main
+                        label: Primary Microphone
+                        volume: 0.64
+                        muted: false
+                        available: true
+                        isDefault: true
+                        isVirtual: false
+                        backendApi: alsa
+                    selectedSourceId: source-main
+            error: null
         - payload:
             type: patch
-            reason: source-updated
-            sinkId: null
-            sourceId: alsa_input.usb-example.analog-stereo
-            changes:
-              - path: audio
-                value:
-                  sinks:
-                    - id: alsa_output.usb-example.analog-stereo
-                      label: USB Audio
-                      volume: 0.75
-                      muted: false
-                      available: true
-                      isDefault: true
-                      isVirtual: false
-                      backendApi: alsa
-                  selectedSinkId: alsa_output.usb-example.analog-stereo
-                  sources:
-                    - id: alsa_input.usb-example.analog-stereo
-                      label: USB Microphone
-                      volume: 0.70
-                      muted: false
-                      available: true
-                      isDefault: true
-                      isVirtual: false
-                      backendApi: alsa
-                  selectedSourceId: alsa_input.usb-example.analog-stereo
+            payload:
+              reason: source-updated
+              sinkId: null
+              sourceId: source-main
+              changes:
+                - path: audio
+                  value:
+                    sinks:
+                      - id: sink-main
+                        label: Primary Speakers
+                        volume: 0.75
+                        muted: false
+                        available: true
+                        isDefault: true
+                        isVirtual: false
+                        backendApi: alsa
+                    selectedSinkId: sink-main
+                    sources:
+                      - id: source-main
+                        label: Primary Microphone
+                        volume: 0.70
+                        muted: false
+                        available: true
+                        isDefault: true
+                        isVirtual: false
+                        backendApi: alsa
+                    selectedSourceId: source-main
+            error: null
     Error:
       name: error
       title: Error
       summary: Error message emitted by the service.
       payload:
-        $ref: '#/components/schemas/ErrorPayload'
+        $ref: '#/components/schemas/ErrorMessage'
       examples:
         - payload:
             type: error
-            code: not_ready
-            message: Initial audio state is not ready yet.
+            payload: null
+            error:
+              code: not_ready
+              message: Initial audio state is not ready yet.

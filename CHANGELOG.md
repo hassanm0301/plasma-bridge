@@ -9,7 +9,9 @@
 
 ### Changed
 
-- Nothing
+- HTTP responses now use a consistent `{ "payload": ..., "error": ... }` envelope across snapshot and control endpoints
+- WebSocket messages now use `{ "type": "...", "payload": ..., "error": ... }`, and the audio protocol version is bumped to `2`
+- HTTP control failures now return structured `error.details` instead of success-shaped bodies with `status`
 
 ### Removed
 
