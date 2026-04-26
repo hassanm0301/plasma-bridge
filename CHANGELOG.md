@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.3.0] - 2026-04-27
 ### Added
 
 - Snapshot-only `window_probe` CLI with `setup`, `status`, `teardown`, `list`, and `active` commands backed by a KWin script helper
