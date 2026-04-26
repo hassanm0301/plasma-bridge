@@ -234,7 +234,7 @@ bool FakeWindowProbeSource::hasInitialSnapshot() const
 
 QString FakeWindowProbeSource::backendName() const
 {
-    return QStringLiteral("plasma-wayland");
+    return QStringLiteral("kwin-script-helper");
 }
 
 void FakeWindowProbeSource::setSnapshot(const WindowSnapshot &snapshot, const bool ready)
@@ -257,6 +257,54 @@ void FakeWindowProbeSource::emitConnectionFailure(const QString &message)
 int FakeWindowProbeSource::startCount() const
 {
     return m_startCount;
+}
+
+FakeWindowProbeBackendController::FakeWindowProbeBackendController(QObject *parent)
+    : WindowProbeBackendController(parent)
+{
+    const tools::window_probe::WindowProbeBackendStatus defaultStatus{
+        QStringLiteral("kwin-script-helper"), true, true, true, false, true, true};
+    m_setupResult = {true, QStringLiteral("Synthetic setup success."), defaultStatus};
+    m_statusResult = {true, QStringLiteral("Synthetic status success."), defaultStatus};
+    m_teardownResult = {true,
+                        QStringLiteral("Synthetic teardown success."),
+                        tools::window_probe::WindowProbeBackendStatus{QStringLiteral("kwin-script-helper"),
+                                                                      false,
+                                                                      false,
+                                                                      false,
+                                                                      false,
+                                                                      false,
+                                                                      false}};
+}
+
+tools::window_probe::WindowProbeCommandResult FakeWindowProbeBackendController::setup()
+{
+    return m_setupResult;
+}
+
+tools::window_probe::WindowProbeCommandResult FakeWindowProbeBackendController::status()
+{
+    return m_statusResult;
+}
+
+tools::window_probe::WindowProbeCommandResult FakeWindowProbeBackendController::teardown()
+{
+    return m_teardownResult;
+}
+
+void FakeWindowProbeBackendController::setSetupResult(const tools::window_probe::WindowProbeCommandResult &result)
+{
+    m_setupResult = result;
+}
+
+void FakeWindowProbeBackendController::setStatusResult(const tools::window_probe::WindowProbeCommandResult &result)
+{
+    m_statusResult = result;
+}
+
+void FakeWindowProbeBackendController::setTeardownResult(const tools::window_probe::WindowProbeCommandResult &result)
+{
+    m_teardownResult = result;
 }
 
 FakeSubmissionGate::FakeSubmissionGate(QObject *parent)

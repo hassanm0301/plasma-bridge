@@ -7,6 +7,7 @@ target_link_libraries(plasma_bridge
         plasma_bridge_api
         plasma_bridge_audio_adapter
         plasma_bridge_audio_control_adapter
+        plasma_bridge_window_adapter
         plasma_bridge_common
         plasma_bridge_state
         Qt6::Core

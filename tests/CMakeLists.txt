@@ -128,10 +128,10 @@ target_link_libraries(test_snapshot_http_server
         plasma_bridge_state
 )
 
-plasma_bridge_add_qt_test(test_audio_websocket_server
-    feature/test_audio_websocket_server.cpp
+plasma_bridge_add_qt_test(test_state_websocket_server
+    feature/test_state_websocket_server.cpp
 )
-target_link_libraries(test_audio_websocket_server
+target_link_libraries(test_state_websocket_server
     PRIVATE
         plasma_bridge_api
         plasma_bridge_state

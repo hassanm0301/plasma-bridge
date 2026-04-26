@@ -13,20 +13,23 @@ class QWebSocket;
 namespace plasma_bridge::state
 {
 class AudioStateStore;
+class WindowStateStore;
 }
 
 namespace plasma_bridge::api
 {
 
-inline constexpr auto kAudioWebSocketPath = PLASMA_BRIDGE_AUDIO_WS_PATH;
-inline constexpr int kAudioWebSocketProtocolVersion = PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION;
+inline constexpr auto kStateWebSocketPath = PLASMA_BRIDGE_WS_PATH;
+inline constexpr int kStateWebSocketProtocolVersion = PLASMA_BRIDGE_WS_PROTOCOL_VERSION;
 
-class AudioWebSocketServer final : public QObject
+class StateWebSocketServer final : public QObject
 {
     Q_OBJECT
 
 public:
-    explicit AudioWebSocketServer(state::AudioStateStore *audioStateStore, QObject *parent = nullptr);
+    explicit StateWebSocketServer(state::AudioStateStore *audioStateStore,
+                                  state::WindowStateStore *windowStateStore = nullptr,
+                                  QObject *parent = nullptr);
 
     bool listen(const QHostAddress &address, quint16 port);
     QString errorString() const;
@@ -44,12 +47,17 @@ private:
     void handleNewConnection();
     void handleTextMessage(QWebSocket *socket, const QString &message);
     void handleBinaryMessage(QWebSocket *socket);
-    void handleStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId);
+    void handleAudioStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId);
+    void handleWindowStateChanged(const QString &reason, const QString &windowId);
+    bool isConfiguredStateReady() const;
+    QString notReadyMessage() const;
     void sendFullState(QWebSocket *socket);
     void sendPatch(QWebSocket *socket, const QString &reason, const QString &sinkId, const QString &sourceId);
+    void sendWindowPatch(QWebSocket *socket, const QString &reason, const QString &windowId);
     void sendError(QWebSocket *socket, const QString &code, const QString &message, bool closeAfter);
 
     state::AudioStateStore *m_audioStateStore = nullptr;
+    state::WindowStateStore *m_windowStateStore = nullptr;
     QHash<QWebSocket *, ClientSession> m_clients;
     QWebSocketServer m_server;
 };

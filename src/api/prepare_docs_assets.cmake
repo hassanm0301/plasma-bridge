@@ -27,8 +27,8 @@ foreach(required_var
         PLASMA_BRIDGE_DEFAULT_HOST
         PLASMA_BRIDGE_DEFAULT_HTTP_PORT
         PLASMA_BRIDGE_DEFAULT_WS_PORT
-        PLASMA_BRIDGE_AUDIO_WS_PATH
-        PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION)
+        PLASMA_BRIDGE_WS_PATH
+        PLASMA_BRIDGE_WS_PROTOCOL_VERSION)
     if(NOT DEFINED ${required_var} OR "${${required_var}}" STREQUAL "")
         message(FATAL_ERROR "Missing required variable: ${required_var}")
     endif()
@@ -115,10 +115,15 @@ function(stage_versioned_spec source_file destination_file)
         "${PLASMA_BRIDGE_DEFAULT_HOST}:${PLASMA_BRIDGE_DEFAULT_WS_PORT}"
         spec_content
         "${spec_content}")
-    string(REPLACE "@PLASMA_BRIDGE_AUDIO_WS_PATH@" "${PLASMA_BRIDGE_AUDIO_WS_PATH}" spec_content "${spec_content}")
+    string(REPLACE "@PLASMA_BRIDGE_WS_PATH@" "${PLASMA_BRIDGE_WS_PATH}" spec_content "${spec_content}")
     string(REPLACE
-        "@PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@"
-        "${PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION}"
+        "'@PLASMA_BRIDGE_WS_PROTOCOL_VERSION@'"
+        "${PLASMA_BRIDGE_WS_PROTOCOL_VERSION}"
+        spec_content
+        "${spec_content}")
+    string(REPLACE
+        "@PLASMA_BRIDGE_WS_PROTOCOL_VERSION@"
+        "${PLASMA_BRIDGE_WS_PROTOCOL_VERSION}"
         spec_content
         "${spec_content}")
 

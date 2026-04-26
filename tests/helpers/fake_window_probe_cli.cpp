@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
     }
 
     plasma_bridge::tests::FakeWindowProbeSource source;
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, *optionsResult.options, &output, &error);
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, nullptr, *optionsResult.options, &output, &error);
     QObject::connect(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished, &app, &QCoreApplication::exit);
 
     const QString scenario = parser.value(QStringLiteral("scenario"));

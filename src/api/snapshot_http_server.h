@@ -21,6 +21,7 @@ class AudioVolumeController;
 namespace plasma_bridge::state
 {
 class AudioStateStore;
+class WindowStateStore;
 }
 
 namespace plasma_bridge::api
@@ -32,6 +33,14 @@ class SnapshotHttpServer final : public QObject
 
 public:
     explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                control::AudioVolumeController *audioVolumeController,
+                                control::AudioDeviceController *audioDeviceController,
+                                const QString &documentationHost,
+                                quint16 documentationHttpPort,
+                                quint16 documentationWsPort,
+                                QObject *parent = nullptr);
+    explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                state::WindowStateStore *windowStateStore,
                                 control::AudioVolumeController *audioVolumeController,
                                 control::AudioDeviceController *audioDeviceController,
                                 const QString &documentationHost,
@@ -68,6 +77,7 @@ private:
                                 QJsonObject details = {});
 
     state::AudioStateStore *m_audioStateStore = nullptr;
+    state::WindowStateStore *m_windowStateStore = nullptr;
     control::AudioVolumeController *m_audioVolumeController = nullptr;
     control::AudioDeviceController *m_audioDeviceController = nullptr;
     QString m_documentationHost;

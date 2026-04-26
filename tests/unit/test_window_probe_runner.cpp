@@ -14,6 +14,9 @@ private slots:
     void parseOptionsHandlesCommandsAndFailures();
     void runnerPrintsListJsonAndExitsInOneShotMode();
     void runnerPrintsActiveJsonWithNullWindow();
+    void runnerExecutesSetupCommand();
+    void runnerPrintsStatusJson();
+    void runnerFailsListCommandWhenBackendIsNotConfigured();
     void runnerTimesOutBeforeInitialSnapshot();
     void runnerFailsWhenConnectionBreaksBeforeReady();
 };
@@ -36,6 +39,14 @@ void WindowProbeRunnerTest::parseOptionsHandlesCommandsAndFailures()
     QCOMPARE(success.options->command, Command::List);
     QCOMPARE(success.options->jsonOutput, true);
     QCOMPARE(success.options->timeoutMs, 25);
+
+    QCommandLineParser setupParser;
+    configureParser(setupParser);
+    setupParser.process(QStringList{QStringLiteral("window_probe"), QStringLiteral("setup")});
+    const ParseOptionsResult setupResult = parseOptions(setupParser);
+    QVERIFY(setupResult.ok);
+    QVERIFY(setupResult.options.has_value());
+    QCOMPARE(setupResult.options->command, Command::Setup);
 
     QCommandLineParser invalidCommandParser;
     configureParser(invalidCommandParser);
@@ -75,7 +86,8 @@ void WindowProbeRunnerTest::runnerPrintsListJsonAndExitsInOneShotMode()
     options.jsonOutput = true;
     options.timeoutMs = 100;
 
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, options, &output, &error);
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
     QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
 
     QTimer::singleShot(0, &source, [&source]() {
@@ -88,7 +100,7 @@ void WindowProbeRunnerTest::runnerPrintsListJsonAndExitsInOneShotMode()
     QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 0);
     QCOMPARE(source.startCount(), 1);
     QVERIFY(outputText.contains(QStringLiteral("\"command\": \"list\"")));
-    QVERIFY(outputText.contains(QStringLiteral("\"backend\": \"plasma-wayland\"")));
+    QVERIFY(outputText.contains(QStringLiteral("\"backend\": \"kwin-script-helper\"")));
     QVERIFY(outputText.contains(QStringLiteral("\"activeWindowId\": \"window-editor\"")));
     QVERIFY(outputText.contains(QStringLiteral("\"title\": \"CHANGELOG.md - Kate\"")));
     QVERIFY(errorText.isEmpty());
@@ -107,7 +119,8 @@ void WindowProbeRunnerTest::runnerPrintsActiveJsonWithNullWindow()
     options.jsonOutput = true;
     options.timeoutMs = 100;
 
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, options, &output, &error);
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
     QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
 
     QTimer::singleShot(0, &source, [&source]() {
@@ -123,31 +136,70 @@ void WindowProbeRunnerTest::runnerPrintsActiveJsonWithNullWindow()
     QVERIFY(errorText.isEmpty());
 }
 
-void WindowProbeRunnerTest::runnerTimesOutBeforeInitialSnapshot()
+void WindowProbeRunnerTest::runnerExecutesSetupCommand()
 {
     plasma_bridge::tests::FakeWindowProbeSource source;
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
     QString outputText;
     QString errorText;
     QTextStream output(&outputText);
     QTextStream error(&errorText);
 
     plasma_bridge::tools::window_probe::WindowProbeOptions options;
-    options.command = plasma_bridge::tools::window_probe::Command::List;
-    options.timeoutMs = 10;
+    options.command = plasma_bridge::tools::window_probe::Command::Setup;
 
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, options, &output, &error);
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
     QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
 
     runner.start();
 
     QTRY_COMPARE(finishedSpy.count(), 1);
-    QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
-    QVERIFY(errorText.contains(QStringLiteral("Timed out waiting for Plasma Wayland window state.")));
+    QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 0);
+    QVERIFY(outputText.contains(QStringLiteral("Command: setup")));
+    QVERIFY(outputText.contains(QStringLiteral("Synthetic setup success.")));
+    QVERIFY(outputText.contains(QStringLiteral("Script Installed: yes")));
+    QVERIFY(errorText.isEmpty());
 }
 
-void WindowProbeRunnerTest::runnerFailsWhenConnectionBreaksBeforeReady()
+void WindowProbeRunnerTest::runnerPrintsStatusJson()
 {
     plasma_bridge::tests::FakeWindowProbeSource source;
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    QString outputText;
+    QString errorText;
+    QTextStream output(&outputText);
+    QTextStream error(&errorText);
+
+    plasma_bridge::tools::window_probe::WindowProbeOptions options;
+    options.command = plasma_bridge::tools::window_probe::Command::Status;
+    options.jsonOutput = true;
+
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
+    QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
+
+    runner.start();
+
+    QTRY_COMPARE(finishedSpy.count(), 1);
+    QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 0);
+    QVERIFY(outputText.contains(QStringLiteral("\"command\": \"status\"")));
+    QVERIFY(outputText.contains(QStringLiteral("\"scriptInstalled\": true")));
+    QVERIFY(errorText.isEmpty());
+}
+
+void WindowProbeRunnerTest::runnerFailsListCommandWhenBackendIsNotConfigured()
+{
+    plasma_bridge::tests::FakeWindowProbeSource source;
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    backendController.setStatusResult(
+        {true,
+         QStringLiteral("Backend missing."),
+         plasma_bridge::tools::window_probe::WindowProbeBackendStatus{QStringLiteral("kwin-script-helper"),
+                                                                     false,
+                                                                     false,
+                                                                     false,
+                                                                     false,
+                                                                     false,
+                                                                     false}});
     QString outputText;
     QString errorText;
     QTextStream output(&outputText);
@@ -157,7 +209,54 @@ void WindowProbeRunnerTest::runnerFailsWhenConnectionBreaksBeforeReady()
     options.command = plasma_bridge::tools::window_probe::Command::List;
     options.timeoutMs = 100;
 
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, options, &output, &error);
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
+    QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
+
+    runner.start();
+
+    QTRY_COMPARE(finishedSpy.count(), 1);
+    QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
+    QCOMPARE(source.startCount(), 0);
+    QVERIFY(errorText.contains(QStringLiteral("window_probe backend is not configured")));
+}
+
+void WindowProbeRunnerTest::runnerTimesOutBeforeInitialSnapshot()
+{
+    plasma_bridge::tests::FakeWindowProbeSource source;
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    QString outputText;
+    QString errorText;
+    QTextStream output(&outputText);
+    QTextStream error(&errorText);
+
+    plasma_bridge::tools::window_probe::WindowProbeOptions options;
+    options.command = plasma_bridge::tools::window_probe::Command::List;
+    options.timeoutMs = 10;
+
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
+    QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
+
+    runner.start();
+
+    QTRY_COMPARE(finishedSpy.count(), 1);
+    QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
+    QVERIFY(errorText.contains(QStringLiteral("Timed out waiting for cached KWin script window state.")));
+}
+
+void WindowProbeRunnerTest::runnerFailsWhenConnectionBreaksBeforeReady()
+{
+    plasma_bridge::tests::FakeWindowProbeSource source;
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    QString outputText;
+    QString errorText;
+    QTextStream output(&outputText);
+    QTextStream error(&errorText);
+
+    plasma_bridge::tools::window_probe::WindowProbeOptions options;
+    options.command = plasma_bridge::tools::window_probe::Command::List;
+    options.timeoutMs = 100;
+
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
     QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
 
     QTimer::singleShot(0, &source, [&source]() {

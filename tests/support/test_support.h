@@ -73,6 +73,27 @@ private:
     int m_startCount = 0;
 };
 
+class FakeWindowProbeBackendController final : public tools::window_probe::WindowProbeBackendController
+{
+    Q_OBJECT
+
+public:
+    explicit FakeWindowProbeBackendController(QObject *parent = nullptr);
+
+    tools::window_probe::WindowProbeCommandResult setup() override;
+    tools::window_probe::WindowProbeCommandResult status() override;
+    tools::window_probe::WindowProbeCommandResult teardown() override;
+
+    void setSetupResult(const tools::window_probe::WindowProbeCommandResult &result);
+    void setStatusResult(const tools::window_probe::WindowProbeCommandResult &result);
+    void setTeardownResult(const tools::window_probe::WindowProbeCommandResult &result);
+
+private:
+    tools::window_probe::WindowProbeCommandResult m_setupResult;
+    tools::window_probe::WindowProbeCommandResult m_statusResult;
+    tools::window_probe::WindowProbeCommandResult m_teardownResult;
+};
+
 class FakeSubmissionGate final : public tools::audio_control_probe::AudioControlSubmissionGate
 {
     Q_OBJECT

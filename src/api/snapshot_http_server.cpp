@@ -3,10 +3,12 @@
 #include "api/audio_control_http_helpers.h"
 #include "api/json_envelope.h"
 #include "common/audio_state.h"
+#include "common/window_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "plasma_bridge_build_config.h"
 #include "state/audio_state_store.h"
+#include "state/window_state_store.h"
 
 #include <QFile>
 #include <QHostAddress>
@@ -27,6 +29,8 @@ const QString kSinksPath = QStringLiteral("/snapshot/audio/sinks");
 const QString kDefaultSinkPath = QStringLiteral("/snapshot/audio/default-sink");
 const QString kSourcesPath = QStringLiteral("/snapshot/audio/sources");
 const QString kDefaultSourcePath = QStringLiteral("/snapshot/audio/default-source");
+const QString kWindowsPath = QStringLiteral("/snapshot/windows");
+const QString kActiveWindowPath = QStringLiteral("/snapshot/windows/active");
 const QString kDocsRootPath = QStringLiteral("/docs/");
 const QString kDocsRootNoSlashPath = QStringLiteral("/docs");
 const QString kDocsHttpPath = QStringLiteral("/docs/http");
@@ -47,6 +51,8 @@ enum class SnapshotRoute {
     DefaultSink,
     Sources,
     DefaultSource,
+    Windows,
+    ActiveWindow,
 };
 
 SnapshotRoute snapshotRouteForPath(const QString &path)
@@ -62,6 +68,12 @@ SnapshotRoute snapshotRouteForPath(const QString &path)
     }
     if (path == kDefaultSourcePath) {
         return SnapshotRoute::DefaultSource;
+    }
+    if (path == kWindowsPath) {
+        return SnapshotRoute::Windows;
+    }
+    if (path == kActiveWindowPath) {
+        return SnapshotRoute::ActiveWindow;
     }
 
     return SnapshotRoute::None;
@@ -360,8 +372,28 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
                                        QObject *parent)
+    : SnapshotHttpServer(audioStateStore,
+                         nullptr,
+                         audioVolumeController,
+                         audioDeviceController,
+                         documentationHost,
+                         documentationHttpPort,
+                         documentationWsPort,
+                         parent)
+{
+}
+
+SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                       state::WindowStateStore *windowStateStore,
+                                       control::AudioVolumeController *audioVolumeController,
+                                       control::AudioDeviceController *audioDeviceController,
+                                       const QString &documentationHost,
+                                       quint16 documentationHttpPort,
+                                       quint16 documentationWsPort,
+                                       QObject *parent)
     : QObject(parent)
     , m_audioStateStore(audioStateStore)
+    , m_windowStateStore(windowStateStore)
     , m_audioVolumeController(audioVolumeController)
     , m_audioDeviceController(audioDeviceController)
     , m_documentationHost(documentationHost)
@@ -814,14 +846,40 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
-    if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
-        writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
-                               QStringLiteral("Initial audio state is not ready yet."));
+    switch (snapshotRoute) {
+    case SnapshotRoute::Windows:
+        if (m_windowStateStore == nullptr || !m_windowStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial window state is not ready yet."));
+            return;
+        }
+
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(m_windowStateStore->windowState())));
+        return;
+    case SnapshotRoute::ActiveWindow: {
+        if (m_windowStateStore == nullptr || !m_windowStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial window state is not ready yet."));
+            return;
+        }
+
+        const std::optional<plasma_bridge::WindowState> active = m_windowStateStore->activeWindow();
+        QJsonObject payload;
+        payload[QStringLiteral("window")] =
+            active.has_value() ? QJsonValue(plasma_bridge::toJsonObject(*active)) : QJsonValue(QJsonValue::Null);
+        writeJsonResponse(socket, 200, QByteArrayLiteral("OK"), buildHttpSuccessEnvelope(payload));
         return;
     }
-
-    switch (snapshotRoute) {
     case SnapshotRoute::Sinks:
+        if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial audio state is not ready yet."));
+            return;
+        }
+
         writeJsonResponse(socket,
                           200,
                           QByteArrayLiteral("OK"),
@@ -829,6 +887,12 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
                               plasma_bridge::toJsonObject(plasma_bridge::toAudioOutputState(m_audioStateStore->audioState()))));
         return;
     case SnapshotRoute::Sources:
+        if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial audio state is not ready yet."));
+            return;
+        }
+
         writeJsonResponse(socket,
                           200,
                           QByteArrayLiteral("OK"),
@@ -836,6 +900,12 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
                               plasma_bridge::toJsonObject(plasma_bridge::toAudioInputState(m_audioStateStore->audioState()))));
         return;
     case SnapshotRoute::DefaultSink: {
+        if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial audio state is not ready yet."));
+            return;
+        }
+
         const std::optional<plasma_bridge::AudioSinkState> defaultSink = m_audioStateStore->defaultSink();
         if (!defaultSink.has_value()) {
             writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
@@ -850,6 +920,12 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
     case SnapshotRoute::DefaultSource: {
+        if (m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial audio state is not ready yet."));
+            return;
+        }
+
         const std::optional<plasma_bridge::AudioSourceState> defaultSource = m_audioStateStore->defaultSource();
         if (!defaultSource.has_value()) {
             writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),

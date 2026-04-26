@@ -21,8 +21,8 @@ add_custom_command(
         -DPLASMA_BRIDGE_DEFAULT_HOST=${PLASMA_BRIDGE_DEFAULT_HOST}
         -DPLASMA_BRIDGE_DEFAULT_HTTP_PORT=${PLASMA_BRIDGE_DEFAULT_HTTP_PORT}
         -DPLASMA_BRIDGE_DEFAULT_WS_PORT=${PLASMA_BRIDGE_DEFAULT_WS_PORT}
-        -DPLASMA_BRIDGE_AUDIO_WS_PATH=${PLASMA_BRIDGE_AUDIO_WS_PATH}
-        -DPLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION=${PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION}
+        -DPLASMA_BRIDGE_WS_PATH=${PLASMA_BRIDGE_WS_PATH}
+        -DPLASMA_BRIDGE_WS_PROTOCOL_VERSION=${PLASMA_BRIDGE_WS_PROTOCOL_VERSION}
         -P "${CMAKE_CURRENT_SOURCE_DIR}/prepare_docs_assets.cmake"
     DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/prepare_docs_assets.cmake"
@@ -38,7 +38,7 @@ set_source_files_properties("${GENERATED_DOCS_QRC}" PROPERTIES GENERATED TRUE)
 
 add_library(plasma_bridge_api STATIC
     audio_control_http_helpers.cpp
-    audio_websocket_server.cpp
+    state_websocket_server.cpp
     json_envelope.cpp
     snapshot_http_server.cpp
     "${GENERATED_DOCS_QRC}"

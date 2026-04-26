@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral(PLASMA_BRIDGE_VERSION));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Inspect KDE Plasma window state through Plasma Wayland window management."));
+    parser.setApplicationDescription(QStringLiteral("Inspect KDE Plasma window state through the window_probe KWin script backend."));
     plasma_bridge::tools::window_probe::configureParser(parser);
     parser.process(app);
 
@@ -27,8 +27,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    plasma_bridge::tools::window_probe::PlasmaWaylandWindowProbeSource source;
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, *optionsResult.options, &output, &error);
+    plasma_bridge::tools::window_probe::KWinScriptWindowProbeSource source;
+    plasma_bridge::tools::window_probe::KWinScriptWindowProbeBackendController backendController;
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source,
+                                                                 &backendController,
+                                                                 *optionsResult.options,
+                                                                 &output,
+                                                                 &error);
     QObject::connect(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished, &app, &QCoreApplication::exit);
     QTimer::singleShot(0, &runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::start);
 

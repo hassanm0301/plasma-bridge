@@ -1,5 +1,6 @@
-#include "api/audio_websocket_server.h"
+#include "api/state_websocket_server.h"
 #include "state/audio_state_store.h"
+#include "state/window_state_store.h"
 #include "tests/support/test_support.h"
 
 #include "plasma_bridge_build_config.h"
@@ -11,7 +12,7 @@
 #include <QWebSocket>
 #include <QtTest>
 
-class AudioWebSocketServerFeatureTest : public QObject
+class StateWebSocketServerFeatureTest : public QObject
 {
     Q_OBJECT
 
@@ -22,10 +23,12 @@ private slots:
     void rejectsUnsupportedProtocolVersionAndBinaryMessages();
     void sendsNotReadyThenFullStateAfterReadiness();
     void sendsPatchMessagesToAllReadyClients();
+    void sendsWindowNotReadyThenFullStateAfterReadiness();
+    void sendsWindowPatchMessagesToAllReadyClients();
 
 private:
     static QHostAddress bindAddress();
-    static QString helloMessage(int protocolVersion = plasma_bridge::api::AudioWebSocketServer::protocolVersion());
+    static QString helloMessage(int protocolVersion = plasma_bridge::api::StateWebSocketServer::protocolVersion());
     static QJsonObject takeMessage(QSignalSpy &spy, int index = 0);
 };
 
@@ -44,12 +47,12 @@ QJsonObject errorObject(const QJsonObject &envelope)
 
 } // namespace
 
-void AudioWebSocketServerFeatureTest::rejectsUnknownEndpoint()
+void StateWebSocketServerFeatureTest::rejectsUnknownEndpoint()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
-    plasma_bridge::api::AudioWebSocketServer server(&store);
+    plasma_bridge::api::StateWebSocketServer server(&store);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QWebSocket socket;
@@ -69,12 +72,12 @@ void AudioWebSocketServerFeatureTest::rejectsUnknownEndpoint()
     QCOMPARE(errorObject(error).value(QStringLiteral("code")).toString(), QStringLiteral("unknown_endpoint"));
 }
 
-void AudioWebSocketServerFeatureTest::ignoresStateChangesUntilHello()
+void StateWebSocketServerFeatureTest::ignoresStateChangesUntilHello()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
-    plasma_bridge::api::AudioWebSocketServer server(&store);
+    plasma_bridge::api::StateWebSocketServer server(&store);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QWebSocket socket;
@@ -82,7 +85,7 @@ void AudioWebSocketServerFeatureTest::ignoresStateChangesUntilHello()
     QSignalSpy messageSpy(&socket, &QWebSocket::textMessageReceived);
     QSignalSpy disconnectedSpy(&socket, &QWebSocket::disconnected);
 
-    socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
+    socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
     QTRY_COMPARE(connectedSpy.count(), 1);
 
     store.updateAudioState(plasma_bridge::tests::alternateAudioState(), true, QStringLiteral("sink-updated"), QStringLiteral("bluez_output.headset.1"));
@@ -102,19 +105,19 @@ void AudioWebSocketServerFeatureTest::ignoresStateChangesUntilHello()
     QTRY_COMPARE(disconnectedSpy.count(), 1);
 }
 
-void AudioWebSocketServerFeatureTest::rejectsMalformedFirstMessages()
+void StateWebSocketServerFeatureTest::rejectsMalformedFirstMessages()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
-    plasma_bridge::api::AudioWebSocketServer server(&store);
+    plasma_bridge::api::StateWebSocketServer server(&store);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QWebSocket malformedSocket;
     QSignalSpy malformedConnectedSpy(&malformedSocket, &QWebSocket::connected);
     QSignalSpy malformedMessageSpy(&malformedSocket, &QWebSocket::textMessageReceived);
     QSignalSpy malformedDisconnectedSpy(&malformedSocket, &QWebSocket::disconnected);
-    malformedSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
+    malformedSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
     QTRY_COMPARE(malformedConnectedSpy.count(), 1);
     malformedSocket.sendTextMessage(QStringLiteral("{"));
     QTRY_COMPARE(malformedMessageSpy.count(), 1);
@@ -125,7 +128,7 @@ void AudioWebSocketServerFeatureTest::rejectsMalformedFirstMessages()
     QSignalSpy wrongTypeConnectedSpy(&wrongTypeSocket, &QWebSocket::connected);
     QSignalSpy wrongTypeMessageSpy(&wrongTypeSocket, &QWebSocket::textMessageReceived);
     QSignalSpy wrongTypeDisconnectedSpy(&wrongTypeSocket, &QWebSocket::disconnected);
-    wrongTypeSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
+    wrongTypeSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
     QTRY_COMPARE(wrongTypeConnectedSpy.count(), 1);
     wrongTypeSocket.sendTextMessage(QStringLiteral("{\"type\":\"patch\"}"));
     QTRY_COMPARE(wrongTypeMessageSpy.count(), 1);
@@ -133,21 +136,21 @@ void AudioWebSocketServerFeatureTest::rejectsMalformedFirstMessages()
     QCOMPARE(errorObject(takeMessage(wrongTypeMessageSpy)).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
 }
 
-void AudioWebSocketServerFeatureTest::rejectsUnsupportedProtocolVersionAndBinaryMessages()
+void StateWebSocketServerFeatureTest::rejectsUnsupportedProtocolVersionAndBinaryMessages()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
-    plasma_bridge::api::AudioWebSocketServer server(&store);
+    plasma_bridge::api::StateWebSocketServer server(&store);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QWebSocket versionSocket;
     QSignalSpy versionConnectedSpy(&versionSocket, &QWebSocket::connected);
     QSignalSpy versionMessageSpy(&versionSocket, &QWebSocket::textMessageReceived);
     QSignalSpy versionDisconnectedSpy(&versionSocket, &QWebSocket::disconnected);
-    versionSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
+    versionSocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
     QTRY_COMPARE(versionConnectedSpy.count(), 1);
-    versionSocket.sendTextMessage(helloMessage(plasma_bridge::api::AudioWebSocketServer::protocolVersion() + 1));
+    versionSocket.sendTextMessage(helloMessage(plasma_bridge::api::StateWebSocketServer::protocolVersion() + 1));
     QTRY_COMPARE(versionMessageSpy.count(), 1);
     QTRY_COMPARE(versionDisconnectedSpy.count(), 1);
     QCOMPARE(errorObject(takeMessage(versionMessageSpy)).value(QStringLiteral("code")).toString(),
@@ -157,7 +160,7 @@ void AudioWebSocketServerFeatureTest::rejectsUnsupportedProtocolVersionAndBinary
     QSignalSpy binaryConnectedSpy(&binarySocket, &QWebSocket::connected);
     QSignalSpy binaryMessageSpy(&binarySocket, &QWebSocket::textMessageReceived);
     QSignalSpy binaryDisconnectedSpy(&binarySocket, &QWebSocket::disconnected);
-    binarySocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
+    binarySocket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
     QTRY_COMPARE(binaryConnectedSpy.count(), 1);
     binarySocket.sendBinaryMessage(QByteArrayLiteral("abc"));
     QTRY_COMPARE(binaryMessageSpy.count(), 1);
@@ -165,10 +168,10 @@ void AudioWebSocketServerFeatureTest::rejectsUnsupportedProtocolVersionAndBinary
     QCOMPARE(errorObject(takeMessage(binaryMessageSpy)).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
 }
 
-void AudioWebSocketServerFeatureTest::sendsNotReadyThenFullStateAfterReadiness()
+void StateWebSocketServerFeatureTest::sendsNotReadyThenFullStateAfterReadiness()
 {
     plasma_bridge::state::AudioStateStore store;
-    plasma_bridge::api::AudioWebSocketServer server(&store);
+    plasma_bridge::api::StateWebSocketServer server(&store);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QWebSocket socket;
@@ -176,7 +179,7 @@ void AudioWebSocketServerFeatureTest::sendsNotReadyThenFullStateAfterReadiness()
     QSignalSpy messageSpy(&socket, &QWebSocket::textMessageReceived);
     QSignalSpy disconnectedSpy(&socket, &QWebSocket::disconnected);
 
-    socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath()));
+    socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
     QTRY_COMPARE(connectedSpy.count(), 1);
     socket.sendTextMessage(helloMessage());
 
@@ -203,12 +206,12 @@ void AudioWebSocketServerFeatureTest::sendsNotReadyThenFullStateAfterReadiness()
     QTRY_COMPARE(disconnectedSpy.count(), 1);
 }
 
-void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
+void StateWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
 {
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
 
-    plasma_bridge::api::AudioWebSocketServer server(&store);
+    plasma_bridge::api::StateWebSocketServer server(&store);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QWebSocket firstSocket;
@@ -218,7 +221,7 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QSignalSpy firstMessageSpy(&firstSocket, &QWebSocket::textMessageReceived);
     QSignalSpy secondMessageSpy(&secondSocket, &QWebSocket::textMessageReceived);
 
-    const QUrl url = plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::AudioWebSocketServer::endpointPath());
+    const QUrl url = plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath());
     firstSocket.open(url);
     secondSocket.open(url);
 
@@ -260,6 +263,7 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QCOMPARE(payloadObject(secondPatch).value(QStringLiteral("reason")).toString(), QStringLiteral("sink-updated"));
     QCOMPARE(payloadObject(firstPatch).value(QStringLiteral("sinkId")).toString(), QStringLiteral("bluez_output.headset.1"));
     QVERIFY(payloadObject(firstPatch).value(QStringLiteral("sourceId")).isNull());
+    QVERIFY(payloadObject(firstPatch).value(QStringLiteral("windowId")).isNull());
     QVERIFY(payloadObject(secondPatch).value(QStringLiteral("sourceId")).isNull());
 
     plasma_bridge::AudioState sourceUpdatedState = plasma_bridge::tests::alternateAudioState();
@@ -280,6 +284,7 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QCOMPARE(payloadObject(firstSourcePatch).value(QStringLiteral("reason")).toString(), QStringLiteral("source-updated"));
     QVERIFY(payloadObject(firstSourcePatch).value(QStringLiteral("sinkId")).isNull());
     QCOMPARE(payloadObject(firstSourcePatch).value(QStringLiteral("sourceId")).toString(), QStringLiteral("bluez_input.headset.1"));
+    QVERIFY(payloadObject(firstSourcePatch).value(QStringLiteral("windowId")).isNull());
     QCOMPARE(payloadObject(secondSourcePatch).value(QStringLiteral("sourceId")).toString(), QStringLiteral("bluez_input.headset.1"));
 
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(),
@@ -295,6 +300,7 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QVERIFY(payloadObject(defaultSourcePatch).value(QStringLiteral("sinkId")).isNull());
     QCOMPARE(payloadObject(defaultSourcePatch).value(QStringLiteral("sourceId")).toString(),
              QStringLiteral("alsa_input.usb-default.analog-stereo"));
+    QVERIFY(payloadObject(defaultSourcePatch).value(QStringLiteral("windowId")).isNull());
 
     QSignalSpy firstDisconnectedSpy(&firstSocket, &QWebSocket::disconnected);
     QSignalSpy secondDisconnectedSpy(&secondSocket, &QWebSocket::disconnected);
@@ -304,22 +310,140 @@ void AudioWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QTRY_COMPARE(secondDisconnectedSpy.count(), 1);
 }
 
-QJsonObject AudioWebSocketServerFeatureTest::takeMessage(QSignalSpy &spy, const int index)
+void StateWebSocketServerFeatureTest::sendsWindowNotReadyThenFullStateAfterReadiness()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+
+    plasma_bridge::api::StateWebSocketServer server(&audioStore, &windowStore);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QWebSocket socket;
+    QSignalSpy connectedSpy(&socket, &QWebSocket::connected);
+    QSignalSpy messageSpy(&socket, &QWebSocket::textMessageReceived);
+    QSignalSpy disconnectedSpy(&socket, &QWebSocket::disconnected);
+
+    socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
+    QTRY_COMPARE(connectedSpy.count(), 1);
+    socket.sendTextMessage(helloMessage());
+
+    QTRY_COMPARE(messageSpy.count(), 1);
+    {
+        const QJsonObject error = takeMessage(messageSpy);
+        QCOMPARE(error.value(QStringLiteral("type")).toString(), QStringLiteral("error"));
+        QVERIFY(error.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(error).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    QCOMPARE(disconnectedSpy.count(), 0);
+
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    QTRY_COMPARE(messageSpy.count(), 1);
+    const QJsonObject fullState = takeMessage(messageSpy);
+    QCOMPARE(fullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    QVERIFY(fullState.value(QStringLiteral("error")).isNull());
+    const QJsonObject audio = payloadObject(fullState).value(QStringLiteral("audio")).toObject();
+    QCOMPARE(audio.value(QStringLiteral("selectedSourceId")).toString(), audioStore.audioState().selectedSourceId);
+    const QJsonObject windowState = payloadObject(fullState).value(QStringLiteral("windowState")).toObject();
+    QCOMPARE(windowState.value(QStringLiteral("activeWindowId")).toString(), QStringLiteral("window-editor"));
+    QCOMPARE(windowState.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("id")).toString(),
+             QStringLiteral("window-editor"));
+    QCOMPARE(windowState.value(QStringLiteral("windows")).toArray().size(), 2);
+
+    socket.close();
+    QTRY_COMPARE(disconnectedSpy.count(), 1);
+}
+
+void StateWebSocketServerFeatureTest::sendsWindowPatchMessagesToAllReadyClients()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::api::StateWebSocketServer server(&audioStore, &windowStore);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QWebSocket firstSocket;
+    QWebSocket secondSocket;
+    QSignalSpy firstConnectedSpy(&firstSocket, &QWebSocket::connected);
+    QSignalSpy secondConnectedSpy(&secondSocket, &QWebSocket::connected);
+    QSignalSpy firstMessageSpy(&firstSocket, &QWebSocket::textMessageReceived);
+    QSignalSpy secondMessageSpy(&secondSocket, &QWebSocket::textMessageReceived);
+
+    const QUrl url = plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath());
+    firstSocket.open(url);
+    secondSocket.open(url);
+
+    QTRY_COMPARE(firstConnectedSpy.count(), 1);
+    QTRY_COMPARE(secondConnectedSpy.count(), 1);
+
+    firstSocket.sendTextMessage(helloMessage());
+    secondSocket.sendTextMessage(helloMessage());
+
+    QTRY_COMPARE(firstMessageSpy.count(), 1);
+    QTRY_COMPARE(secondMessageSpy.count(), 1);
+    const QJsonObject firstFullState = takeMessage(firstMessageSpy);
+    const QJsonObject secondFullState = takeMessage(secondMessageSpy);
+    QCOMPARE(firstFullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    QCOMPARE(secondFullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    QVERIFY(payloadObject(firstFullState).contains(QStringLiteral("audio")));
+    QVERIFY(payloadObject(firstFullState).contains(QStringLiteral("windowState")));
+    QVERIFY(payloadObject(secondFullState).contains(QStringLiteral("audio")));
+    QVERIFY(payloadObject(secondFullState).contains(QStringLiteral("windowState")));
+
+    plasma_bridge::WindowSnapshot updatedSnapshot = plasma_bridge::tests::sampleWindowSnapshot();
+    updatedSnapshot.activeWindowId = QStringLiteral("window-terminal");
+    windowStore.updateWindowState(updatedSnapshot,
+                                  true,
+                                  QStringLiteral("active-window-changed"),
+                                  QStringLiteral("window-terminal"));
+
+    QTRY_COMPARE(firstMessageSpy.count(), 1);
+    QTRY_COMPARE(secondMessageSpy.count(), 1);
+
+    const QJsonObject firstPatch = takeMessage(firstMessageSpy);
+    const QJsonObject secondPatch = takeMessage(secondMessageSpy);
+    QCOMPARE(firstPatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QCOMPARE(secondPatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QVERIFY(firstPatch.value(QStringLiteral("error")).isNull());
+    QVERIFY(secondPatch.value(QStringLiteral("error")).isNull());
+    const QJsonObject payload = payloadObject(firstPatch);
+    QCOMPARE(payload.value(QStringLiteral("reason")).toString(), QStringLiteral("active-window-changed"));
+    QVERIFY(payload.value(QStringLiteral("sinkId")).isNull());
+    QVERIFY(payload.value(QStringLiteral("sourceId")).isNull());
+    QCOMPARE(payload.value(QStringLiteral("windowId")).toString(), QStringLiteral("window-terminal"));
+    const QJsonObject change = payload.value(QStringLiteral("changes")).toArray().at(0).toObject();
+    QCOMPARE(change.value(QStringLiteral("path")).toString(), QStringLiteral("windowState"));
+    QCOMPARE(change.value(QStringLiteral("value")).toObject().value(QStringLiteral("activeWindowId")).toString(),
+             QStringLiteral("window-terminal"));
+    QCOMPARE(payloadObject(secondPatch).value(QStringLiteral("windowId")).toString(), QStringLiteral("window-terminal"));
+
+    QSignalSpy firstDisconnectedSpy(&firstSocket, &QWebSocket::disconnected);
+    QSignalSpy secondDisconnectedSpy(&secondSocket, &QWebSocket::disconnected);
+    firstSocket.close();
+    secondSocket.close();
+    QTRY_COMPARE(firstDisconnectedSpy.count(), 1);
+    QTRY_COMPARE(secondDisconnectedSpy.count(), 1);
+}
+
+QJsonObject StateWebSocketServerFeatureTest::takeMessage(QSignalSpy &spy, const int index)
 {
     return plasma_bridge::tests::parseJsonObject(spy.takeAt(index).at(0).toString().toUtf8());
 }
 
-QHostAddress AudioWebSocketServerFeatureTest::bindAddress()
+QHostAddress StateWebSocketServerFeatureTest::bindAddress()
 {
     return QHostAddress(QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST));
 }
 
-QString AudioWebSocketServerFeatureTest::helloMessage(const int protocolVersion)
+QString StateWebSocketServerFeatureTest::helloMessage(const int protocolVersion)
 {
     return QStringLiteral("{\"type\":\"hello\",\"payload\":{\"protocolVersion\":%1},\"error\":null}")
         .arg(QString::number(protocolVersion));
 }
 
-QTEST_GUILESS_MAIN(AudioWebSocketServerFeatureTest)
+QTEST_GUILESS_MAIN(StateWebSocketServerFeatureTest)
 
-#include "test_audio_websocket_server.moc"
+#include "test_state_websocket_server.moc"

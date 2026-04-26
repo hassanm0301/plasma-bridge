@@ -1,4 +1,6 @@
 #include <QProcess>
+#include <QProcessEnvironment>
+#include <QTemporaryDir>
 #include <QtTest>
 
 class CliBinariesFeatureTest : public QObject
@@ -115,6 +117,18 @@ void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
     QVERIFY(help.standardOutput.contains(QStringLiteral("--timeout-ms")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("list")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("active")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("setup")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("status")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("teardown")));
+
+    const ProcessResult status = runProcess(windowProbeBin, {QStringLiteral("--json"), QStringLiteral("status")});
+    QCOMPARE(status.exitCode, 0);
+    QVERIFY(status.standardOutput.contains(QStringLiteral("\"command\": \"status\"")));
+    QVERIFY(status.standardOutput.contains(QStringLiteral("\"scriptInstalled\": false")));
+
+    const ProcessResult missingSetup = runProcess(windowProbeBin, {QStringLiteral("list")});
+    QCOMPARE(missingSetup.exitCode, 1);
+    QVERIFY(missingSetup.standardError.contains(QStringLiteral("window_probe backend is not configured")));
 
     const ProcessResult timeout = runProcess(fakeWindowProbeCliBin,
                                              {QStringLiteral("--scenario"),
@@ -123,7 +137,7 @@ void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
                                               QStringLiteral("20"),
                                               QStringLiteral("list")});
     QCOMPARE(timeout.exitCode, 1);
-    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for Plasma Wayland window state.")));
+    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for cached KWin script window state.")));
 
     const ProcessResult failure = runProcess(fakeWindowProbeCliBin,
                                              {QStringLiteral("--scenario"), QStringLiteral("failure"), QStringLiteral("active")});
@@ -137,6 +151,7 @@ void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
                                            QStringLiteral("list")});
     QCOMPARE(list.exitCode, 0);
     QVERIFY(list.standardOutput.contains(QStringLiteral("\"activeWindowId\": \"window-editor\"")));
+    QVERIFY(list.standardOutput.contains(QStringLiteral("\"backend\": \"kwin-script-helper\"")));
 
     const ProcessResult noActive = runProcess(fakeWindowProbeCliBin,
                                               {QStringLiteral("--scenario"),
@@ -151,10 +166,19 @@ CliBinariesFeatureTest::ProcessResult CliBinariesFeatureTest::runProcess(const Q
                                                                          const QStringList &arguments,
                                                                          const int timeoutMs)
 {
+    ProcessResult result;
     QProcess process;
+    QTemporaryDir tempRoot;
+    if (!tempRoot.isValid()) {
+        result.standardError = QStringLiteral("Failed to create temporary test root.");
+        return result;
+    }
+    QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+    environment.insert(QStringLiteral("PLASMA_BRIDGE_WINDOW_PROBE_DATA_ROOT"), tempRoot.path());
+    environment.insert(QStringLiteral("PLASMA_BRIDGE_WINDOW_PROBE_CONFIG_ROOT"), tempRoot.path());
+    process.setProcessEnvironment(environment);
     process.start(program, arguments);
 
-    ProcessResult result;
     if (!process.waitForStarted()) {
         result.standardError = process.errorString();
         return result;

@@ -12,7 +12,9 @@ private slots:
     void geometryJsonUsesCoordinates();
     void windowJsonUsesNullForUnsetOptionalFields();
     void snapshotJsonUsesNullForMissingActiveWindow();
+    void snapshotRoundTripsThroughJsonHelpers();
     void activeWindowFallsBackToActiveFlag();
+    void normalizeSnapshotMakesActiveStateConsistent();
     void humanReadableFormattingIncludesImportantFields();
 };
 
@@ -59,6 +61,20 @@ void WindowStateTest::snapshotJsonUsesNullForMissingActiveWindow()
     QVERIFY(json.value(QStringLiteral("activeWindowId")).isNull());
 }
 
+void WindowStateTest::snapshotRoundTripsThroughJsonHelpers()
+{
+    const plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+    const QJsonObject json = plasma_bridge::toJsonObject(snapshot);
+
+    const std::optional<plasma_bridge::WindowSnapshot> parsed = plasma_bridge::windowSnapshotFromJson(json);
+
+    QVERIFY(parsed.has_value());
+    QCOMPARE(parsed->activeWindowId, QStringLiteral("window-editor"));
+    QCOMPARE(parsed->windows.size(), 2);
+    QCOMPARE(parsed->windows.at(0).id, QStringLiteral("window-terminal"));
+    QCOMPARE(parsed->windows.at(1).resourceName, QStringLiteral("kate"));
+}
+
 void WindowStateTest::activeWindowFallsBackToActiveFlag()
 {
     plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
@@ -68,6 +84,27 @@ void WindowStateTest::activeWindowFallsBackToActiveFlag()
 
     QVERIFY(activeWindow.has_value());
     QCOMPARE(activeWindow->id, QStringLiteral("window-editor"));
+}
+
+void WindowStateTest::normalizeSnapshotMakesActiveStateConsistent()
+{
+    plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+    snapshot.activeWindowId = QStringLiteral("window-terminal");
+    snapshot.windows[0].isActive = false;
+    snapshot.windows[1].isActive = true;
+
+    const plasma_bridge::WindowSnapshot normalized = plasma_bridge::normalizeWindowSnapshot(snapshot);
+    const QJsonObject json = plasma_bridge::toJsonObject(snapshot);
+
+    QCOMPARE(normalized.activeWindowId, QStringLiteral("window-terminal"));
+    QCOMPARE(normalized.windows[0].id, QStringLiteral("window-terminal"));
+    QCOMPARE(normalized.windows[0].isActive, true);
+    QCOMPARE(normalized.windows[1].isActive, false);
+    QCOMPARE(json.value(QStringLiteral("activeWindowId")).toString(), QStringLiteral("window-terminal"));
+    QCOMPARE(json.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("id")).toString(),
+             QStringLiteral("window-terminal"));
+    QCOMPARE(json.value(QStringLiteral("windows")).toArray().at(0).toObject().value(QStringLiteral("isActive")).toBool(),
+             true);
 }
 
 void WindowStateTest::humanReadableFormattingIncludesImportantFields()

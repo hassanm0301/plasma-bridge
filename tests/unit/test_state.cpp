@@ -1,4 +1,6 @@
 #include "state/audio_state_store.h"
+#include "state/window_state_store.h"
+#include "adapters/window/window_observer.h"
 #include "tests/support/test_support.h"
 
 #include <QSignalSpy>
@@ -16,7 +18,63 @@ private slots:
     void defaultSourceFallsBackToIsDefault();
     void defaultSinkRequiresReadyState();
     void defaultSourceRequiresReadyState();
+    void updateWindowStateTransitionsReadinessAndNormalizesActiveWindow();
+    void windowStateStoreAttachesGenericObserver();
+    void activeWindowRequiresReadyWindowState();
 };
+
+namespace
+{
+
+class FakeWindowObserver final : public plasma_bridge::window::WindowObserver
+{
+    Q_OBJECT
+
+public:
+    using WindowObserver::WindowObserver;
+
+    void start() override
+    {
+        ++m_startCount;
+    }
+
+    const plasma_bridge::WindowSnapshot &currentSnapshot() const override
+    {
+        return m_snapshot;
+    }
+
+    bool hasInitialSnapshot() const override
+    {
+        return m_ready;
+    }
+
+    QString backendName() const override
+    {
+        return QStringLiteral("fake-window-observer");
+    }
+
+    void emitInitialSnapshot(const plasma_bridge::WindowSnapshot &snapshot)
+    {
+        m_snapshot = snapshot;
+        m_ready = true;
+        emit initialSnapshotReady();
+    }
+
+    void emitWindowChange(const plasma_bridge::WindowSnapshot &snapshot,
+                          const QString &reason,
+                          const QString &windowId)
+    {
+        m_snapshot = snapshot;
+        m_ready = true;
+        emit windowStateChanged(reason, windowId);
+    }
+
+    int m_startCount = 0;
+    plasma_bridge::WindowSnapshot m_snapshot;
+    bool m_ready = false;
+};
+
+} // namespace
 
 void AudioStateStoreTest::updateAudioStateTransitionsReadinessAndSignals()
 {
@@ -115,6 +173,65 @@ void AudioStateStoreTest::defaultSourceRequiresReadyState()
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), false, QStringLiteral("initial"));
     QVERIFY(!store.defaultSource().has_value());
+}
+
+void AudioStateStoreTest::updateWindowStateTransitionsReadinessAndNormalizesActiveWindow()
+{
+    plasma_bridge::state::WindowStateStore store;
+    QSignalSpy readySpy(&store, &plasma_bridge::state::WindowStateStore::readyChanged);
+    QSignalSpy stateSpy(&store, &plasma_bridge::state::WindowStateStore::windowStateChanged);
+
+    plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+    snapshot.activeWindowId = QStringLiteral("window-terminal");
+    snapshot.windows[0].isActive = false;
+    snapshot.windows[1].isActive = true;
+
+    store.updateWindowState(snapshot, true, QStringLiteral("active-window-changed"), QStringLiteral("window-terminal"));
+
+    QCOMPARE(store.isReady(), true);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(readySpy.takeFirst().at(0).toBool(), true);
+    QCOMPARE(stateSpy.count(), 1);
+    const QList<QVariant> stateArgs = stateSpy.takeFirst();
+    QCOMPARE(stateArgs.at(0).toString(), QStringLiteral("active-window-changed"));
+    QCOMPARE(stateArgs.at(1).toString(), QStringLiteral("window-terminal"));
+    QCOMPARE(store.windowState().activeWindowId, QStringLiteral("window-terminal"));
+    QCOMPARE(store.windowState().windows[0].isActive, true);
+    QCOMPARE(store.windowState().windows[1].isActive, false);
+    QVERIFY(store.activeWindow().has_value());
+    QCOMPARE(store.activeWindow()->id, QStringLiteral("window-terminal"));
+}
+
+void AudioStateStoreTest::windowStateStoreAttachesGenericObserver()
+{
+    plasma_bridge::state::WindowStateStore store;
+    FakeWindowObserver observer;
+    QSignalSpy readySpy(&store, &plasma_bridge::state::WindowStateStore::readyChanged);
+    QSignalSpy stateSpy(&store, &plasma_bridge::state::WindowStateStore::windowStateChanged);
+
+    store.attachObserver(&observer);
+    observer.emitInitialSnapshot(plasma_bridge::tests::sampleWindowSnapshot());
+
+    QCOMPARE(store.isReady(), true);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(stateSpy.takeFirst().at(0).toString(), QStringLiteral("initial"));
+
+    plasma_bridge::WindowSnapshot changed = plasma_bridge::tests::sampleWindowSnapshotWithoutActiveWindow();
+    observer.emitWindowChange(changed, QStringLiteral("active-window-changed"), QStringLiteral("window-editor"));
+
+    QCOMPARE(stateSpy.count(), 1);
+    const QList<QVariant> args = stateSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("active-window-changed"));
+    QCOMPARE(args.at(1).toString(), QStringLiteral("window-editor"));
+    QVERIFY(!store.activeWindow().has_value());
+}
+
+void AudioStateStoreTest::activeWindowRequiresReadyWindowState()
+{
+    plasma_bridge::state::WindowStateStore store;
+    store.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), false, QStringLiteral("initial"));
+    QVERIFY(!store.activeWindow().has_value());
 }
 
 QTEST_GUILESS_MAIN(AudioStateStoreTest)

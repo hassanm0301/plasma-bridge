@@ -49,7 +49,11 @@ QRect toQRect(const WindowGeometryState &state);
 QJsonObject toJsonObject(const WindowGeometryState &geometry);
 QJsonObject toJsonObject(const WindowState &window);
 QJsonObject toJsonObject(const WindowSnapshot &snapshot);
+std::optional<WindowGeometryState> windowGeometryStateFromJson(const QJsonObject &json);
+std::optional<WindowState> windowStateFromJson(const QJsonObject &json);
+std::optional<WindowSnapshot> windowSnapshotFromJson(const QJsonObject &json);
 
+WindowSnapshot normalizeWindowSnapshot(const WindowSnapshot &snapshot);
 std::optional<WindowState> activeWindow(const WindowSnapshot &snapshot);
 
 QString formatHumanReadableWindowList(const WindowSnapshot &snapshot);

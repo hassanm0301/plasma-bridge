@@ -30,6 +30,24 @@ QString joinValuesOrFallback(const QStringList &values, const QString &fallback)
     return values.isEmpty() ? fallback : values.join(QStringLiteral(", "));
 }
 
+QStringList stringListFromJson(const QJsonValue &value)
+{
+    QStringList values;
+    if (!value.isArray()) {
+        return values;
+    }
+
+    const QJsonArray array = value.toArray();
+    values.reserve(array.size());
+    for (const QJsonValue &entry : array) {
+        if (entry.isString()) {
+            values.append(entry.toString());
+        }
+    }
+
+    return values;
+}
+
 void appendWindow(QTextStream &stream, const WindowState &window)
 {
     stream << (window.isActive ? "* " : "  ")
@@ -119,15 +137,138 @@ QJsonObject toJsonObject(const WindowState &window)
 
 QJsonObject toJsonObject(const WindowSnapshot &snapshot)
 {
+    const WindowSnapshot normalizedSnapshot = normalizeWindowSnapshot(snapshot);
     QJsonArray windows;
-    for (const WindowState &window : snapshot.windows) {
+    for (const WindowState &window : normalizedSnapshot.windows) {
         windows.append(toJsonObject(window));
     }
 
     QJsonObject json;
-    json[QStringLiteral("activeWindowId")] = stringOrNull(snapshot.activeWindowId);
+    const std::optional<WindowState> active = activeWindow(normalizedSnapshot);
+    json[QStringLiteral("activeWindowId")] = stringOrNull(normalizedSnapshot.activeWindowId);
+    json[QStringLiteral("activeWindow")] =
+        active.has_value() ? QJsonValue(toJsonObject(*active)) : QJsonValue(QJsonValue::Null);
     json[QStringLiteral("windows")] = windows;
     return json;
+}
+
+std::optional<WindowGeometryState> windowGeometryStateFromJson(const QJsonObject &json)
+{
+    const QJsonValue xValue = json.value(QStringLiteral("x"));
+    const QJsonValue yValue = json.value(QStringLiteral("y"));
+    const QJsonValue widthValue = json.value(QStringLiteral("width"));
+    const QJsonValue heightValue = json.value(QStringLiteral("height"));
+    if (!xValue.isDouble() || !yValue.isDouble() || !widthValue.isDouble() || !heightValue.isDouble()) {
+        return std::nullopt;
+    }
+
+    WindowGeometryState geometry;
+    geometry.x = xValue.toInt();
+    geometry.y = yValue.toInt();
+    geometry.width = widthValue.toInt();
+    geometry.height = heightValue.toInt();
+    return geometry;
+}
+
+std::optional<WindowState> windowStateFromJson(const QJsonObject &json)
+{
+    const QString id = json.value(QStringLiteral("id")).toString();
+    if (id.isEmpty()) {
+        return std::nullopt;
+    }
+
+    const QJsonValue geometryValue = json.value(QStringLiteral("geometry"));
+    const QJsonValue clientGeometryValue = json.value(QStringLiteral("clientGeometry"));
+    if (!geometryValue.isObject() || !clientGeometryValue.isObject()) {
+        return std::nullopt;
+    }
+
+    const std::optional<WindowGeometryState> geometry = windowGeometryStateFromJson(geometryValue.toObject());
+    const std::optional<WindowGeometryState> clientGeometry =
+        windowGeometryStateFromJson(clientGeometryValue.toObject());
+    if (!geometry.has_value() || !clientGeometry.has_value()) {
+        return std::nullopt;
+    }
+
+    WindowState window;
+    window.id = id;
+    window.title = json.value(QStringLiteral("title")).toString();
+    if (const QJsonValue appIdValue = json.value(QStringLiteral("appId")); appIdValue.isString()) {
+        window.appId = appIdValue.toString();
+    }
+    if (const QJsonValue pidValue = json.value(QStringLiteral("pid")); pidValue.isDouble()) {
+        window.pid = static_cast<quint32>(pidValue.toInteger());
+    }
+    window.isActive = json.value(QStringLiteral("isActive")).toBool(false);
+    window.isMinimized = json.value(QStringLiteral("isMinimized")).toBool(false);
+    window.isMaximized = json.value(QStringLiteral("isMaximized")).toBool(false);
+    window.isFullscreen = json.value(QStringLiteral("isFullscreen")).toBool(false);
+    window.isOnAllDesktops = json.value(QStringLiteral("isOnAllDesktops")).toBool(false);
+    window.skipTaskbar = json.value(QStringLiteral("skipTaskbar")).toBool(false);
+    window.skipSwitcher = json.value(QStringLiteral("skipSwitcher")).toBool(false);
+    window.geometry = *geometry;
+    window.clientGeometry = *clientGeometry;
+    window.virtualDesktopIds = stringListFromJson(json.value(QStringLiteral("virtualDesktopIds")));
+    window.activityIds = stringListFromJson(json.value(QStringLiteral("activityIds")));
+    if (const QJsonValue parentIdValue = json.value(QStringLiteral("parentId")); parentIdValue.isString()) {
+        window.parentId = parentIdValue.toString();
+    }
+    if (const QJsonValue resourceNameValue = json.value(QStringLiteral("resourceName")); resourceNameValue.isString()) {
+        window.resourceName = resourceNameValue.toString();
+    }
+
+    return window;
+}
+
+std::optional<WindowSnapshot> windowSnapshotFromJson(const QJsonObject &json)
+{
+    const QJsonValue windowsValue = json.value(QStringLiteral("windows"));
+    if (!windowsValue.isArray()) {
+        return std::nullopt;
+    }
+
+    WindowSnapshot snapshot;
+    if (const QJsonValue activeWindowIdValue = json.value(QStringLiteral("activeWindowId")); activeWindowIdValue.isString()) {
+        snapshot.activeWindowId = activeWindowIdValue.toString();
+    }
+
+    const QJsonArray windowsArray = windowsValue.toArray();
+    snapshot.windows.reserve(windowsArray.size());
+    for (const QJsonValue &windowValue : windowsArray) {
+        if (!windowValue.isObject()) {
+            return std::nullopt;
+        }
+
+        const std::optional<WindowState> window = windowStateFromJson(windowValue.toObject());
+        if (!window.has_value()) {
+            return std::nullopt;
+        }
+
+        snapshot.windows.append(*window);
+    }
+
+    return normalizeWindowSnapshot(snapshot);
+}
+
+WindowSnapshot normalizeWindowSnapshot(const WindowSnapshot &snapshot)
+{
+    WindowSnapshot normalized = snapshot;
+    const std::optional<WindowState> active = activeWindow(snapshot);
+
+    if (!active.has_value()) {
+        normalized.activeWindowId.clear();
+        for (WindowState &window : normalized.windows) {
+            window.isActive = false;
+        }
+        return normalized;
+    }
+
+    normalized.activeWindowId = active->id;
+    for (WindowState &window : normalized.windows) {
+        window.isActive = window.id == normalized.activeWindowId;
+    }
+
+    return normalized;
 }
 
 std::optional<WindowState> activeWindow(const WindowSnapshot &snapshot)
