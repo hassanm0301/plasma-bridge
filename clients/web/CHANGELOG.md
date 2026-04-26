@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.1.0] - 2026-04-27
 ### Added
 
 - Initial React web client scaffold with Vite, TypeScript, and independent web versioning
