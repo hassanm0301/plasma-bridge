@@ -4,6 +4,12 @@ project(plasma_bridge VERSION 0.2.0 LANGUAGES CXX)
 
 include(CTest)
 
+get_filename_component(PLASMA_REMOTE_TOOLBAR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+set(PLASMA_BRIDGE_SPECS_DIR
+    "${PLASMA_REMOTE_TOOLBAR_ROOT}/specs"
+    CACHE PATH
+    "Directory containing the checked-in OpenAPI and AsyncAPI specs.")
+
 set(PLASMA_BRIDGE_DEFAULT_HOST "127.0.0.1" CACHE STRING "Default host address used by plasma_bridge.")
 set(PLASMA_BRIDGE_DEFAULT_HTTP_PORT 8080 CACHE STRING "Default HTTP port used by plasma_bridge.")
 set(PLASMA_BRIDGE_DEFAULT_WS_PORT 8081 CACHE STRING "Default WebSocket port used by plasma_bridge.")

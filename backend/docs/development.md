@@ -4,15 +4,15 @@ This guide is for contributors who want to understand where behavior lives befor
 
 ## Source Map
 
-- `src/app/`: application entry point, CLI flags, service wiring, and startup output
-- `src/api/`: HTTP server, WebSocket server, JSON envelope helpers, hosted docs assets
-- `src/adapters/audio/`: PulseAudioQt observers and controllers
-- `src/adapters/window/`: KWin script helper backend and window observer interface
-- `src/state/`: in-memory stores that hold the canonical audio and window snapshots
-- `src/common/`: shared state models, JSON serialization, formatting, and generated build config
-- `tools/probes/`: standalone inspection and control tools used for local debugging
-- `tests/`: Qt Test unit and feature coverage plus fake probe helpers
-- `docs/api/`: checked-in OpenAPI and AsyncAPI source files
+- `backend/src/app/`: application entry point, CLI flags, service wiring, and startup output
+- `backend/src/api/`: HTTP server, WebSocket server, JSON envelope helpers, hosted docs assets
+- `backend/src/adapters/audio/`: PulseAudioQt observers and controllers
+- `backend/src/adapters/window/`: KWin script helper backend and window observer interface
+- `backend/src/state/`: in-memory stores that hold the canonical audio and window snapshots
+- `backend/src/common/`: shared state models, JSON serialization, formatting, and generated build config
+- `backend/tools/probes/`: standalone inspection and control tools used for local debugging
+- `backend/tests/`: Qt Test unit and feature coverage plus fake probe helpers
+- `specs/`: checked-in OpenAPI and AsyncAPI source files
 
 ## Runtime Shape
 
@@ -41,25 +41,25 @@ All public HTTP and WebSocket messages use explicit envelopes. Keep that convent
 
 Prefer changing the shared state model first when adding a field. Then update serialization, stores, adapters, API responses, tests, and docs in that order.
 
-For HTTP changes, update `docs/api/openapi.yaml` with the same response envelopes that the server returns.
-For WebSocket changes, update `docs/api/asyncapi.yaml` and keep the checked-in placeholders such as `@PLASMA_BRIDGE_WS_PATH@`; the build rewrites them for the hosted runtime spec.
+For HTTP changes, update `specs/openapi.yaml` with the same response envelopes that the server returns.
+For WebSocket changes, update `specs/asyncapi.yaml` and keep the checked-in placeholders such as `@PLASMA_BRIDGE_WS_PATH@`; the build rewrites them for the hosted runtime spec.
 
-The hosted docs pages under `src/api/docs_assets/` are intentionally small static shells. The checked-in OpenAPI and AsyncAPI files remain the source of truth.
+The hosted docs pages under `backend/src/api/docs_assets/` are intentionally small static shells. The checked-in OpenAPI and AsyncAPI files remain the source of truth.
 
 ## Testing
 
 Use CTest from the build directory:
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir backend/build --output-on-failure
 ```
 
 Focused tests are usually faster while iterating:
 
 ```bash
-ctest --test-dir build --output-on-failure -R test_state_websocket_server
-ctest --test-dir build --output-on-failure -R test_snapshot_http_server
-ctest --test-dir build --output-on-failure -R test_cli_binaries
+ctest --test-dir backend/build --output-on-failure -R test_state_websocket_server
+ctest --test-dir backend/build --output-on-failure -R test_snapshot_http_server
+ctest --test-dir backend/build --output-on-failure -R test_cli_binaries
 ```
 
 The default automated suite is hermetic: it does not require a live KDE Plasma session and does not mutate real audio devices.
@@ -69,8 +69,8 @@ The default automated suite is hermetic: it does not require a live KDE Plasma s
 From a Plasma user session, build and run:
 
 ```bash
-cmake --build build --target plasma_bridge
-./build/src/app/plasma_bridge
+cmake --build backend/build --target plasma_bridge
+./backend/build/src/app/plasma_bridge
 ```
 
 Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `window_probe setup` and `window_probe status` when diagnosing the shared KWin script helper backend directly.

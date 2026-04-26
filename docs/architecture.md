@@ -1,66 +1,28 @@
 # Architecture
 
-## Overview
+Plasma Remote Toolbar is organized as a monorepo with one implemented backend and two planned clients.
 
-`plasma_bridge` is a standalone service that runs in a KDE Plasma user session and exposes local desktop state to local clients.
+## Monorepo Shape
 
-## Current Scope
+- `backend/`: Qt 6 C++ service for KDE Plasma, plus backend tests, probe tools, and backend-specific docs
+- `clients/web/`: planned React web client
+- `clients/app/`: planned Flutter mobile app
+- `specs/`: OpenAPI and AsyncAPI contracts shared by backend and clients
+- `docs/`: project-wide documentation
 
-The current implementation exposes local audio and Plasma window state:
+## Current Runtime
 
-- observe all KDE-visible output sinks
-- observe all KDE-visible input sources
-- observe Plasma windows through a KWin script helper backend
-- identify the active window
-- identify the current default output sink
-- identify the current default input source
-- report per-device volume and mute state
-- expose audio and window snapshot reads plus local default, mute, and sink-volume control over HTTP
-- expose live audio and window updates over one WebSocket state stream
+The implemented runtime is `plasma_bridge`, a standalone service that runs inside a KDE Plasma user session. It reads local audio and window state, exposes HTTP snapshot and control endpoints, and publishes live updates over a WebSocket state stream.
 
-Media state and broader control actions are not part of the current public HTTP or WebSocket runtime surface.
-
-## System Flow
-
-The runtime has five main parts:
-
-1. An audio adapter reads sink data from the Plasma audio stack.
-   It also reads user-facing input sources and filters monitor sources from the public state.
-2. A window adapter installs/enables the KWin script helper backend and reads normalized helper snapshots.
-3. Shared in-memory state stores keep canonical audio and window snapshots.
-4. An HTTP server serves snapshots from those stores and forwards local sink/source default, sink/source mute, and sink volume-control requests.
-5. A WebSocket server streams the same state to connected clients from the unified `/ws` endpoint as it changes.
-
-For local CLI inspection, `window_probe` uses the same shared KWin script backend that writes normalized snapshots through a helper service instead of binding directly to the Plasma window-management Wayland interface.
-
-Both transports use the same underlying stores so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP default, mute, and volume changes flow back through the observer and state store.
-The WebSocket `fullState` payload contains the ready audio and window snapshots, and later `patch` payloads replace either the `audio` or `windowState` subtree.
-
-The HTTP listener also serves local API documentation pages and runtime-adjusted OpenAPI and AsyncAPI documents under `/docs/`.
-The checked-in API specs remain the source of truth, while the interactive Swagger UI and AsyncAPI viewer assets are downloaded at build time into the build tree and then served locally by the app.
-
-## Platform Assumptions
-
-The current build targets KDE Plasma on Linux, reads audio state from the Plasma session's audio stack, and reads service window state through the KWin script helper backend. By default, the service binds only to localhost.
-
-## Defaults
-
-The current defaults are:
+The backend binds to localhost by default:
 
 - HTTP on `127.0.0.1:8080`
 - WebSocket on `ws://127.0.0.1:8081/ws`
-- local audio sink/source snapshot, default, mute, and sink volume-control HTTP behavior
-- local window snapshot and active-window HTTP behavior
-- localhost binding unless the operator explicitly changes it
-- hosted docs on the HTTP listener under `/docs/`
 
-## Not Yet Included
+## Contract Boundary
 
-These areas are still outside the current public scope:
+The checked-in specs under `specs/` are the contract between the backend and future clients. Backend changes that alter HTTP or WebSocket behavior should update those specs in the same change.
 
-- source volume-control actions
-- broader output-control actions beyond default-device and mute changes
-- window control actions
-- authentication and pairing
-- packaging and service installation workflow
-- cross-desktop support beyond KDE Plasma
+## Documentation Boundary
+
+Project-wide docs stay in this folder. Backend-only development and runtime details live in `backend/docs/`. Future client-specific setup and development notes should live under the relevant client folder.

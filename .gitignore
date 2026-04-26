@@ -1,3 +1,19 @@
-.codex
 .codex/
+
+# CMake backend builds
 build/
+backend/build/
+
+# Future React web client outputs
+clients/web/node_modules/
+clients/web/dist/
+clients/web/build/
+clients/web/.vite/
+clients/web/coverage/
+
+# Future Flutter mobile client outputs
+clients/app/.dart_tool/
+clients/app/build/
+clients/app/.flutter-plugins
+clients/app/.flutter-plugins-dependencies
+clients/app/.packages

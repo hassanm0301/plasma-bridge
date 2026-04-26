@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 foreach(required_var
         PROJECT_SOURCE_DIR
         SOURCE_DIR
+        SPECS_DIR
         DOCS_STAGE_DIR
         GENERATED_QRC
         STAMP_FILE)
@@ -154,8 +155,8 @@ copy_required("${asyncapi_extract_dir}/package/browser/standalone/index.js" "${a
 copy_required("${asyncapi_extract_dir}/package/LICENSE" "${asyncapi_stage_dir}/LICENSE")
 copy_required("${asyncapi_extract_dir}/package/browser/standalone/index.js.LICENSE.txt" "${asyncapi_stage_dir}/asyncapi-standalone.js.LICENSE.txt")
 
-stage_versioned_spec("${PROJECT_SOURCE_DIR}/docs/api/openapi.yaml" "${STAGED_OPENAPI_SPEC}")
-stage_versioned_spec("${PROJECT_SOURCE_DIR}/docs/api/asyncapi.yaml" "${STAGED_ASYNCAPI_SPEC}")
+stage_versioned_spec("${SPECS_DIR}/openapi.yaml" "${STAGED_OPENAPI_SPEC}")
+stage_versioned_spec("${SPECS_DIR}/asyncapi.yaml" "${STAGED_ASYNCAPI_SPEC}")
 
 string(CONCAT notices_content
     "Hosted documentation assets bundled with plasma_bridge\n"

@@ -12,6 +12,7 @@ add_custom_command(
         "${CMAKE_COMMAND}"
         -DPROJECT_SOURCE_DIR=${PROJECT_SOURCE_DIR}
         -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+        -DSPECS_DIR=${PLASMA_BRIDGE_SPECS_DIR}
         -DDOCS_STAGE_DIR=${DOCS_ASSETS_STAGE_DIR}
         -DGENERATED_QRC=${GENERATED_DOCS_QRC}
         -DSTAMP_FILE=${DOCS_ASSETS_STAMP}
@@ -29,8 +30,8 @@ add_custom_command(
         "${CMAKE_CURRENT_SOURCE_DIR}/docs_assets/index.html"
         "${CMAKE_CURRENT_SOURCE_DIR}/docs_assets/http.html"
         "${CMAKE_CURRENT_SOURCE_DIR}/docs_assets/ws.html"
-        "${PROJECT_SOURCE_DIR}/docs/api/openapi.yaml"
-        "${PROJECT_SOURCE_DIR}/docs/api/asyncapi.yaml"
+        "${PLASMA_BRIDGE_SPECS_DIR}/openapi.yaml"
+        "${PLASMA_BRIDGE_SPECS_DIR}/asyncapi.yaml"
     VERBATIM
 )
 
