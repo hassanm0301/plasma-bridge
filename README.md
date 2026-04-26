@@ -1,13 +1,13 @@
 # Plasma Remote Toolbar
 
-Plasma Remote Toolbar is a monorepo for a KDE Plasma backend service and future client applications.
+Plasma Remote Toolbar is a monorepo for a KDE Plasma backend service and client applications.
 
-The current implementation is the backend service, `plasma_bridge`, which exposes local audio and window state over HTTP and WebSocket APIs. The React web client and Flutter mobile app are planned but not implemented yet.
+The current implementation includes the backend service, `plasma_bridge`, and an initial React web client. The Flutter mobile app is planned but not implemented yet.
 
 ## Repository Layout
 
 - [backend](backend/): Qt 6 C++ service, probe tools, tests, and backend-specific docs
-- [clients](clients/): future React web and Flutter mobile clients
+- [clients](clients/): React web client and future Flutter mobile app
 - [docs](docs/): project-wide usage and architecture docs
 - [specs](specs/): checked-in OpenAPI and AsyncAPI contracts
 

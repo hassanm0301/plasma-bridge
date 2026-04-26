@@ -10,6 +10,7 @@ clients/web/dist/
 clients/web/build/
 clients/web/.vite/
 clients/web/coverage/
+clients/web/tsconfig.tsbuildinfo
 
 # Future Flutter mobile client outputs
 clients/app/.dart_tool/

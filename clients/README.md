@@ -2,7 +2,7 @@
 
 This folder is reserved for client applications that consume the `plasma_bridge` backend APIs.
 
-- [web](web/): planned React web client
+- [web](web/): React web client
 - [app](app/): planned Flutter mobile app
 
-Client implementation is intentionally pending. Client-specific setup, development notes, and build instructions should live inside each client folder when those projects are added.
+Client versions are managed inside each client folder. The web client starts at `0.1.0`; the Flutter mobile app has not been generated yet.

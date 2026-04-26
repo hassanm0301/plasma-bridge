@@ -1,6 +1,6 @@
 # Getting Started
 
-Build and run commands currently target the backend service because the React web client and Flutter mobile app are placeholders.
+Build and run commands currently target the backend service and React web client. The Flutter mobile app is still a placeholder.
 
 ## Backend
 
@@ -25,14 +25,26 @@ Default backend endpoints:
 
 For full backend setup, verification, and test instructions, see [backend/docs/getting-started.md](../backend/docs/getting-started.md).
 
-## Clients
+## Web Client
 
-Client implementation is pending.
+From the monorepo root:
 
-- [React web client placeholder](../clients/web/)
-- [Flutter mobile app placeholder](../clients/app/)
+```bash
+cd clients/web
+npm install
+npm run dev
+```
 
-When the clients are added, their setup and development commands should live in their respective folders.
+Open the Vite dev server URL and use the default backend endpoints:
+
+- HTTP: `http://127.0.0.1:8080`
+- WebSocket: `ws://127.0.0.1:8081/ws`
+
+See [clients/web](../clients/web/) for web-specific docs.
+
+## Mobile App
+
+The Flutter mobile app is pending. Its setup and development commands should live in [clients/app](../clients/app/) when the project is generated.
 
 ## Specs
 
