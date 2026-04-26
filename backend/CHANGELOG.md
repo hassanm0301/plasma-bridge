@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.3.1] - 2026-04-27
 ### Added
 
 - CORS headers for loopback web-client origins so browser clients can read backend HTTP endpoints during local development
