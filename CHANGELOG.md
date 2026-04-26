@@ -1,7 +1,9 @@
 ## [Unreleased]
 ### Added
 
-- Snapshot-only `window_probe` CLI with `list` and `active` commands for KDE Plasma Wayland window inspection
+- Snapshot-only `window_probe` CLI with `setup`, `status`, `teardown`, `list`, and `active` commands backed by a KWin script helper
+- HTTP endpoints to list Plasma windows and read the active window
+- WebSocket window-state coverage on the unified `/ws` state stream
 
 ### Fixed
 
@@ -10,9 +12,11 @@
 ### Changed
 
 - HTTP responses now use a consistent `{ "payload": ..., "error": ... }` envelope across snapshot and control endpoints
-- WebSocket messages now use `{ "type": "...", "payload": ..., "error": ... }`, and the audio protocol version is bumped to `2`
+- WebSocket messages now use `{ "type": "...", "payload": ..., "error": ... }`, and the state protocol version is bumped to `2`
+- `plasma_bridge` now reports one WebSocket listener, `ws://127.0.0.1:8081/ws`, instead of separate audio and window WebSocket endpoints
 - HTTP control failures now return structured `error.details` instead of success-shaped bodies with `status`
 - Shared common types and hermetic test coverage now include window snapshot formatting and the new window probe runner
+- `window_probe` and the long-running service now share the KWin script helper backend for window snapshots
 
 ### Removed
 

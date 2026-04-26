@@ -2,18 +2,17 @@ asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
   version: '@PLASMA_BRIDGE_VERSION@'
-  description: Live WebSocket monitoring for KDE Plasma sinks and sources. The implemented endpoint is `@PLASMA_BRIDGE_AUDIO_WS_PATH@`, and local HTTP default, mute, and volume-control writes converge back through this stream.
+  description: Live WebSocket monitoring for KDE Plasma audio and window state. The service exposes one implemented WebSocket endpoint at `@PLASMA_BRIDGE_WS_PATH@`.
 defaultContentType: application/json
 servers:
   local:
     host: '@PLASMA_BRIDGE_DEFAULT_WS_HOSTPORT@'
-    pathname: '@PLASMA_BRIDGE_AUDIO_WS_PATH@'
     protocol: ws
     title: Local WebSocket server
-    summary: WebSocket endpoint for live audio sink and source state.
+    summary: WebSocket server for live audio and window state.
 channels:
-  wsAudio:
-    address: '@PLASMA_BRIDGE_AUDIO_WS_PATH@'
+  state:
+    address: '@PLASMA_BRIDGE_WS_PATH@'
     messages:
       hello:
         $ref: '#/components/messages/Hello'
@@ -27,38 +26,39 @@ operations:
   receiveHello:
     action: receive
     channel:
-      $ref: '#/channels/wsAudio'
+      $ref: '#/channels/state'
     title: Receive hello
     summary: Accept the initial client hello message.
     description: The client must send this message before the service streams any state.
     messages:
-      - $ref: '#/channels/wsAudio/messages/hello'
+      - $ref: '#/channels/state/messages/hello'
   sendFullState:
     action: send
     channel:
-      $ref: '#/channels/wsAudio'
+      $ref: '#/channels/state'
     title: Send full state
-    summary: Send the initial audio snapshot after a successful hello.
+    summary: Send the initial audio and window snapshot after a successful hello.
+    description: The full state is sent once the configured state stores are ready.
     messages:
-      - $ref: '#/channels/wsAudio/messages/fullState'
+      - $ref: '#/channels/state/messages/fullState'
   sendPatch:
     action: send
     channel:
-      $ref: '#/channels/wsAudio'
+      $ref: '#/channels/state'
     title: Send patch
-    summary: Send an audio update after sink, source, or default-device changes.
-    description: Each patch replaces the full `audio` subtree. Local HTTP control writes may trigger the same patch stream after the observer republishes state.
+    summary: Send an audio or window update after observed state changes.
+    description: Each patch replaces one top-level subtree, either `audio` or `windowState`. Local HTTP control writes may trigger the same patch stream after the observer republishes state.
     messages:
-      - $ref: '#/channels/wsAudio/messages/patch'
+      - $ref: '#/channels/state/messages/patch'
   sendError:
     action: send
     channel:
-      $ref: '#/channels/wsAudio'
+      $ref: '#/channels/state'
     title: Send error
-    summary: Send a protocol or readiness error to the client.
-    description: Invalid JSON, unsupported protocol versions, and unsupported client messages return an `error` message and close the socket. A `not_ready` error may be sent before the initial audio state is available.
+    summary: Send a protocol, endpoint, or readiness error to the client.
+    description: Invalid JSON, unsupported protocol versions, unknown paths, and unsupported client messages return an `error` message. A `not_ready` error may be sent without closing the socket before the initial state is available.
     messages:
-      - $ref: '#/channels/wsAudio/messages/error'
+      - $ref: '#/channels/state/messages/error'
 components:
   schemas:
     NullValue:
@@ -120,15 +120,123 @@ components:
           type:
             - string
             - 'null'
-    AudioPayload:
+    WindowGeometry:
+      type: object
+      additionalProperties: false
+      required:
+        - x
+        - y
+        - width
+        - height
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+    WindowState:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - appId
+        - pid
+        - isActive
+        - isMinimized
+        - isMaximized
+        - isFullscreen
+        - isOnAllDesktops
+        - skipTaskbar
+        - skipSwitcher
+        - geometry
+        - clientGeometry
+        - virtualDesktopIds
+        - activityIds
+        - parentId
+        - resourceName
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        appId:
+          type:
+            - string
+            - 'null'
+        pid:
+          type:
+            - integer
+            - 'null'
+        isActive:
+          type: boolean
+        isMinimized:
+          type: boolean
+        isMaximized:
+          type: boolean
+        isFullscreen:
+          type: boolean
+        isOnAllDesktops:
+          type: boolean
+        skipTaskbar:
+          type: boolean
+        skipSwitcher:
+          type: boolean
+        geometry:
+          $ref: '#/components/schemas/WindowGeometry'
+        clientGeometry:
+          $ref: '#/components/schemas/WindowGeometry'
+        virtualDesktopIds:
+          type: array
+          items:
+            type: string
+        activityIds:
+          type: array
+          items:
+            type: string
+        parentId:
+          type:
+            - string
+            - 'null'
+        resourceName:
+          type:
+            - string
+            - 'null'
+    WindowSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - activeWindowId
+        - activeWindow
+        - windows
+      properties:
+        activeWindowId:
+          type:
+            - string
+            - 'null'
+        activeWindow:
+          oneOf:
+            - $ref: '#/components/schemas/WindowState'
+            - $ref: '#/components/schemas/NullValue'
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/WindowState'
+    StatePayload:
       type: object
       additionalProperties: false
       required:
         - audio
+        - windowState
       properties:
         audio:
           $ref: '#/components/schemas/AudioState'
-    PatchChange:
+        windowState:
+          $ref: '#/components/schemas/WindowSnapshot'
+    AudioPatchChange:
       type: object
       additionalProperties: false
       required:
@@ -140,6 +248,22 @@ components:
           const: audio
         value:
           $ref: '#/components/schemas/AudioState'
+    WindowPatchChange:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - value
+      properties:
+        path:
+          type: string
+          const: windowState
+        value:
+          $ref: '#/components/schemas/WindowSnapshot'
+    PatchChange:
+      oneOf:
+        - $ref: '#/components/schemas/AudioPatchChange'
+        - $ref: '#/components/schemas/WindowPatchChange'
     HelloData:
       type: object
       additionalProperties: false
@@ -148,7 +272,7 @@ components:
       properties:
         protocolVersion:
           type: integer
-          const: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
+          const: '@PLASMA_BRIDGE_WS_PROTOCOL_VERSION@'
     PatchData:
       type: object
       additionalProperties: false
@@ -156,6 +280,7 @@ components:
         - reason
         - sinkId
         - sourceId
+        - windowId
         - changes
       properties:
         reason:
@@ -167,6 +292,10 @@ components:
             - string
             - 'null'
         sourceId:
+          type:
+            - string
+            - 'null'
+        windowId:
           type:
             - string
             - 'null'
@@ -184,6 +313,12 @@ components:
       properties:
         code:
           type: string
+          enum:
+            - unknown_endpoint
+            - bad_request
+            - unsupported_protocol_version
+            - protocol_error
+            - not_ready
         message:
           type: string
         details:
@@ -218,7 +353,7 @@ components:
           type: string
           const: fullState
         payload:
-          $ref: '#/components/schemas/AudioPayload'
+          $ref: '#/components/schemas/StatePayload'
         error:
           $ref: '#/components/schemas/NullValue'
     PatchMessage:
@@ -262,12 +397,12 @@ components:
         - payload:
             type: hello
             payload:
-              protocolVersion: @PLASMA_BRIDGE_AUDIO_PROTOCOL_VERSION@
+              protocolVersion: '@PLASMA_BRIDGE_WS_PROTOCOL_VERSION@'
             error: null
     FullState:
       name: fullState
       title: Full state
-      summary: Initial audio snapshot sent after a successful hello.
+      summary: Initial audio and window snapshot sent after a successful hello.
       payload:
         $ref: '#/components/schemas/FullStateMessage'
       examples:
@@ -295,11 +430,32 @@ components:
                     isVirtual: false
                     backendApi: alsa
                 selectedSourceId: source-main
+              windowState:
+                activeWindowId: window-editor
+                activeWindow:
+                  id: window-editor
+                  title: CHANGELOG.md - Kate
+                  appId: org.kde.kate
+                  pid: 4201
+                  isActive: true
+                  isMinimized: false
+                  isMaximized: true
+                  isFullscreen: false
+                  isOnAllDesktops: false
+                  skipTaskbar: false
+                  skipSwitcher: false
+                  geometry: { x: 40, y: 30, width: 1440, height: 960 }
+                  clientGeometry: { x: 40, y: 58, width: 1440, height: 932 }
+                  virtualDesktopIds: [desktop-1]
+                  activityIds: [activity-work]
+                  parentId: null
+                  resourceName: kate
+                windows: []
             error: null
     Patch:
       name: patch
       title: Patch
-      summary: Audio change event.
+      summary: Audio or window change event.
       payload:
         $ref: '#/components/schemas/PatchMessage'
       examples:
@@ -309,13 +465,14 @@ components:
               reason: sink-updated
               sinkId: sink-main
               sourceId: null
+              windowId: null
               changes:
                 - path: audio
                   value:
                     sinks:
                       - id: sink-main
                         label: Primary Speakers
-                        volume: 0.75
+                        volume: 0.80
                         muted: false
                         available: true
                         isDefault: true
@@ -336,32 +493,33 @@ components:
         - payload:
             type: patch
             payload:
-              reason: source-updated
+              reason: active-window-changed
               sinkId: null
-              sourceId: source-main
+              sourceId: null
+              windowId: window-editor
               changes:
-                - path: audio
+                - path: windowState
                   value:
-                    sinks:
-                      - id: sink-main
-                        label: Primary Speakers
-                        volume: 0.75
-                        muted: false
-                        available: true
-                        isDefault: true
-                        isVirtual: false
-                        backendApi: alsa
-                    selectedSinkId: sink-main
-                    sources:
-                      - id: source-main
-                        label: Primary Microphone
-                        volume: 0.70
-                        muted: false
-                        available: true
-                        isDefault: true
-                        isVirtual: false
-                        backendApi: alsa
-                    selectedSourceId: source-main
+                    activeWindowId: window-editor
+                    activeWindow:
+                      id: window-editor
+                      title: CHANGELOG.md - Kate
+                      appId: org.kde.kate
+                      pid: 4201
+                      isActive: true
+                      isMinimized: false
+                      isMaximized: true
+                      isFullscreen: false
+                      isOnAllDesktops: false
+                      skipTaskbar: false
+                      skipSwitcher: false
+                      geometry: { x: 40, y: 30, width: 1440, height: 960 }
+                      clientGeometry: { x: 40, y: 58, width: 1440, height: 932 }
+                      virtualDesktopIds: [desktop-1]
+                      activityIds: [activity-work]
+                      parentId: null
+                      resourceName: kate
+                    windows: []
             error: null
     Error:
       name: error
@@ -375,4 +533,4 @@ components:
             payload: null
             error:
               code: not_ready
-              message: Initial audio state is not ready yet.
+              message: Initial audio and window state are not ready yet.

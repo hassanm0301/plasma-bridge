@@ -2,7 +2,7 @@ openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
   version: '@PLASMA_BRIDGE_VERSION@'
-  summary: Audio snapshot endpoints plus local sink/source control endpoints for KDE Plasma.
+  summary: Audio and window snapshot endpoints plus local sink/source control endpoints for KDE Plasma.
 servers:
   - url: '@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@'
 tags:
@@ -10,6 +10,8 @@ tags:
     description: Read the current output-device snapshot and default sink.
   - name: Snapshots / Sources
     description: Read the current input-device snapshot and default source.
+  - name: Snapshots / Windows
+    description: Read the current window snapshot and active window.
   - name: Control / Defaults
     description: Change the current default sink or source.
   - name: Control / Mute
@@ -237,6 +239,124 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial audio state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /snapshot/windows:
+    get:
+      tags:
+        - Snapshots / Windows
+      operationId: getWindowSnapshot
+      summary: List windows
+      description: Returns the current Plasma window snapshot, including the resolved active window.
+      responses:
+        '200':
+          description: Current window snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WindowSnapshotEnvelope'
+              examples:
+                snapshot:
+                  value:
+                    payload:
+                      activeWindowId: window-editor
+                      activeWindow:
+                        id: window-editor
+                        title: CHANGELOG.md - Kate
+                        appId: org.kde.kate
+                        pid: 4201
+                        isActive: true
+                        isMinimized: false
+                        isMaximized: true
+                        isFullscreen: false
+                        isOnAllDesktops: false
+                        skipTaskbar: false
+                        skipSwitcher: false
+                        geometry: { x: 40, y: 30, width: 1440, height: 960 }
+                        clientGeometry: { x: 40, y: 58, width: 1440, height: 932 }
+                        virtualDesktopIds: [desktop-1]
+                        activityIds: [activity-work]
+                        parentId: null
+                        resourceName: kate
+                      windows: []
+                    error: null
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Initial window state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /snapshot/windows/active:
+    get:
+      tags:
+        - Snapshots / Windows
+      operationId: getActiveWindow
+      summary: Get the active window
+      description: >
+        Returns the current active window, or `window: null` when no active window is known.
+      responses:
+        '200':
+          description: Current active window result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveWindowEnvelope'
+              examples:
+                active:
+                  value:
+                    payload:
+                      window:
+                        id: window-editor
+                        title: CHANGELOG.md - Kate
+                        appId: org.kde.kate
+                        pid: 4201
+                        isActive: true
+                        isMinimized: false
+                        isMaximized: true
+                        isFullscreen: false
+                        isOnAllDesktops: false
+                        skipTaskbar: false
+                        skipSwitcher: false
+                        geometry: { x: 40, y: 30, width: 1440, height: 960 }
+                        clientGeometry: { x: 40, y: 58, width: 1440, height: 932 }
+                        virtualDesktopIds: [desktop-1]
+                        activityIds: [activity-work]
+                        parentId: null
+                        resourceName: kate
+                    error: null
+                none:
+                  value:
+                    payload:
+                      window: null
+                    error: null
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Initial window state is not ready yet.
           content:
             application/json:
               schema:
@@ -852,6 +972,121 @@ components:
             - string
             - 'null'
           description: Identifier of the current default input source.
+    WindowGeometry:
+      type: object
+      additionalProperties: false
+      required:
+        - x
+        - y
+        - width
+        - height
+      properties:
+        x:
+          type: integer
+        y:
+          type: integer
+        width:
+          type: integer
+        height:
+          type: integer
+    WindowState:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - title
+        - appId
+        - pid
+        - isActive
+        - isMinimized
+        - isMaximized
+        - isFullscreen
+        - isOnAllDesktops
+        - skipTaskbar
+        - skipSwitcher
+        - geometry
+        - clientGeometry
+        - virtualDesktopIds
+        - activityIds
+        - parentId
+        - resourceName
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        appId:
+          type:
+            - string
+            - 'null'
+        pid:
+          type:
+            - integer
+            - 'null'
+        isActive:
+          type: boolean
+        isMinimized:
+          type: boolean
+        isMaximized:
+          type: boolean
+        isFullscreen:
+          type: boolean
+        isOnAllDesktops:
+          type: boolean
+        skipTaskbar:
+          type: boolean
+        skipSwitcher:
+          type: boolean
+        geometry:
+          $ref: '#/components/schemas/WindowGeometry'
+        clientGeometry:
+          $ref: '#/components/schemas/WindowGeometry'
+        virtualDesktopIds:
+          type: array
+          items:
+            type: string
+        activityIds:
+          type: array
+          items:
+            type: string
+        parentId:
+          type:
+            - string
+            - 'null'
+        resourceName:
+          type:
+            - string
+            - 'null'
+    WindowSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - activeWindowId
+        - activeWindow
+        - windows
+      properties:
+        activeWindowId:
+          type:
+            - string
+            - 'null'
+        activeWindow:
+          oneOf:
+            - $ref: '#/components/schemas/WindowState'
+            - $ref: '#/components/schemas/NullValue'
+        windows:
+          type: array
+          items:
+            $ref: '#/components/schemas/WindowState'
+    ActiveWindowPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - window
+      properties:
+        window:
+          oneOf:
+            - $ref: '#/components/schemas/WindowState'
+            - $ref: '#/components/schemas/NullValue'
     VolumeValueRequest:
       type: object
       additionalProperties: false
@@ -972,6 +1207,28 @@ components:
       properties:
         payload:
           $ref: '#/components/schemas/AudioInputState'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    WindowSnapshotEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/WindowSnapshot'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    ActiveWindowEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/ActiveWindowPayload'
         error:
           $ref: '#/components/schemas/NullValue'
     AudioDeviceEnvelope:

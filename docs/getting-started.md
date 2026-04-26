@@ -6,9 +6,8 @@ Build from the repository root.
 
 - CMake 3.25 or newer
 - Ninja
-- Qt 6 development packages for `Core`, `Network`, and `WebSockets`
+- Qt 6 development packages for `Core`, `DBus`, `Network`, and `WebSockets`
 - `KF6PulseAudioQt` development package
-- `KWayland` development package
 
 ## Build
 
@@ -50,7 +49,7 @@ ctest --test-dir build --output-on-failure
 Run one test executable by name:
 
 ```bash
-ctest --test-dir build --output-on-failure -R test_audio_websocket_server
+ctest --test-dir build --output-on-failure -R test_state_websocket_server
 ```
 
 Current coverage includes:
@@ -67,7 +66,7 @@ Current coverage includes:
 
 ## Run
 
-Start the service from a KDE Plasma user session:
+Start the service from a KDE Plasma user session. Window snapshots use the KWin script helper backend; audio endpoints remain available when window state is not ready.
 
 ```bash
 ./build/src/app/plasma_bridge
@@ -76,7 +75,7 @@ Start the service from a KDE Plasma user session:
 Default addresses:
 
 - HTTP: `http://127.0.0.1:8080`
-- WebSocket: `ws://127.0.0.1:8081/ws/audio`
+- WebSocket: `ws://127.0.0.1:8081/ws`
 
 Supported flags:
 
@@ -91,18 +90,25 @@ Example:
 ./build/src/app/plasma_bridge --host 127.0.0.1 --port 8080 --ws-port 8081
 ```
 
+On startup, the service prints one HTTP listener, one WebSocket listener, and the hosted docs URLs.
+
 To list all available flags:
 
 ```bash
 ./build/src/app/plasma_bridge -h
 ```
 
-Optional Wayland window probe examples:
+Optional window probe backend inspection:
 
 ```bash
+./build/tools/probes/window_probe/window_probe setup
+./build/tools/probes/window_probe/window_probe status
 ./build/tools/probes/window_probe/window_probe --json list
 ./build/tools/probes/window_probe/window_probe --json active
 ```
+
+`plasma_bridge` auto-installs and enables the same KWin script helper backend on startup.
+The standalone `window_probe` tool uses that shared backend too; run `setup` from a KDE Plasma session before using `window_probe list` or `active` directly.
 
 ## Verify
 
@@ -116,6 +122,8 @@ curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
 curl http://127.0.0.1:8080/snapshot/audio/sources
 curl http://127.0.0.1:8080/snapshot/audio/default-source
+curl http://127.0.0.1:8080/snapshot/windows
+curl http://127.0.0.1:8080/snapshot/windows/active
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/default
 curl -X POST http://127.0.0.1:8080/control/audio/sources/${SOURCE_ID}/default
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/mute \
@@ -155,7 +163,7 @@ Hosted docs and runtime-served specs:
 - `http://127.0.0.1:8080/docs/openapi.yaml`
 - `http://127.0.0.1:8080/docs/asyncapi.yaml`
 
-For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws/audio` and send:
+For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws` and send:
 
 ```json
 {
@@ -171,10 +179,13 @@ Server messages use the same explicit contract:
 { "type": "fullState", "payload": { ... }, "error": null }
 ```
 
-You should receive one `fullState` message followed by `patch` messages as sink or source state changes.
+You should receive one `fullState` message followed by `patch` messages as sink, source, or window state changes.
 Local HTTP default, mute, and volume-control writes will converge back through the same WebSocket state stream.
-The `state.audio` object now includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
-Connections to `/` and other non-audio WebSocket paths are rejected.
+The `fullState` payload includes `audio` and `windowState` once both configured stores are ready.
+The `audio` object includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
+The `windowState` object includes `activeWindowId`, `activeWindow`, and `windows`.
+Patch payloads use one stable shape with `reason`, `sinkId`, `sourceId`, `windowId`, and `changes`; IDs unrelated to a given patch are `null`.
+Connections to `/` and other unknown WebSocket paths are rejected.
 
 Repo API specs:
 
