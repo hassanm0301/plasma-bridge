@@ -84,6 +84,7 @@ private:
     quint16 m_documentationHttpPort = 0;
     quint16 m_documentationWsPort = 0;
     QHash<QTcpSocket *, QByteArray> m_pendingRequests;
+    QHash<QTcpSocket *, QList<QPair<QByteArray, QByteArray>>> m_corsHeaders;
     QTcpServer m_server;
 };
 

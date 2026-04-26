@@ -1,3 +1,21 @@
+## [Unreleased]
+### Added
+
+- CORS headers for loopback web-client origins so browser clients can read backend HTTP endpoints during local development
+- HTTP `OPTIONS` preflight handling for backend endpoints
+
+### Fixed
+
+- Browser requests from local Vite dev-server origins are no longer blocked when reading `/docs/openapi.yaml`
+
+### Changed
+
+- Nothing
+
+### Removed
+
+- Nothing
+
 ## [0.3.0] - 2026-04-27
 ### Added
 

@@ -236,6 +236,50 @@ bool isJsonContentType(const QByteArray &contentType)
     return mediaType == QByteArrayLiteral("application/json");
 }
 
+bool isAllowedCorsOrigin(const QByteArray &origin)
+{
+    const QUrl originUrl = QUrl::fromEncoded(origin.trimmed());
+    const QString path = originUrl.path();
+    if (!originUrl.isValid() || (!path.isEmpty() && path != QStringLiteral("/")) || originUrl.hasQuery()
+        || originUrl.hasFragment()) {
+        return false;
+    }
+
+    const QString scheme = originUrl.scheme();
+    if (scheme != QStringLiteral("http") && scheme != QStringLiteral("https")) {
+        return false;
+    }
+
+    const QString host = originUrl.host();
+    return host == QStringLiteral("127.0.0.1") || host == QStringLiteral("localhost") || host == QStringLiteral("::1");
+}
+
+QList<QPair<QByteArray, QByteArray>> corsHeadersForRequest(const QHash<QByteArray, QByteArray> &headers)
+{
+    const QByteArray origin = headers.value(QByteArrayLiteral("origin")).trimmed();
+    if (!isAllowedCorsOrigin(origin)) {
+        return {};
+    }
+
+    return {
+        {QByteArrayLiteral("Access-Control-Allow-Origin"), origin},
+        {QByteArrayLiteral("Vary"), QByteArrayLiteral("Origin")},
+    };
+}
+
+QList<QPair<QByteArray, QByteArray>> corsPreflightHeadersForRequest(const QHash<QByteArray, QByteArray> &headers)
+{
+    if (!isAllowedCorsOrigin(headers.value(QByteArrayLiteral("origin")))) {
+        return {};
+    }
+
+    QList<QPair<QByteArray, QByteArray>> corsHeaders;
+    corsHeaders.append({QByteArrayLiteral("Access-Control-Allow-Methods"), QByteArrayLiteral("GET, POST, OPTIONS")});
+    corsHeaders.append({QByteArrayLiteral("Access-Control-Allow-Headers"), QByteArrayLiteral("Content-Type")});
+    corsHeaders.append({QByteArrayLiteral("Access-Control-Max-Age"), QByteArrayLiteral("600")});
+    return corsHeaders;
+}
+
 QByteArray buildHttpResponse(int statusCode,
                              const QByteArray &reasonPhrase,
                              const QByteArray &contentType,
@@ -431,6 +475,7 @@ void SnapshotHttpServer::handleNewConnection()
         });
         connect(socket, &QTcpSocket::disconnected, this, [this, socket]() {
             m_pendingRequests.remove(socket);
+            m_corsHeaders.remove(socket);
             socket->deleteLater();
         });
     }
@@ -541,6 +586,8 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
+    m_corsHeaders.insert(socket, corsHeadersForRequest(headers));
+
     bool hasContentLength = false;
     qsizetype contentLength = 0;
     if (!parseContentLength(headers, &contentLength, &hasContentLength, &headerErrorMessage)) {
@@ -556,6 +603,16 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
     }
 
     const QByteArray body = contentLength > 0 ? bodyData.left(contentLength) : QByteArray();
+
+    if (method == QByteArrayLiteral("OPTIONS")) {
+        writeByteResponse(socket,
+                          204,
+                          QByteArrayLiteral("No Content"),
+                          QByteArrayLiteral("text/plain; charset=utf-8"),
+                          {},
+                          corsPreflightHeadersForRequest(headers));
+        return;
+    }
 
     if (path == kDocsRootNoSlashPath) {
         writeByteResponse(socket,
@@ -955,7 +1012,10 @@ void SnapshotHttpServer::writeByteResponse(QTcpSocket *socket,
         return;
     }
 
-    socket->write(buildHttpResponse(statusCode, reasonPhrase, contentType, body, extraHeaders));
+    QList<QPair<QByteArray, QByteArray>> responseHeaders = m_corsHeaders.take(socket);
+    responseHeaders.append(extraHeaders);
+
+    socket->write(buildHttpResponse(statusCode, reasonPhrase, contentType, body, responseHeaders));
     socket->disconnectFromHost();
 }
 

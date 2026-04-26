@@ -37,6 +37,7 @@ private slots:
     void rejectsInvalidDeviceControlRequests();
     void rejectsMalformedAndOversizedRequests();
     void servesDocsAndRewritesSpecHosts();
+    void addsCorsHeadersForAllowedWebClientOrigins();
 
 private:
     static QHostAddress bindAddress();
@@ -1294,6 +1295,52 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     QVERIFY(asyncApiBody.contains(QStringLiteral("payload:")));
     QVERIFY(asyncApiBody.contains(QStringLiteral("error:")));
     asyncApiReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::addsCorsHeadersForAllowedWebClientOrigins()
+{
+    plasma_bridge::state::AudioStateStore store;
+    store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::api::SnapshotHttpServer server(&store, nullptr, nullptr, QStringLiteral("localhost"), 19080, 19081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkRequest openApiRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/docs/openapi.yaml")));
+    openApiRequest.setRawHeader("Origin", QByteArrayLiteral("http://127.0.0.1:5174"));
+    QNetworkReply *openApiReply = manager.get(openApiRequest);
+    QSignalSpy openApiSpy(openApiReply, &QNetworkReply::finished);
+    QVERIFY(openApiSpy.wait());
+    QCOMPARE(openApiReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    QCOMPARE(openApiReply->rawHeader("Access-Control-Allow-Origin"), QByteArrayLiteral("http://127.0.0.1:5174"));
+    QCOMPARE(openApiReply->rawHeader("Vary"), QByteArrayLiteral("Origin"));
+    openApiReply->deleteLater();
+
+    QNetworkRequest preflightRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                   QStringLiteral("/snapshot/audio/sinks")));
+    preflightRequest.setRawHeader("Origin", QByteArrayLiteral("http://localhost:5173"));
+    preflightRequest.setRawHeader("Access-Control-Request-Method", QByteArrayLiteral("GET"));
+    QNetworkReply *preflightReply = manager.sendCustomRequest(preflightRequest, QByteArrayLiteral("OPTIONS"));
+    QSignalSpy preflightSpy(preflightReply, &QNetworkReply::finished);
+    QVERIFY(preflightSpy.wait());
+    QCOMPARE(preflightReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 204);
+    QCOMPARE(preflightReply->rawHeader("Access-Control-Allow-Origin"), QByteArrayLiteral("http://localhost:5173"));
+    QVERIFY(preflightReply->rawHeader("Access-Control-Allow-Methods").contains("GET"));
+    QVERIFY(preflightReply->rawHeader("Access-Control-Allow-Methods").contains("POST"));
+    QVERIFY(preflightReply->rawHeader("Access-Control-Allow-Methods").contains("OPTIONS"));
+    QVERIFY(preflightReply->rawHeader("Access-Control-Allow-Headers").contains("Content-Type"));
+    QCOMPARE(readReplyBody(preflightReply), QByteArray());
+    preflightReply->deleteLater();
+
+    QNetworkRequest disallowedRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/docs/openapi.yaml")));
+    disallowedRequest.setRawHeader("Origin", QByteArrayLiteral("http://example.test"));
+    QNetworkReply *disallowedReply = manager.get(disallowedRequest);
+    QSignalSpy disallowedSpy(disallowedReply, &QNetworkReply::finished);
+    QVERIFY(disallowedSpy.wait());
+    QCOMPARE(disallowedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    QVERIFY(disallowedReply->rawHeader("Access-Control-Allow-Origin").isEmpty());
+    disallowedReply->deleteLater();
 }
 
 QHostAddress SnapshotHttpServerFeatureTest::bindAddress()
