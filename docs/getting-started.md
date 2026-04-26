@@ -35,7 +35,7 @@ npm install
 npm run dev
 ```
 
-Open the Vite dev server URL and use the default backend endpoints:
+Open the Vite dev server URL. The dashboard auto-connects with the default backend endpoints:
 
 - HTTP: `http://127.0.0.1:8080`
 - WebSocket: `ws://127.0.0.1:8081/ws`

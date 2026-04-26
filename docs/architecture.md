@@ -25,7 +25,7 @@ The checked-in specs under `specs/` are the contract between the backend and cli
 
 ## Web Client
 
-The web client is a Vite, React, and TypeScript app. Its first screen validates that the browser can reach the backend HTTP docs spec and the WebSocket state stream. It keeps its own version and changelog under `clients/web/`.
+The web client is a Vite, React, and TypeScript app. It auto-connects to the backend WebSocket state stream, renders live window and audio state, and uses HTTP control endpoints for sink volume plus sink/source mute writes. Endpoint and theme settings live in a Settings popup, and the client keeps its own version and changelog under `clients/web/`.
 
 ## Documentation Boundary
 

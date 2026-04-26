@@ -15,10 +15,12 @@ npm install
 npm run dev
 ```
 
-The first screen checks contact with the backend through:
+The app opens a dashboard and auto-connects to the backend with:
 
 - HTTP base URL, default `http://127.0.0.1:8080`
 - WebSocket URL, default `ws://127.0.0.1:8081/ws`
+
+Use Settings to change endpoints, reconnect, or switch between light and dark mode. The dashboard shows live windows, audio sinks, and audio sources. Sink volume plus sink/source mute controls use HTTP control endpoints; source volume is read-only until the backend supports writes for sources.
 
 ## Docs
 

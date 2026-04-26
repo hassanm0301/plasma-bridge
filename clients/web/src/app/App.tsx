@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { ConnectionScreen } from "./ConnectionScreen";
+import { Dashboard } from "./Dashboard";
 import { initialThemeMode, persistThemeMode, type ThemeMode } from "../theme/theme";
 
 export function App() {
@@ -11,5 +11,5 @@ export function App() {
     persistThemeMode(themeMode);
   }, [themeMode]);
 
-  return <ConnectionScreen themeMode={themeMode} onThemeModeChange={setThemeMode} />;
+  return <Dashboard themeMode={themeMode} onThemeModeChange={setThemeMode} />;
 }

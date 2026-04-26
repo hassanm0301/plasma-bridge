@@ -36,7 +36,7 @@ npm test
 
 ## Source Map
 
-- `src/app/`: app shell and connection screen
-- `src/api/`: endpoint normalization and connectivity checks
-- `src/components/`: reusable form and status components
+- `src/app/`: app shell and dashboard orchestration
+- `src/api/`: endpoint normalization, settings persistence, WebSocket state reduction, and HTTP controls
+- `src/components/`: reusable settings, window, audio, and form components
 - `src/theme/`: Breeze-inspired theme tokens and persistence
