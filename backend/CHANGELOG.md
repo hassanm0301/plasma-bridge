@@ -1,3 +1,21 @@
+## [Unreleased]
+### Added
+
+- HTTP endpoint to activate a Plasma window by id
+- `window_probe activate <window-id>` command backed by the shared KWin script helper
+
+### Fixed
+
+- Nothing
+
+### Changed
+
+- API docs and backend getting-started examples now document window activation control
+
+### Removed
+
+- Nothing
+
 ## [0.3.1] - 2026-04-27
 ### Added
 
