@@ -17,4 +17,6 @@ The main dashboard shows:
 - Audio sinks with volume sliders and mute/unmute buttons
 - Audio sources with read-only volume sliders and active mute/unmute buttons
 
+Inactive taskbar windows can be clicked to request focus through `POST /control/windows/{windowId}/active`. The active window changes after the backend publishes the resulting WebSocket state update.
+
 Sink volume writes use `POST /control/audio/sinks/{sinkId}/volume`. Sink and source mute writes use `POST /control/audio/{sinks|sources}/{id}/mute`. Source volume is display-only until the backend exposes a source volume write endpoint.

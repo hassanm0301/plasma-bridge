@@ -12,6 +12,10 @@ export function controlPath(kind: DeviceKind, deviceId: string, action: "mute" |
   return `/control/audio/${kind}/${encodeURIComponent(deviceId)}/${action}`;
 }
 
+export function windowControlPath(windowId: string, action: "active"): string {
+  return `/control/windows/${encodeURIComponent(windowId)}/${action}`;
+}
+
 async function postJson(httpBaseUrl: string, path: string, body: unknown): Promise<void> {
   const response = await fetch(`${normalizeHttpBaseUrl(httpBaseUrl)}${path}`, {
     method: "POST",
@@ -21,6 +25,18 @@ async function postJson(httpBaseUrl: string, path: string, body: unknown): Promi
     body: JSON.stringify(body)
   });
 
+  await assertControlResponseOk(response);
+}
+
+async function postEmpty(httpBaseUrl: string, path: string): Promise<void> {
+  const response = await fetch(`${normalizeHttpBaseUrl(httpBaseUrl)}${path}`, {
+    method: "POST"
+  });
+
+  await assertControlResponseOk(response);
+}
+
+async function assertControlResponseOk(response: Response): Promise<void> {
   if (response.ok) {
     return;
   }
@@ -47,4 +63,8 @@ export function setDeviceMuted(
   muted: boolean
 ): Promise<void> {
   return postJson(httpBaseUrl, controlPath(kind, deviceId, "mute"), { muted });
+}
+
+export function activateWindow(httpBaseUrl: string, windowId: string): Promise<void> {
+  return postEmpty(httpBaseUrl, windowControlPath(windowId, "active"));
 }

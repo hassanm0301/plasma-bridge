@@ -1,3 +1,20 @@
+## [Unreleased]
+### Added
+
+- Inactive taskbar windows can now be clicked to request focus through the backend window activation endpoint
+
+### Fixed
+
+- Nothing
+
+### Changed
+
+- Web usage docs now describe window activation from the taskbar strip
+
+### Removed
+
+- Nothing
+
 ## [0.1.0] - 2026-04-27
 ### Added
 

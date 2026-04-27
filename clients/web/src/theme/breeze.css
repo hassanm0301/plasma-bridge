@@ -262,13 +262,14 @@ input:focus-visible {
   display: grid;
   align-content: center;
   gap: 2px;
-  flex: 0 0 min(210px, 70vw);
+  width: min(210px, 70vw);
   min-height: 56px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 5px;
   background: var(--view-alt);
   color: var(--text);
+  text-align: left;
 }
 
 .taskbar-item.active {
@@ -276,8 +277,17 @@ input:focus-visible {
   background: var(--accent-soft);
 }
 
+.taskbar-item:not(.active):hover {
+  background: var(--view-hover);
+}
+
+.taskbar-list-item {
+  flex: 0 0 min(210px, 70vw);
+}
+
 .taskbar-title,
-.taskbar-meta {
+.taskbar-meta,
+.taskbar-error {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -292,6 +302,11 @@ input:focus-visible {
 .taskbar-meta {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.taskbar-error {
+  color: var(--danger);
+  font-size: 0.76rem;
 }
 
 .audio-grid {

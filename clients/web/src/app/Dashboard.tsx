@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { checkHttpEndpoint, type CheckState } from "../api/connectivity";
-import { setDeviceMuted, setSinkVolume } from "../api/controls";
+import { activateWindow, setDeviceMuted, setSinkVolume } from "../api/controls";
 import type { AudioDeviceState } from "../api/models";
 import { initialEndpointSettings, persistEndpointSettings, type EndpointSettings } from "../api/settings";
 import { audioDevicesWithSelectedFirst } from "../api/state";
@@ -94,6 +94,21 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
     }
   };
 
+  const runWindowAction = async (windowId: string, actionKey: string, action: () => Promise<void>) => {
+    setPendingActions((current) => ({ ...current, [actionKey]: true }));
+    setRowErrors((current) => ({ ...current, [windowId]: "" }));
+    try {
+      await action();
+    } catch (error) {
+      setRowErrors((current) => ({
+        ...current,
+        [windowId]: error instanceof Error ? error.message : "Request failed."
+      }));
+    } finally {
+      setPendingActions((current) => ({ ...current, [actionKey]: false }));
+    }
+  };
+
   const commitSinkVolume = (sinkId: string, value: number) => {
     void runDeviceAction(sinkId, `volume:${sinkId}`, () => setSinkVolume(settings.httpBaseUrl, sinkId, value));
   };
@@ -108,6 +123,10 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
     void runDeviceAction(device.id, `mute:${device.id}`, () =>
       setDeviceMuted(settings.httpBaseUrl, "sources", device.id, !device.muted)
     );
+  };
+
+  const activateTaskbarWindow = (windowId: string) => {
+    void runWindowAction(windowId, `window-active:${windowId}`, () => activateWindow(settings.httpBaseUrl, windowId));
   };
 
   const saveSettings = (nextSettings: EndpointSettings) => {
@@ -149,7 +168,12 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
         </section>
       ) : null}
 
-      <WindowTaskbar snapshot={stream.state.windowState} />
+      <WindowTaskbar
+        snapshot={stream.state.windowState}
+        pendingActions={pendingActions}
+        errors={rowErrors}
+        onWindowActivate={activateTaskbarWindow}
+      />
 
       <div className="audio-grid">
         <AudioSection
