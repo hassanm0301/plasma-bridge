@@ -36,6 +36,7 @@ struct WindowState {
     QStringList activityIds;
     QString parentId;
     QString resourceName;
+    QString iconUrl;
 };
 
 struct WindowSnapshot {

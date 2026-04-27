@@ -349,6 +349,8 @@ void StateWebSocketServerFeatureTest::sendsWindowNotReadyThenFullStateAfterReadi
     QCOMPARE(windowState.value(QStringLiteral("activeWindowId")).toString(), QStringLiteral("window-editor"));
     QCOMPARE(windowState.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("id")).toString(),
              QStringLiteral("window-editor"));
+    QCOMPARE(windowState.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("iconUrl")).toString(),
+             QStringLiteral("/icons/apps/org.kde.kate"));
     QCOMPARE(windowState.value(QStringLiteral("windows")).toArray().size(), 2);
 
     socket.close();

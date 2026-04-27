@@ -10,8 +10,10 @@
 #include <QJsonDocument>
 #include <QObject>
 #include <QSaveFile>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QStringList>
+#include <QUrl>
 #include <QVariantMap>
 
 #include <optional>
@@ -72,6 +74,76 @@ QString readString(const QVariantMap &map, const QStringList &keys)
     }
 
     return QString();
+}
+
+QString normalizedIconName(const QString &value)
+{
+    QString iconName = value.trimmed();
+    if (iconName.isEmpty()) {
+        return {};
+    }
+
+    if (iconName.endsWith(QStringLiteral(".desktop"))) {
+        iconName.chop(QStringLiteral(".desktop").size());
+    }
+
+    if (iconName.contains(QLatin1Char('/'))) {
+        const QFileInfo fileInfo(iconName);
+        iconName = fileInfo.completeBaseName();
+    }
+
+    return iconName;
+}
+
+QString desktopFilePathForAppId(const QString &appId)
+{
+    const QString trimmed = appId.trimmed();
+    if (trimmed.isEmpty()) {
+        return {};
+    }
+
+    if (trimmed.contains(QLatin1Char('/'))) {
+        const QFileInfo fileInfo(trimmed);
+        return fileInfo.exists() && fileInfo.isFile() ? fileInfo.absoluteFilePath() : QString();
+    }
+
+    const QString desktopFileName = trimmed.endsWith(QStringLiteral(".desktop")) ? trimmed : trimmed + QStringLiteral(".desktop");
+    return QStandardPaths::locate(QStandardPaths::GenericDataLocation,
+                                  QStringLiteral("applications/%1").arg(desktopFileName));
+}
+
+QString desktopIconNameForAppId(const QString &appId)
+{
+    const QString desktopFilePath = desktopFilePathForAppId(appId);
+    if (desktopFilePath.isEmpty()) {
+        return {};
+    }
+
+    QSettings settings(desktopFilePath, QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("Desktop Entry"));
+    const QString iconName = settings.value(QStringLiteral("Icon")).toString();
+    settings.endGroup();
+    return iconName;
+}
+
+QString iconUrlForWindow(const plasma_bridge::WindowState &window, const QVariantMap &windowInfo)
+{
+    const QStringList candidates{
+        desktopIconNameForAppId(window.appId),
+        readString(windowInfo, {QStringLiteral("icon"), QStringLiteral("iconName")}),
+        window.appId,
+        window.resourceName,
+        readString(windowInfo, {QStringLiteral("resourceClass"), QStringLiteral("desktopFileName")}),
+    };
+
+    for (const QString &candidate : candidates) {
+        const QString iconName = normalizedIconName(candidate);
+        if (!iconName.isEmpty()) {
+            return QStringLiteral("/icons/apps/%1").arg(QString::fromUtf8(QUrl::toPercentEncoding(iconName)));
+        }
+    }
+
+    return {};
 }
 
 std::optional<bool> readBool(const QVariantMap &map, const QStringList &keys)
@@ -136,6 +208,9 @@ void applyBackfill(plasma_bridge::WindowState &window, const QVariantMap &window
 
     if (window.resourceName.isEmpty()) {
         window.resourceName = readString(windowInfo, {QStringLiteral("resourceName")});
+    }
+    if (window.iconUrl.isEmpty()) {
+        window.iconUrl = iconUrlForWindow(window, windowInfo);
     }
 
     if (window.pid == 0) {

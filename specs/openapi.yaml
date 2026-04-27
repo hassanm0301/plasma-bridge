@@ -282,6 +282,7 @@ paths:
                         activityIds: [activity-work]
                         parentId: null
                         resourceName: kate
+                        iconUrl: /icons/apps/org.kde.kate
                       windows: []
                     error: null
         '405':
@@ -339,6 +340,7 @@ paths:
                         activityIds: [activity-work]
                         parentId: null
                         resourceName: kate
+                        iconUrl: /icons/apps/org.kde.kate
                     error: null
                 none:
                   value:
@@ -359,6 +361,50 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial window state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /icons/apps/{iconName}:
+    get:
+      tags:
+        - Assets
+      operationId: getAppIcon
+      summary: Get an app icon
+      description: Resolves an app icon name against the local Plasma icon theme.
+      parameters:
+        - name: iconName
+          in: path
+          required: true
+          schema:
+            type: string
+          example: org.kde.kate
+      responses:
+        '200':
+          description: Icon bytes.
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/svg+xml:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Icon not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
           content:
             application/json:
               schema:
@@ -1099,6 +1145,7 @@ components:
         - activityIds
         - parentId
         - resourceName
+        - iconUrl
       properties:
         id:
           type: string
@@ -1146,6 +1193,11 @@ components:
           type:
             - string
             - 'null'
+        iconUrl:
+          type:
+            - string
+            - 'null'
+          description: Backend-relative URL for the app icon when one can be resolved.
     WindowSnapshot:
       type: object
       additionalProperties: false

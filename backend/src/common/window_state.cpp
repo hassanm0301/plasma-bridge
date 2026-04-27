@@ -73,6 +73,7 @@ void appendWindow(QTextStream &stream, const WindowState &window)
     stream << "  parentId: " << (window.parentId.isEmpty() ? QStringLiteral("(none)") : window.parentId) << '\n';
     stream << "  resourceName: "
            << (window.resourceName.isEmpty() ? QStringLiteral("(none)") : window.resourceName) << '\n';
+    stream << "  iconUrl: " << (window.iconUrl.isEmpty() ? QStringLiteral("(none)") : window.iconUrl) << '\n';
 }
 
 } // namespace
@@ -132,6 +133,7 @@ QJsonObject toJsonObject(const WindowState &window)
     json[QStringLiteral("activityIds")] = activityIds;
     json[QStringLiteral("parentId")] = stringOrNull(window.parentId);
     json[QStringLiteral("resourceName")] = stringOrNull(window.resourceName);
+    json[QStringLiteral("iconUrl")] = stringOrNull(window.iconUrl);
     return json;
 }
 
@@ -215,6 +217,9 @@ std::optional<WindowState> windowStateFromJson(const QJsonObject &json)
     }
     if (const QJsonValue resourceNameValue = json.value(QStringLiteral("resourceName")); resourceNameValue.isString()) {
         window.resourceName = resourceNameValue.toString();
+    }
+    if (const QJsonValue iconUrlValue = json.value(QStringLiteral("iconUrl")); iconUrlValue.isString()) {
+        window.iconUrl = iconUrlValue.toString();
     }
 
     return window;

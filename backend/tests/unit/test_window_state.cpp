@@ -46,6 +46,7 @@ void WindowStateTest::windowJsonUsesNullForUnsetOptionalFields()
     QVERIFY(json.value(QStringLiteral("pid")).isNull());
     QVERIFY(json.value(QStringLiteral("parentId")).isNull());
     QVERIFY(json.value(QStringLiteral("resourceName")).isNull());
+    QVERIFY(json.value(QStringLiteral("iconUrl")).isNull());
     QCOMPARE(json.value(QStringLiteral("geometry")).toObject().value(QStringLiteral("width")).toInt(), 3);
     QCOMPARE(json.value(QStringLiteral("clientGeometry")).toObject().value(QStringLiteral("height")).toInt(), 8);
     QCOMPARE(json.value(QStringLiteral("virtualDesktopIds")).toArray().size(), 0);
@@ -72,6 +73,7 @@ void WindowStateTest::snapshotRoundTripsThroughJsonHelpers()
     QCOMPARE(parsed->activeWindowId, QStringLiteral("window-editor"));
     QCOMPARE(parsed->windows.size(), 2);
     QCOMPARE(parsed->windows.at(0).id, QStringLiteral("window-terminal"));
+    QCOMPARE(parsed->windows.at(0).iconUrl, QStringLiteral("/icons/apps/org.kde.konsole"));
     QCOMPARE(parsed->windows.at(1).resourceName, QStringLiteral("kate"));
 }
 
@@ -117,6 +119,7 @@ void WindowStateTest::humanReadableFormattingIncludesImportantFields()
     QVERIFY(listText.contains(QStringLiteral("Active Window: window-editor")));
     QVERIFY(listText.contains(QStringLiteral("* CHANGELOG.md - Kate")));
     QVERIFY(listText.contains(QStringLiteral("resourceName: kate")));
+    QVERIFY(listText.contains(QStringLiteral("iconUrl: /icons/apps/org.kde.kate")));
 
     QVERIFY(activeText.contains(QStringLiteral("Active Window:")));
     QVERIFY(activeText.contains(QStringLiteral("id: window-editor")));

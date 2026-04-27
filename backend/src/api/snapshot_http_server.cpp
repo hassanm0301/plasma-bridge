@@ -12,15 +12,21 @@
 #include "state/audio_state_store.h"
 #include "state/window_state_store.h"
 
+#include <QDir>
+#include <QDirIterator>
 #include <QFile>
+#include <QFileInfo>
 #include <QHostAddress>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QTcpSocket>
 #include <QUrl>
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace plasma_bridge::api
 {
@@ -35,6 +41,7 @@ const QString kSourcesPath = QStringLiteral("/snapshot/audio/sources");
 const QString kDefaultSourcePath = QStringLiteral("/snapshot/audio/default-source");
 const QString kWindowsPath = QStringLiteral("/snapshot/windows");
 const QString kActiveWindowPath = QStringLiteral("/snapshot/windows/active");
+const QString kAppIconPathPrefix = QStringLiteral("/icons/apps/");
 const QString kDocsRootPath = QStringLiteral("/docs/");
 const QString kDocsRootNoSlashPath = QStringLiteral("/docs");
 const QString kDocsHttpPath = QStringLiteral("/docs/http");
@@ -125,6 +132,23 @@ QByteArray contentTypeForPath(const QString &path)
     return QByteArrayLiteral("text/plain; charset=utf-8");
 }
 
+QByteArray contentTypeForIconPath(const QString &path)
+{
+    if (path.endsWith(QStringLiteral(".svg")) || path.endsWith(QStringLiteral(".svgz"))) {
+        return QByteArrayLiteral("image/svg+xml");
+    }
+    if (path.endsWith(QStringLiteral(".png"))) {
+        return QByteArrayLiteral("image/png");
+    }
+    if (path.endsWith(QStringLiteral(".jpg")) || path.endsWith(QStringLiteral(".jpeg"))) {
+        return QByteArrayLiteral("image/jpeg");
+    }
+    if (path.endsWith(QStringLiteral(".xpm"))) {
+        return QByteArrayLiteral("image/x-xpixmap");
+    }
+    return QByteArrayLiteral("application/octet-stream");
+}
+
 QByteArray readResourceBytes(const QString &resourcePath)
 {
     QFile file(resourcePath);
@@ -133,6 +157,132 @@ QByteArray readResourceBytes(const QString &resourcePath)
     }
 
     return file.readAll();
+}
+
+QString configuredIconThemeName()
+{
+    const QString configPath = QStandardPaths::locate(QStandardPaths::ConfigLocation, QStringLiteral("kdeglobals"));
+    if (configPath.isEmpty()) {
+        return QStringLiteral("breeze");
+    }
+
+    QSettings settings(configPath, QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("Icons"));
+    const QString themeName = settings.value(QStringLiteral("Theme"), QStringLiteral("breeze")).toString();
+    settings.endGroup();
+    return themeName.isEmpty() ? QStringLiteral("breeze") : themeName;
+}
+
+QStringList iconSearchRoots()
+{
+    QStringList roots = QStandardPaths::standardLocations(QStandardPaths::GenericDataLocation);
+    roots.removeDuplicates();
+    return roots;
+}
+
+int iconCandidateScore(const QFileInfo &fileInfo)
+{
+    const QString suffix = fileInfo.suffix().toLower();
+    int score = suffix == QStringLiteral("svg") || suffix == QStringLiteral("svgz") ? 1000 : 0;
+
+    QDir dir = fileInfo.dir();
+    while (!dir.isRoot()) {
+        bool ok = false;
+        const int size = dir.dirName().toInt(&ok);
+        if (ok) {
+            score += 256 - std::min(std::abs(size - 48), 255);
+            break;
+        }
+        dir.cdUp();
+    }
+
+    return score;
+}
+
+QString bestIconCandidate(const QStringList &candidatePaths)
+{
+    QString bestPath;
+    int bestScore = -1;
+    for (const QString &path : candidatePaths) {
+        const QFileInfo fileInfo(path);
+        const int score = iconCandidateScore(fileInfo);
+        if (score > bestScore) {
+            bestScore = score;
+            bestPath = fileInfo.absoluteFilePath();
+        }
+    }
+    return bestPath;
+}
+
+QString findIconInDirectory(const QString &directoryPath, const QString &iconName)
+{
+    const QDir directory(directoryPath);
+    if (!directory.exists()) {
+        return {};
+    }
+
+    const QStringList nameFilters{
+        iconName + QStringLiteral(".svg"),
+        iconName + QStringLiteral(".svgz"),
+        iconName + QStringLiteral(".png"),
+        iconName + QStringLiteral(".jpg"),
+        iconName + QStringLiteral(".jpeg"),
+        iconName + QStringLiteral(".xpm"),
+    };
+
+    QStringList candidates;
+    QDirIterator iterator(directory.absolutePath(), nameFilters, QDir::Files, QDirIterator::Subdirectories);
+    while (iterator.hasNext()) {
+        candidates.append(iterator.next());
+    }
+
+    return bestIconCandidate(candidates);
+}
+
+QString resolveAppIconPath(const QString &iconName)
+{
+    const QString decodedIconName = iconName.trimmed();
+    if (decodedIconName.isEmpty() || decodedIconName.contains(QLatin1Char('/'))) {
+        return {};
+    }
+
+    const QString configuredTheme = configuredIconThemeName();
+    const QStringList themeNames{configuredTheme, QStringLiteral("breeze"), QStringLiteral("hicolor")};
+    for (const QString &root : iconSearchRoots()) {
+        for (const QString &themeName : themeNames) {
+            const QString iconPath = findIconInDirectory(QDir(root).filePath(QStringLiteral("icons/%1").arg(themeName)),
+                                                         decodedIconName);
+            if (!iconPath.isEmpty()) {
+                return iconPath;
+            }
+        }
+
+        const QString pixmapPath = findIconInDirectory(QDir(root).filePath(QStringLiteral("pixmaps")), decodedIconName);
+        if (!pixmapPath.isEmpty()) {
+            return pixmapPath;
+        }
+    }
+
+    return {};
+}
+
+QString appIconNameFromPath(const QString &path)
+{
+    if (!path.startsWith(kAppIconPathPrefix)) {
+        return {};
+    }
+
+    const QString encodedIconName = path.mid(kAppIconPathPrefix.size());
+    if (encodedIconName.isEmpty() || encodedIconName.contains(QLatin1Char('/'))) {
+        return {};
+    }
+
+    const QString iconName = QUrl::fromPercentEncoding(encodedIconName.toUtf8());
+    if (iconName.isEmpty() || iconName.contains(QLatin1Char('/'))) {
+        return {};
+    }
+
+    return iconName;
 }
 
 QString requestPathFromTarget(const QByteArray &target)
@@ -677,6 +827,47 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
                           QByteArrayLiteral("text/plain; charset=utf-8"),
                           {},
                           corsPreflightHeadersForRequest(headers));
+        return;
+    }
+
+    if (path.startsWith(kAppIconPathPrefix)) {
+        if (method != QByteArrayLiteral("GET")) {
+            writeJsonErrorResponse(socket,
+                                   405,
+                                   QByteArrayLiteral("Method Not Allowed"),
+                                   QStringLiteral("method_not_allowed"),
+                                   QStringLiteral("Only GET is supported for this endpoint."),
+                                   {{QByteArrayLiteral("Allow"), QByteArrayLiteral("GET")}});
+            return;
+        }
+
+        const QString iconName = appIconNameFromPath(path);
+        if (iconName.isEmpty()) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Icon name must be a single path segment."));
+            return;
+        }
+
+        const QString iconPath = resolveAppIconPath(iconName);
+        if (iconPath.isEmpty()) {
+            writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
+                                   QStringLiteral("Requested icon was not found."));
+            return;
+        }
+
+        const QByteArray body = readResourceBytes(iconPath);
+        if (body.isEmpty()) {
+            writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
+                                   QStringLiteral("Requested icon was not found."));
+            return;
+        }
+
+        writeByteResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          contentTypeForIconPath(iconPath),
+                          body,
+                          {{QByteArrayLiteral("Cache-Control"), QByteArrayLiteral("public, max-age=86400")}});
         return;
     }
 

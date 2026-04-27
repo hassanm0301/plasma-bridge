@@ -104,6 +104,7 @@ WindowSnapshot sampleWindowSnapshot()
     editorWindow.virtualDesktopIds = {QStringLiteral("desktop-1")};
     editorWindow.activityIds = {QStringLiteral("activity-work")};
     editorWindow.resourceName = QStringLiteral("kate");
+    editorWindow.iconUrl = QStringLiteral("/icons/apps/org.kde.kate");
 
     WindowState terminalWindow;
     terminalWindow.id = QStringLiteral("window-terminal");
@@ -121,6 +122,7 @@ WindowSnapshot sampleWindowSnapshot()
     terminalWindow.clientGeometry = {96, 148, 960, 612};
     terminalWindow.virtualDesktopIds = {QStringLiteral("desktop-1")};
     terminalWindow.parentId = editorWindow.id;
+    terminalWindow.iconUrl = QStringLiteral("/icons/apps/org.kde.konsole");
 
     snapshot.windows = {terminalWindow, editorWindow};
     snapshot.activeWindowId = editorWindow.id;

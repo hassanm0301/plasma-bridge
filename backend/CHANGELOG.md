@@ -1,3 +1,20 @@
+## [Unreleased]
+### Added
+
+- Window snapshots now include app icon URLs that clients can render.
+
+### Fixed
+
+- Window activation now reloads the KWin script and helper cleanly so focus requests are consumed by the current script instance.
+
+### Changed
+
+- Nothing
+
+### Removed
+
+- Nothing
+
 ## [0.3.2] - 2026-04-27
 ### Added
 

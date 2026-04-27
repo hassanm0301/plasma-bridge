@@ -210,6 +210,8 @@ void SnapshotHttpServerFeatureTest::servesWindowSnapshotEndpoints()
     QCOMPARE(windowsJson.value(QStringLiteral("activeWindowId")).toString(), snapshot.activeWindowId);
     QCOMPARE(windowsJson.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("id")).toString(),
              snapshot.activeWindowId);
+    QCOMPARE(windowsJson.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("iconUrl")).toString(),
+             QStringLiteral("/icons/apps/org.kde.kate"));
     QCOMPARE(windowsJson.value(QStringLiteral("windows")).toArray().size(), snapshot.windows.size());
     windowsReply->deleteLater();
 
@@ -223,6 +225,8 @@ void SnapshotHttpServerFeatureTest::servesWindowSnapshotEndpoints()
     const QJsonObject activeJson = payloadObject(activeEnvelope);
     QCOMPARE(activeJson.value(QStringLiteral("window")).toObject().value(QStringLiteral("id")).toString(),
              snapshot.activeWindowId);
+    QCOMPARE(activeJson.value(QStringLiteral("window")).toObject().value(QStringLiteral("iconUrl")).toString(),
+             QStringLiteral("/icons/apps/org.kde.kate"));
     activeReply->deleteLater();
 }
 

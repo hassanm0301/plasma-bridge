@@ -158,6 +158,7 @@ components:
         - activityIds
         - parentId
         - resourceName
+        - iconUrl
       properties:
         id:
           type: string
@@ -205,6 +206,11 @@ components:
           type:
             - string
             - 'null'
+        iconUrl:
+          type:
+            - string
+            - 'null'
+          description: Backend-relative URL for the app icon when one can be resolved.
     WindowSnapshot:
       type: object
       additionalProperties: false
@@ -450,6 +456,7 @@ components:
                   activityIds: [activity-work]
                   parentId: null
                   resourceName: kate
+                  iconUrl: /icons/apps/org.kde.kate
                 windows: []
             error: null
     Patch:
@@ -519,6 +526,7 @@ components:
                       activityIds: [activity-work]
                       parentId: null
                       resourceName: kate
+                      iconUrl: /icons/apps/org.kde.kate
                     windows: []
             error: null
     Error:
