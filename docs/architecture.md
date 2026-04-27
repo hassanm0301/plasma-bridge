@@ -9,6 +9,7 @@ Plasma Remote Toolbar is organized as a monorepo with one implemented backend, o
 - `clients/app/`: planned Flutter mobile app
 - `specs/`: OpenAPI and AsyncAPI contracts shared by backend and clients
 - `docs/`: project-wide documentation
+- `VERSION` and `CHANGELOG.md`: the single project version and release history for backend and clients
 
 ## Current Runtime
 
@@ -25,7 +26,7 @@ The checked-in specs under `specs/` are the contract between the backend and cli
 
 ## Web Client
 
-The web client is a Vite, React, and TypeScript app. It auto-connects to the backend WebSocket state stream, renders live window and audio state, and uses HTTP control endpoints for sink volume plus sink/source mute writes. Endpoint and theme settings live in a Settings popup, and the client keeps its own version and changelog under `clients/web/`.
+The web client is a Vite, React, and TypeScript app. It auto-connects to the backend WebSocket state stream, renders live window and audio state, and uses HTTP control endpoints for sink volume plus sink/source mute writes. Endpoint and theme settings live in a Settings popup. The web client uses the repository-wide version and changelog instead of client-specific release metadata.
 
 ## Documentation Boundary
 

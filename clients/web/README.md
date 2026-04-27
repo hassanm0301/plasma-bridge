@@ -4,9 +4,8 @@ React web client for Plasma Remote Toolbar.
 
 ## Version
 
-Current web version: `0.1.0`
-
-See [CHANGELOG.md](CHANGELOG.md) for web-specific release notes.
+The web client uses the repository-wide project version from [../../VERSION](../../VERSION).
+Release notes live in [../../CHANGELOG.md](../../CHANGELOG.md).
 
 ## Getting Started
 

@@ -10,6 +10,8 @@ The current implementation includes the backend service, `plasma_bridge`, and a 
 - [clients](clients/): React web dashboard and future Flutter mobile app
 - [docs](docs/): project-wide usage and architecture docs
 - [specs](specs/): checked-in OpenAPI and AsyncAPI contracts
+- [VERSION](VERSION): single project version for backend and clients
+- [CHANGELOG.md](CHANGELOG.md): single release history for backend and clients
 
 ## Quick Links
 
