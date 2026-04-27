@@ -170,6 +170,7 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
 
       <WindowTaskbar
         snapshot={stream.state.windowState}
+        httpBaseUrl={settings.httpBaseUrl}
         pendingActions={pendingActions}
         errors={rowErrors}
         onWindowActivate={activateTaskbarWindow}

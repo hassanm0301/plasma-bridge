@@ -36,7 +36,8 @@ const windowState = (id: string, title: string, isActive = false, skipTaskbar = 
   virtualDesktopIds: [],
   activityIds: [],
   parentId: null,
-  resourceName: null
+  resourceName: null,
+  iconUrl: null
 });
 
 describe("backend state helpers", () => {

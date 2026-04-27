@@ -260,8 +260,10 @@ input:focus-visible {
 
 .taskbar-item {
   display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
   align-content: center;
-  gap: 2px;
+  gap: 8px;
   width: min(210px, 70vw);
   min-height: 56px;
   padding: 8px 10px;
@@ -283,6 +285,33 @@ input:focus-visible {
 
 .taskbar-list-item {
   flex: 0 0 min(210px, 70vw);
+}
+
+.taskbar-icon-frame {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--view) 72%, transparent);
+}
+
+.taskbar-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.taskbar-icon-fallback {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.taskbar-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
 }
 
 .taskbar-title,

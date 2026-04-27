@@ -2,6 +2,7 @@
 ### Added
 
 - Inactive taskbar windows can now be clicked to request focus through the backend window activation endpoint
+- Taskbar window items now render backend-provided app icons when available
 
 ### Fixed
 

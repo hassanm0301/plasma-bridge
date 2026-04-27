@@ -41,6 +41,7 @@ export interface WindowState {
   activityIds: string[];
   parentId: string | null;
   resourceName: string | null;
+  iconUrl: string | null;
 }
 
 export interface WindowSnapshot {
