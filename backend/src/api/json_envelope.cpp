@@ -2,6 +2,7 @@
 
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/window_activation_controller.h"
 
 #include <cmath>
 
@@ -119,6 +120,18 @@ QJsonObject buildVolumePayload(const control::VolumeChangeResult &result)
 QJsonObject buildVolumeErrorDetails(const control::VolumeChangeResult &result)
 {
     return buildVolumePayload(result);
+}
+
+QJsonObject buildWindowActivationPayload(const control::WindowActivationResult &result)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("windowId")] = result.windowId;
+    return payload;
+}
+
+QJsonObject buildWindowActivationErrorDetails(const control::WindowActivationResult &result)
+{
+    return buildWindowActivationPayload(result);
 }
 
 } // namespace plasma_bridge::api

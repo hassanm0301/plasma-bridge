@@ -15,7 +15,7 @@ The current implementation exposes local audio and Plasma window state:
 - identify the current default output sink
 - identify the current default input source
 - report per-device volume and mute state
-- expose audio and window snapshot reads plus local default, mute, and sink-volume control over HTTP
+- expose audio and window snapshot reads plus local default, mute, sink-volume, and window activation control over HTTP
 - expose live audio and window updates over one WebSocket state stream
 
 Media state and broader control actions are not part of the current public HTTP or WebSocket runtime surface.
@@ -28,12 +28,12 @@ The runtime has five main parts:
    It also reads user-facing input sources and filters monitor sources from the public state.
 2. A window adapter installs/enables the KWin script helper backend and reads normalized helper snapshots.
 3. Shared in-memory state stores keep canonical audio and window snapshots.
-4. An HTTP server serves snapshots from those stores and forwards local sink/source default, sink/source mute, and sink volume-control requests.
+4. An HTTP server serves snapshots from those stores and forwards local sink/source default, sink/source mute, sink volume-control, and window activation requests.
 5. A WebSocket server streams the same state to connected clients from the unified `/ws` endpoint as it changes.
 
 For local CLI inspection, `window_probe` uses the same shared KWin script backend that writes normalized snapshots through a helper service instead of binding directly to the Plasma window-management Wayland interface.
 
-Both transports use the same underlying stores so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP default, mute, and volume changes flow back through the observer and state store.
+Both transports use the same underlying stores so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP default, mute, volume, and window activation changes flow back through the observer and state store.
 The WebSocket `fullState` payload contains the ready audio and window snapshots, and later `patch` payloads replace either the `audio` or `windowState` subtree.
 
 The HTTP listener also serves local API documentation pages and runtime-adjusted OpenAPI and AsyncAPI documents under `/docs/`.
@@ -50,7 +50,7 @@ The current defaults are:
 - HTTP on `127.0.0.1:8080`
 - WebSocket on `ws://127.0.0.1:8081/ws`
 - local audio sink/source snapshot, default, mute, and sink volume-control HTTP behavior
-- local window snapshot and active-window HTTP behavior
+- local window snapshot, active-window, and window activation HTTP behavior
 - localhost binding unless the operator explicitly changes it
 - hosted docs on the HTTP listener under `/docs/`
 
@@ -60,7 +60,7 @@ These areas are still outside the current public scope:
 
 - source volume-control actions
 - broader output-control actions beyond default-device and mute changes
-- window control actions
+- window control actions beyond activation
 - authentication and pairing
 - packaging and service installation workflow
 - cross-desktop support beyond KDE Plasma

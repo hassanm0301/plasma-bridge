@@ -117,6 +117,7 @@ void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
     QVERIFY(help.standardOutput.contains(QStringLiteral("--timeout-ms")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("list")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("active")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("activate")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("setup")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("status")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("teardown")));
@@ -160,6 +161,26 @@ void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
                                                QStringLiteral("active")});
     QCOMPARE(noActive.exitCode, 0);
     QVERIFY(noActive.standardOutput.contains(QStringLiteral("\"window\": null")));
+
+    const ProcessResult activate = runProcess(fakeWindowProbeCliBin,
+                                              {QStringLiteral("--scenario"),
+                                               QStringLiteral("list"),
+                                               QStringLiteral("--json"),
+                                               QStringLiteral("activate"),
+                                               QStringLiteral("window-terminal")});
+    QCOMPARE(activate.exitCode, 0);
+    QVERIFY(activate.standardOutput.contains(QStringLiteral("\"command\": \"activate\"")));
+    QVERIFY(activate.standardOutput.contains(QStringLiteral("\"status\": \"accepted\"")));
+    QVERIFY(activate.standardOutput.contains(QStringLiteral("\"windowId\": \"window-terminal\"")));
+
+    const ProcessResult activationFailure = runProcess(fakeWindowProbeCliBin,
+                                                       {QStringLiteral("--scenario"),
+                                                        QStringLiteral("activation-failure"),
+                                                        QStringLiteral("--json"),
+                                                        QStringLiteral("activate"),
+                                                        QStringLiteral("window-terminal")});
+    QCOMPARE(activationFailure.exitCode, 1);
+    QVERIFY(activationFailure.standardOutput.contains(QStringLiteral("\"status\": \"window_not_activatable\"")));
 }
 
 CliBinariesFeatureTest::ProcessResult CliBinariesFeatureTest::runProcess(const QString &program,

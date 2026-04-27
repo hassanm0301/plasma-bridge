@@ -9,6 +9,7 @@ namespace plasma_bridge::control
 struct DefaultDeviceChangeResult;
 struct MuteChangeResult;
 struct VolumeChangeResult;
+struct WindowActivationResult;
 }
 
 namespace plasma_bridge::api
@@ -28,5 +29,7 @@ QJsonObject buildMutePayload(const control::MuteChangeResult &result);
 QJsonObject buildMuteErrorDetails(const control::MuteChangeResult &result);
 QJsonObject buildVolumePayload(const control::VolumeChangeResult &result);
 QJsonObject buildVolumeErrorDetails(const control::VolumeChangeResult &result);
+QJsonObject buildWindowActivationPayload(const control::WindowActivationResult &result);
+QJsonObject buildWindowActivationErrorDetails(const control::WindowActivationResult &result);
 
 } // namespace plasma_bridge::api

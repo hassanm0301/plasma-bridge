@@ -275,6 +275,7 @@ FakeWindowProbeBackendController::FakeWindowProbeBackendController(QObject *pare
                                                                       false,
                                                                       false,
                                                                       false}};
+    m_activationResult.status = control::WindowActivationStatus::Accepted;
 }
 
 tools::window_probe::WindowProbeCommandResult FakeWindowProbeBackendController::setup()
@@ -292,6 +293,18 @@ tools::window_probe::WindowProbeCommandResult FakeWindowProbeBackendController::
     return m_teardownResult;
 }
 
+control::WindowActivationResult FakeWindowProbeBackendController::activateWindow(const QString &windowId)
+{
+    m_lastActivationWindowId = windowId;
+    ++m_activationCallCount;
+
+    control::WindowActivationResult result = m_activationResult;
+    if (result.windowId.isEmpty()) {
+        result.windowId = windowId;
+    }
+    return result;
+}
+
 void FakeWindowProbeBackendController::setSetupResult(const tools::window_probe::WindowProbeCommandResult &result)
 {
     m_setupResult = result;
@@ -305,6 +318,21 @@ void FakeWindowProbeBackendController::setStatusResult(const tools::window_probe
 void FakeWindowProbeBackendController::setTeardownResult(const tools::window_probe::WindowProbeCommandResult &result)
 {
     m_teardownResult = result;
+}
+
+void FakeWindowProbeBackendController::setActivationResult(const control::WindowActivationResult &result)
+{
+    m_activationResult = result;
+}
+
+QString FakeWindowProbeBackendController::lastActivationWindowId() const
+{
+    return m_lastActivationWindowId;
+}
+
+int FakeWindowProbeBackendController::activationCallCount() const
+{
+    return m_activationCallCount;
 }
 
 FakeSubmissionGate::FakeSubmissionGate(QObject *parent)
@@ -512,6 +540,33 @@ control::MuteChangeResult FakeAudioDeviceController::invokeMute(const Operation 
     }
 
     return {};
+}
+
+void FakeWindowActivationController::setResult(const control::WindowActivationResult &result)
+{
+    m_result = result;
+}
+
+control::WindowActivationResult FakeWindowActivationController::activateWindow(const QString &windowId)
+{
+    m_lastWindowId = windowId;
+    ++m_callCount;
+
+    control::WindowActivationResult result = m_result;
+    if (result.windowId.isEmpty()) {
+        result.windowId = windowId;
+    }
+    return result;
+}
+
+QString FakeWindowActivationController::lastWindowId() const
+{
+    return m_lastWindowId;
+}
+
+int FakeWindowActivationController::callCount() const
+{
+    return m_callCount;
 }
 
 } // namespace plasma_bridge::tests

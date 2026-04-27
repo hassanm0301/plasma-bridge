@@ -2,7 +2,7 @@ openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
   version: '@PLASMA_BRIDGE_VERSION@'
-  summary: Audio and window snapshot endpoints plus local sink/source control endpoints for KDE Plasma.
+  summary: Audio and window snapshot endpoints plus local audio and window control endpoints for KDE Plasma.
 servers:
   - url: '@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@'
 tags:
@@ -18,6 +18,8 @@ tags:
     description: Change the mute state for a sink or source.
   - name: Control / Sink Volume
     description: Set or adjust normalized sink volume values.
+  - name: Control / Windows
+    description: Activate existing Plasma windows.
 paths:
   /snapshot/audio/sinks:
     get:
@@ -357,6 +359,85 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial window state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/windows/{windowId}/active:
+    post:
+      tags:
+        - Control / Windows
+      operationId: activateWindow
+      summary: Activate a window
+      description: >
+        Requests that KWin bring the target Plasma window into view and focus it. The response confirms
+        that the request was accepted; the resulting active-window state is published later through the
+        normal snapshot and WebSocket state flow.
+      parameters:
+        - $ref: '#/components/parameters/WindowId'
+      responses:
+        '200':
+          description: Window activation request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WindowActivationEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      windowId: window-editor
+                    error: null
+        '400':
+          description: Unexpected request body, invalid window id path segment, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Requested window was not found in the current window snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                windowNotFound:
+                  value:
+                    payload: null
+                    error:
+                      code: window_not_found
+                      message: Requested window was not found.
+                      details:
+                        windowId: window-editor
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Window exists but cannot be activated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                notActivatable:
+                  value:
+                    payload: null
+                    error:
+                      code: window_not_activatable
+                      message: Window exists but cannot be activated.
+                      details:
+                        windowId: window-editor
+        '503':
+          description: Initial window state or window activation control is not ready yet.
           content:
             application/json:
               schema:
@@ -901,6 +982,14 @@ components:
       example: source-main
       schema:
         type: string
+    WindowId:
+      name: windowId
+      in: path
+      required: true
+      description: URL-decoded Plasma window identifier from the window snapshot. Encoded slashes are not supported.
+      example: window-editor
+      schema:
+        type: string
   schemas:
     NullValue:
       type: 'null'
@@ -1159,6 +1248,14 @@ components:
           type:
             - number
             - 'null'
+    WindowActivationPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - windowId
+      properties:
+        windowId:
+          type: string
     ErrorObject:
       type: object
       additionalProperties: false
@@ -1273,5 +1370,16 @@ components:
       properties:
         payload:
           $ref: '#/components/schemas/VolumeChangePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    WindowActivationEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/WindowActivationPayload'
         error:
           $ref: '#/components/schemas/NullValue'

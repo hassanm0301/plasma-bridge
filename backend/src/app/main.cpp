@@ -113,11 +113,13 @@ int main(int argc, char *argv[])
     plasma_bridge::window::KWinScriptWindowObserver windowObserver;
     plasma_bridge::state::WindowStateStore windowStateStore;
     windowStateStore.attachObserver(&windowObserver);
+    plasma_bridge::window::KWinScriptWindowActivationController windowActivationController;
 
     plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore,
                                                       &windowStateStore,
                                                       &volumeController,
                                                       &deviceController,
+                                                      &windowActivationController,
                                                       parser.value(hostOption),
                                                       port,
                                                       wsPort);

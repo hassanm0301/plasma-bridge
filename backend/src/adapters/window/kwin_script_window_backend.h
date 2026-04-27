@@ -1,6 +1,7 @@
 #pragma once
 
 #include "adapters/window/window_observer.h"
+#include "control/window_activation_controller.h"
 
 #include <QObject>
 #include <QString>
@@ -42,6 +43,19 @@ public:
     KWinScriptBackendCommandResult setup();
     KWinScriptBackendCommandResult status() const;
     KWinScriptBackendCommandResult teardown();
+
+private:
+    class Impl;
+    std::unique_ptr<Impl> m_impl;
+};
+
+class KWinScriptWindowActivationController final : public control::WindowActivationController
+{
+public:
+    KWinScriptWindowActivationController();
+    ~KWinScriptWindowActivationController() override;
+
+    control::WindowActivationResult activateWindow(const QString &windowId) override;
 
 private:
     class Impl;

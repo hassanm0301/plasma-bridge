@@ -14,6 +14,8 @@ private slots:
     void parseOptionsHandlesCommandsAndFailures();
     void runnerPrintsListJsonAndExitsInOneShotMode();
     void runnerPrintsActiveJsonWithNullWindow();
+    void runnerExecutesActivateCommand();
+    void runnerReportsActivationFailures();
     void runnerExecutesSetupCommand();
     void runnerPrintsStatusJson();
     void runnerFailsListCommandWhenBackendIsNotConfigured();
@@ -48,6 +50,19 @@ void WindowProbeRunnerTest::parseOptionsHandlesCommandsAndFailures()
     QVERIFY(setupResult.options.has_value());
     QCOMPARE(setupResult.options->command, Command::Setup);
 
+    QCommandLineParser activateParser;
+    configureParser(activateParser);
+    activateParser.process(QStringList{QStringLiteral("window_probe"),
+                                       QStringLiteral("--json"),
+                                       QStringLiteral("activate"),
+                                       QStringLiteral("window-terminal")});
+    const ParseOptionsResult activateResult = parseOptions(activateParser);
+    QVERIFY(activateResult.ok);
+    QVERIFY(activateResult.options.has_value());
+    QCOMPARE(activateResult.options->command, Command::Activate);
+    QCOMPARE(activateResult.options->windowId, QStringLiteral("window-terminal"));
+    QCOMPARE(activateResult.options->jsonOutput, true);
+
     QCommandLineParser invalidCommandParser;
     configureParser(invalidCommandParser);
     invalidCommandParser.process(QStringList{QStringLiteral("window_probe"), QStringLiteral("nope")});
@@ -60,7 +75,14 @@ void WindowProbeRunnerTest::parseOptionsHandlesCommandsAndFailures()
     missingCommandParser.process(QStringList{QStringLiteral("window_probe")});
     const ParseOptionsResult missingCommand = parseOptions(missingCommandParser);
     QVERIFY(!missingCommand.ok);
-    QVERIFY(missingCommand.errorMessage.contains(QStringLiteral("exactly one command")));
+    QVERIFY(missingCommand.errorMessage.contains(QStringLiteral("expects a command")));
+
+    QCommandLineParser missingWindowIdParser;
+    configureParser(missingWindowIdParser);
+    missingWindowIdParser.process(QStringList{QStringLiteral("window_probe"), QStringLiteral("activate")});
+    const ParseOptionsResult missingWindowId = parseOptions(missingWindowIdParser);
+    QVERIFY(!missingWindowId.ok);
+    QVERIFY(missingWindowId.errorMessage.contains(QStringLiteral("window-id")));
 
     QCommandLineParser invalidTimeoutParser;
     configureParser(invalidTimeoutParser);
@@ -134,6 +156,109 @@ void WindowProbeRunnerTest::runnerPrintsActiveJsonWithNullWindow()
     QVERIFY(outputText.contains(QStringLiteral("\"command\": \"active\"")));
     QVERIFY(outputText.contains(QStringLiteral("\"window\": null")));
     QVERIFY(errorText.isEmpty());
+}
+
+void WindowProbeRunnerTest::runnerExecutesActivateCommand()
+{
+    plasma_bridge::tests::FakeWindowProbeSource source;
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    QString outputText;
+    QString errorText;
+    QTextStream output(&outputText);
+    QTextStream error(&errorText);
+
+    plasma_bridge::tools::window_probe::WindowProbeOptions options;
+    options.command = plasma_bridge::tools::window_probe::Command::Activate;
+    options.windowId = QStringLiteral("window-terminal");
+    options.jsonOutput = true;
+    options.timeoutMs = 100;
+
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
+    QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
+
+    QTimer::singleShot(0, &source, [&source]() {
+        source.emitInitialSnapshotReady(plasma_bridge::tests::sampleWindowSnapshot());
+    });
+
+    runner.start();
+
+    QTRY_COMPARE(finishedSpy.count(), 1);
+    QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 0);
+    QCOMPARE(backendController.lastActivationWindowId(), QStringLiteral("window-terminal"));
+    QCOMPARE(backendController.activationCallCount(), 1);
+    QVERIFY(outputText.contains(QStringLiteral("\"command\": \"activate\"")));
+    QVERIFY(outputText.contains(QStringLiteral("\"status\": \"accepted\"")));
+    QVERIFY(outputText.contains(QStringLiteral("\"windowId\": \"window-terminal\"")));
+    QVERIFY(errorText.isEmpty());
+}
+
+void WindowProbeRunnerTest::runnerReportsActivationFailures()
+{
+    {
+        plasma_bridge::tests::FakeWindowProbeSource source;
+        plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+        QString outputText;
+        QString errorText;
+        QTextStream output(&outputText);
+        QTextStream error(&errorText);
+
+        plasma_bridge::tools::window_probe::WindowProbeOptions options;
+        options.command = plasma_bridge::tools::window_probe::Command::Activate;
+        options.windowId = QStringLiteral("missing-window");
+        options.jsonOutput = true;
+        options.timeoutMs = 100;
+
+        plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
+        QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
+
+        QTimer::singleShot(0, &source, [&source]() {
+            source.emitInitialSnapshotReady(plasma_bridge::tests::sampleWindowSnapshot());
+        });
+
+        runner.start();
+
+        QTRY_COMPARE(finishedSpy.count(), 1);
+        QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
+        QCOMPARE(backendController.activationCallCount(), 0);
+        QVERIFY(outputText.contains(QStringLiteral("\"status\": \"window_not_found\"")));
+        QVERIFY(outputText.contains(QStringLiteral("\"windowId\": \"missing-window\"")));
+        QVERIFY(errorText.isEmpty());
+    }
+
+    {
+        plasma_bridge::tests::FakeWindowProbeSource source;
+        plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+        plasma_bridge::control::WindowActivationResult activationResult;
+        activationResult.status = plasma_bridge::control::WindowActivationStatus::WindowNotActivatable;
+        backendController.setActivationResult(activationResult);
+
+        QString outputText;
+        QString errorText;
+        QTextStream output(&outputText);
+        QTextStream error(&errorText);
+
+        plasma_bridge::tools::window_probe::WindowProbeOptions options;
+        options.command = plasma_bridge::tools::window_probe::Command::Activate;
+        options.windowId = QStringLiteral("window-terminal");
+        options.jsonOutput = true;
+        options.timeoutMs = 100;
+
+        plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, &backendController, options, &output, &error);
+        QSignalSpy finishedSpy(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished);
+
+        QTimer::singleShot(0, &source, [&source]() {
+            source.emitInitialSnapshotReady(plasma_bridge::tests::sampleWindowSnapshot());
+        });
+
+        runner.start();
+
+        QTRY_COMPARE(finishedSpy.count(), 1);
+        QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
+        QCOMPARE(backendController.activationCallCount(), 1);
+        QVERIFY(outputText.contains(QStringLiteral("\"status\": \"window_not_activatable\"")));
+        QVERIFY(outputText.contains(QStringLiteral("\"windowId\": \"window-terminal\"")));
+        QVERIFY(errorText.isEmpty());
+    }
 }
 
 void WindowProbeRunnerTest::runnerExecutesSetupCommand()

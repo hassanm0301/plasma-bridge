@@ -83,15 +83,22 @@ public:
     tools::window_probe::WindowProbeCommandResult setup() override;
     tools::window_probe::WindowProbeCommandResult status() override;
     tools::window_probe::WindowProbeCommandResult teardown() override;
+    control::WindowActivationResult activateWindow(const QString &windowId) override;
 
     void setSetupResult(const tools::window_probe::WindowProbeCommandResult &result);
     void setStatusResult(const tools::window_probe::WindowProbeCommandResult &result);
     void setTeardownResult(const tools::window_probe::WindowProbeCommandResult &result);
+    void setActivationResult(const control::WindowActivationResult &result);
+    QString lastActivationWindowId() const;
+    int activationCallCount() const;
 
 private:
     tools::window_probe::WindowProbeCommandResult m_setupResult;
     tools::window_probe::WindowProbeCommandResult m_statusResult;
     tools::window_probe::WindowProbeCommandResult m_teardownResult;
+    control::WindowActivationResult m_activationResult;
+    QString m_lastActivationWindowId;
+    int m_activationCallCount = 0;
 };
 
 class FakeSubmissionGate final : public tools::audio_control_probe::AudioControlSubmissionGate
@@ -176,6 +183,22 @@ private:
     Operation m_lastOperation = Operation::None;
     QString m_lastDeviceId;
     std::optional<bool> m_lastMuted;
+    int m_callCount = 0;
+};
+
+class FakeWindowActivationController final : public control::WindowActivationController
+{
+public:
+    void setResult(const control::WindowActivationResult &result);
+
+    control::WindowActivationResult activateWindow(const QString &windowId) override;
+
+    QString lastWindowId() const;
+    int callCount() const;
+
+private:
+    control::WindowActivationResult m_result;
+    QString m_lastWindowId;
     int m_callCount = 0;
 };
 

@@ -17,7 +17,7 @@ This guide is for contributors who want to understand where behavior lives befor
 ## Runtime Shape
 
 The app wires adapters into state stores, then serves those stores through HTTP and WebSocket transports.
-HTTP reads and local audio controls are handled by `SnapshotHttpServer`.
+HTTP reads, local audio controls, and window activation controls are handled by `SnapshotHttpServer`.
 Live updates are handled by `StateWebSocketServer` on one endpoint, `/ws`.
 
 The WebSocket flow is:
@@ -73,4 +73,4 @@ cmake --build backend/build --target plasma_bridge
 ./backend/build/src/app/plasma_bridge
 ```
 
-Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `window_probe setup` and `window_probe status` when diagnosing the shared KWin script helper backend directly.
+Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `window_probe setup`, `window_probe status`, and `window_probe activate <window-id>` when diagnosing the shared KWin script helper backend directly.

@@ -12,7 +12,7 @@ Plasma Remote Toolbar is organized as a monorepo with one implemented backend, o
 
 ## Current Runtime
 
-The implemented runtime is `plasma_bridge`, a standalone service that runs inside a KDE Plasma user session. It reads local audio and window state, exposes HTTP snapshot and control endpoints, and publishes live updates over a WebSocket state stream.
+The implemented runtime is `plasma_bridge`, a standalone service that runs inside a KDE Plasma user session. It reads local audio and window state, exposes HTTP snapshot and control endpoints including window activation, and publishes live updates over a WebSocket state stream.
 
 The backend binds to localhost by default:
 

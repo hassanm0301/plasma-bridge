@@ -11,6 +11,7 @@
 #include <QObject>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QStringList>
 #include <QVariantMap>
 
 #include <optional>
@@ -254,6 +255,25 @@ public slots:
         return m_backendName;
     }
 
+    bool RequestActivateWindow(const QString &windowId)
+    {
+        if (!m_ready || windowId.isEmpty()) {
+            return false;
+        }
+
+        m_activationRequests.append(windowId);
+        return true;
+    }
+
+    QString TakeActivationRequest()
+    {
+        if (m_activationRequests.isEmpty()) {
+            return {};
+        }
+
+        return m_activationRequests.takeFirst();
+    }
+
     void Shutdown()
     {
         QCoreApplication::quit();
@@ -288,6 +308,7 @@ private:
     QString m_backendName = QStringLiteral("kwin-script-helper");
     plasma_bridge::WindowSnapshot m_snapshot;
     QString m_snapshotJson;
+    QStringList m_activationRequests;
     bool m_ready = false;
 };
 
