@@ -1,5 +1,6 @@
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/window_activation_controller.h"
 
 #include <QtTest>
 
@@ -25,6 +26,16 @@ private slots:
     void statusName();
     void defaultChangeJsonAndHumanFormatting();
     void muteChangeJsonAndHumanFormatting();
+};
+
+class WindowActivationControllerFormattingTest : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void statusName_data();
+    void statusName();
+    void activationJsonAndHumanFormatting();
 };
 
 void AudioVolumeControllerFormattingTest::statusName_data()
@@ -155,6 +166,50 @@ void AudioDeviceControllerFormattingTest::muteChangeJsonAndHumanFormatting()
     QVERIFY(text.contains(QStringLiteral("Previous Muted: (none)")));
 }
 
+void WindowActivationControllerFormattingTest::statusName_data()
+{
+    QTest::addColumn<int>("status");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("accepted")
+        << static_cast<int>(plasma_bridge::control::WindowActivationStatus::Accepted)
+        << QStringLiteral("accepted");
+    QTest::newRow("not-ready")
+        << static_cast<int>(plasma_bridge::control::WindowActivationStatus::NotReady)
+        << QStringLiteral("not_ready");
+    QTest::newRow("window-missing")
+        << static_cast<int>(plasma_bridge::control::WindowActivationStatus::WindowNotFound)
+        << QStringLiteral("window_not_found");
+    QTest::newRow("window-not-activatable")
+        << static_cast<int>(plasma_bridge::control::WindowActivationStatus::WindowNotActivatable)
+        << QStringLiteral("window_not_activatable");
+}
+
+void WindowActivationControllerFormattingTest::statusName()
+{
+    QFETCH(int, status);
+    QFETCH(QString, expected);
+
+    QCOMPARE(plasma_bridge::control::windowActivationStatusName(
+                 static_cast<plasma_bridge::control::WindowActivationStatus>(status)),
+             expected);
+}
+
+void WindowActivationControllerFormattingTest::activationJsonAndHumanFormatting()
+{
+    plasma_bridge::control::WindowActivationResult result;
+    result.status = plasma_bridge::control::WindowActivationStatus::WindowNotActivatable;
+    result.windowId = QStringLiteral("window-editor");
+
+    const QJsonObject json = plasma_bridge::control::toJsonObject(result);
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("window_not_activatable"));
+    QCOMPARE(json.value(QStringLiteral("windowId")).toString(), QStringLiteral("window-editor"));
+
+    const QString text = plasma_bridge::control::formatHumanReadableResult(result);
+    QVERIFY(text.contains(QStringLiteral("Status: window_not_activatable")));
+    QVERIFY(text.contains(QStringLiteral("Window: window-editor")));
+}
+
 int main(int argc, char *argv[])
 {
     int status = 0;
@@ -164,6 +219,10 @@ int main(int argc, char *argv[])
     }
     {
         AudioDeviceControllerFormattingTest test;
+        status |= QTest::qExec(&test, argc, argv);
+    }
+    {
+        WindowActivationControllerFormattingTest test;
         status |= QTest::qExec(&test, argc, argv);
     }
     return status;

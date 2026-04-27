@@ -2,6 +2,7 @@
 
 #include "plasma_bridge_build_config.h"
 #include "common/window_state.h"
+#include "control/window_activation_controller.h"
 
 #include <QObject>
 #include <QString>
@@ -19,6 +20,7 @@ namespace plasma_bridge::tools::window_probe
 enum class Command {
     List,
     Active,
+    Activate,
     Setup,
     Status,
     Teardown,
@@ -26,6 +28,7 @@ enum class Command {
 
 struct WindowProbeOptions {
     Command command = Command::List;
+    QString windowId;
     int timeoutMs = PLASMA_BRIDGE_DEFAULT_PROBE_STARTUP_TIMEOUT_MS;
     bool jsonOutput = false;
 };
@@ -81,6 +84,7 @@ public:
     virtual WindowProbeCommandResult setup() = 0;
     virtual WindowProbeCommandResult status() = 0;
     virtual WindowProbeCommandResult teardown() = 0;
+    virtual control::WindowActivationResult activateWindow(const QString &windowId) = 0;
 };
 
 class KWinScriptWindowProbeBackendController final : public WindowProbeBackendController
@@ -94,6 +98,7 @@ public:
     WindowProbeCommandResult setup() override;
     WindowProbeCommandResult status() override;
     WindowProbeCommandResult teardown() override;
+    control::WindowActivationResult activateWindow(const QString &windowId) override;
 
 private:
     class Impl;
@@ -139,8 +144,10 @@ private:
     void executeBackendCommand();
     void finish(int exitCode);
     void publishInitialSnapshot();
+    void executeWindowActivation();
     void printSnapshot() const;
     void printBackendCommandResult(const WindowProbeCommandResult &result) const;
+    void printActivationResult(const control::WindowActivationResult &result) const;
 
     WindowProbeSource *m_source = nullptr;
     WindowProbeBackendController *m_backendController = nullptr;
@@ -159,9 +166,16 @@ QByteArray formatJsonResultBytes(const WindowProbeOptions &options,
                                  const QString &backendName,
                                  const plasma_bridge::WindowSnapshot &snapshot);
 QByteArray formatJsonResultBytes(const WindowProbeOptions &options, const WindowProbeCommandResult &result);
+QByteArray formatJsonResultBytes(const WindowProbeOptions &options,
+                                 const QString &backendName,
+                                 const control::WindowActivationResult &result);
 QString formatHumanResultText(const WindowProbeOptions &options,
                               const QString &backendName,
                               const plasma_bridge::WindowSnapshot &snapshot);
 QString formatHumanResultText(const WindowProbeOptions &options, const WindowProbeCommandResult &result);
+QString formatHumanResultText(const WindowProbeOptions &options,
+                              const QString &backendName,
+                              const control::WindowActivationResult &result);
+int exitCodeForResult(const control::WindowActivationResult &result);
 
 } // namespace plasma_bridge::tools::window_probe

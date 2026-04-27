@@ -19,6 +19,7 @@ target_link_libraries(plasma_bridge_window_probe_tool
     PUBLIC
         plasma_bridge_window_adapter
         plasma_bridge_common
+        plasma_bridge_control
         Qt6::Core
 )
 

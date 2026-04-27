@@ -238,6 +238,89 @@ function publishSnapshot(reason, changedWindowId) {
              changedWindowId || "");
 }
 
+let activationPollTimer = null;
+let activationPollInFlight = false;
+
+function findTrackedWindowById(targetWindowId) {
+    const targetId = String(targetWindowId || "");
+    const windows = trackedWindows();
+    for (let index = 0; index < windows.length; ++index) {
+        if (windowId(windows[index]) === targetId) {
+            return windows[index];
+        }
+    }
+
+    return null;
+}
+
+function ensureWindowVisibleForActivation(window) {
+    if (!window) {
+        return;
+    }
+
+    if (window.activities && window.activities.length > 0) {
+        const activityId = String(window.activities[0]);
+        if (activityId.length > 0 && workspace.currentActivity !== activityId) {
+            workspace.currentActivity = activityId;
+        }
+    }
+
+    if (window.desktops && window.desktops.length > 0) {
+        workspace.currentDesktop = window.desktops[0];
+    }
+
+    if (window.minimized) {
+        window.minimized = false;
+    }
+}
+
+function activateWindowById(targetWindowId) {
+    const targetWindow = findTrackedWindowById(targetWindowId);
+    if (!targetWindow) {
+        publishSnapshot("window-activation-failed", targetWindowId);
+        return false;
+    }
+
+    ensureWindowVisibleForActivation(targetWindow);
+    if (typeof workspace.raiseWindow === "function") {
+        workspace.raiseWindow(targetWindow);
+    }
+    workspace.activeWindow = targetWindow;
+    publishSnapshot("window-activation-requested", targetWindowId);
+    return true;
+}
+
+function pollActivationRequest() {
+    if (activationPollInFlight) {
+        return;
+    }
+
+    activationPollInFlight = true;
+    callDBus("%1",
+             "%2",
+             "%3",
+             "TakeActivationRequest",
+             function(targetWindowId) {
+                 activationPollInFlight = false;
+                 if (targetWindowId && String(targetWindowId).length > 0) {
+                     activateWindowById(String(targetWindowId));
+                     pollActivationRequest();
+                 }
+             });
+}
+
+function startActivationRequestPolling() {
+    if (activationPollTimer) {
+        return;
+    }
+
+    activationPollTimer = new QTimer();
+    activationPollTimer.interval = 100;
+    activationPollTimer.timeout.connect(pollActivationRequest);
+    activationPollTimer.start();
+    pollActivationRequest();
+}
+
 const watchedWindows = new Map();
 
 function connectSignal(object, signalName, callback) {
@@ -287,6 +370,7 @@ function attachExistingWindows() {
 function main() {
     attachExistingWindows();
     publishSnapshot("initial", "");
+    startActivationRequestPolling();
 
     connectSignal(workspace, "windowAdded", (window) => {
         attachWindow(window);
@@ -605,6 +689,58 @@ KWinScriptBackendCommandResult KWinScriptWindowBackendController::status() const
 KWinScriptBackendCommandResult KWinScriptWindowBackendController::teardown()
 {
     return m_impl->teardown();
+}
+
+class KWinScriptWindowActivationController::Impl final
+{
+public:
+    control::WindowActivationResult activateWindow(const QString &windowId)
+    {
+        control::WindowActivationResult result;
+        result.windowId = windowId;
+
+        if (windowId.isEmpty()) {
+            result.status = control::WindowActivationStatus::WindowNotFound;
+            return result;
+        }
+
+        QDBusInterface helper(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE),
+                              QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
+                              QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE),
+                              QDBusConnection::sessionBus());
+        if (!helper.isValid()) {
+            result.status = control::WindowActivationStatus::NotReady;
+            return result;
+        }
+
+        const QDBusReply<bool> readyReply = helper.call(QStringLiteral("IsReady"));
+        if (!readyReply.isValid() || !readyReply.value()) {
+            result.status = control::WindowActivationStatus::NotReady;
+            return result;
+        }
+
+        const QDBusReply<bool> reply = helper.call(QStringLiteral("RequestActivateWindow"), windowId);
+        if (!reply.isValid()) {
+            result.status = control::WindowActivationStatus::NotReady;
+            return result;
+        }
+
+        result.status = reply.value() ? control::WindowActivationStatus::Accepted
+                                      : control::WindowActivationStatus::WindowNotActivatable;
+        return result;
+    }
+};
+
+KWinScriptWindowActivationController::KWinScriptWindowActivationController()
+    : m_impl(std::make_unique<Impl>())
+{
+}
+
+KWinScriptWindowActivationController::~KWinScriptWindowActivationController() = default;
+
+control::WindowActivationResult KWinScriptWindowActivationController::activateWindow(const QString &windowId)
+{
+    return m_impl->activateWindow(windowId);
 }
 
 class KWinScriptWindowObserver::Impl final : public QObject

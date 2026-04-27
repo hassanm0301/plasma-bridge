@@ -1,6 +1,7 @@
 add_library(plasma_bridge_control STATIC
     audio_device_controller.cpp
     audio_volume_controller.cpp
+    window_activation_controller.cpp
 )
 
 target_include_directories(plasma_bridge_control

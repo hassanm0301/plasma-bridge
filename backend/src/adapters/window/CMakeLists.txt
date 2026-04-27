@@ -12,6 +12,7 @@ target_include_directories(plasma_bridge_window_adapter
 target_link_libraries(plasma_bridge_window_adapter
     PUBLIC
         plasma_bridge_common
+        plasma_bridge_control
         Qt6::Core
         Qt6::DBus
 )

@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     parser.setApplicationDescription(QStringLiteral("Hermetic window probe CLI helper."));
     plasma_bridge::tools::window_probe::configureParser(parser);
     parser.addOption(QCommandLineOption(QStringLiteral("scenario"),
-                                        QStringLiteral("One of: timeout, failure, list, no-active."),
+                                        QStringLiteral("One of: timeout, failure, list, no-active, activation-failure."),
                                         QStringLiteral("scenario"),
                                         QStringLiteral("timeout")));
     parser.process(app);
@@ -32,7 +32,12 @@ int main(int argc, char *argv[])
     }
 
     plasma_bridge::tests::FakeWindowProbeSource source;
-    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source, nullptr, *optionsResult.options, &output, &error);
+    plasma_bridge::tests::FakeWindowProbeBackendController backendController;
+    plasma_bridge::tools::window_probe::WindowProbeRunner runner(&source,
+                                                                 &backendController,
+                                                                 *optionsResult.options,
+                                                                 &output,
+                                                                 &error);
     QObject::connect(&runner, &plasma_bridge::tools::window_probe::WindowProbeRunner::finished, &app, &QCoreApplication::exit);
 
     const QString scenario = parser.value(QStringLiteral("scenario"));
@@ -47,6 +52,13 @@ int main(int argc, char *argv[])
     } else if (scenario == QStringLiteral("no-active")) {
         QTimer::singleShot(0, &source, [&source]() {
             source.emitInitialSnapshotReady(plasma_bridge::tests::sampleWindowSnapshotWithoutActiveWindow());
+        });
+    } else if (scenario == QStringLiteral("activation-failure")) {
+        plasma_bridge::control::WindowActivationResult result;
+        result.status = plasma_bridge::control::WindowActivationStatus::WindowNotActivatable;
+        backendController.setActivationResult(result);
+        QTimer::singleShot(0, &source, [&source]() {
+            source.emitInitialSnapshotReady(plasma_bridge::tests::sampleWindowSnapshot());
         });
     }
 

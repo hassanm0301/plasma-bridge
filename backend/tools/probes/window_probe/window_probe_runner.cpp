@@ -9,6 +9,8 @@
 #include <QTextStream>
 #include <QTimer>
 
+#include <algorithm>
+
 namespace plasma_bridge::tools::window_probe
 {
 namespace
@@ -23,6 +25,8 @@ QString commandName(const Command command)
         return QStringLiteral("list");
     case Command::Active:
         return QStringLiteral("active");
+    case Command::Activate:
+        return QStringLiteral("activate");
     case Command::Setup:
         return QStringLiteral("setup");
     case Command::Status:
@@ -36,7 +40,7 @@ QString commandName(const Command command)
 
 bool commandUsesSnapshotSource(const Command command)
 {
-    return command == Command::List || command == Command::Active;
+    return command == Command::List || command == Command::Active || command == Command::Activate;
 }
 
 WindowProbeBackendStatus toProbeStatus(const window::KWinScriptBackendStatus &status)
@@ -97,6 +101,13 @@ QString backendReadinessError(const WindowProbeBackendStatus &status)
     return window::kwinScriptBackendReadinessError(toSharedStatus(status));
 }
 
+bool snapshotContainsWindow(const plasma_bridge::WindowSnapshot &snapshot, const QString &windowId)
+{
+    return std::any_of(snapshot.windows.cbegin(), snapshot.windows.cend(), [&windowId](const plasma_bridge::WindowState &window) {
+        return window.id == windowId;
+    });
+}
+
 } // namespace
 
 class KWinScriptWindowProbeBackendController::Impl final
@@ -117,8 +128,14 @@ public:
         return toProbeResult(m_backend.teardown());
     }
 
+    control::WindowActivationResult activateWindow(const QString &windowId)
+    {
+        return m_activationController.activateWindow(windowId);
+    }
+
 private:
     window::KWinScriptWindowBackendController m_backend;
+    window::KWinScriptWindowActivationController m_activationController;
 };
 
 KWinScriptWindowProbeBackendController::KWinScriptWindowProbeBackendController(QObject *parent)
@@ -142,6 +159,11 @@ WindowProbeCommandResult KWinScriptWindowProbeBackendController::status()
 WindowProbeCommandResult KWinScriptWindowProbeBackendController::teardown()
 {
     return m_impl->teardown();
+}
+
+control::WindowActivationResult KWinScriptWindowProbeBackendController::activateWindow(const QString &windowId)
+{
+    return m_impl->activateWindow(windowId);
 }
 
 class KWinScriptWindowProbeSource::Impl final : public QObject
@@ -324,6 +346,7 @@ void WindowProbeRunner::executeBackendCommand()
         break;
     case Command::List:
     case Command::Active:
+    case Command::Activate:
         finish(1);
         return;
     }
@@ -351,8 +374,49 @@ void WindowProbeRunner::publishInitialSnapshot()
 
     m_initialSnapshotPublished = true;
     m_startupTimer->stop();
+    if (m_options.command == Command::Activate) {
+        executeWindowActivation();
+        return;
+    }
+
     printSnapshot();
     finish(0);
+}
+
+void WindowProbeRunner::executeWindowActivation()
+{
+    if (m_output == nullptr || m_source == nullptr) {
+        finish(1);
+        return;
+    }
+
+    control::WindowActivationResult result;
+    result.windowId = m_options.windowId;
+
+    if (!snapshotContainsWindow(m_source->currentSnapshot(), m_options.windowId)) {
+        result.status = control::WindowActivationStatus::WindowNotFound;
+        printActivationResult(result);
+        finish(exitCodeForResult(result));
+        return;
+    }
+
+    if (m_backendController == nullptr) {
+        if (m_error != nullptr) {
+            *m_error << "window_probe backend controller is unavailable." << Qt::endl;
+        }
+        result.status = control::WindowActivationStatus::NotReady;
+        printActivationResult(result);
+        finish(exitCodeForResult(result));
+        return;
+    }
+
+    result = m_backendController->activateWindow(m_options.windowId);
+    if (result.windowId.isEmpty()) {
+        result.windowId = m_options.windowId;
+    }
+
+    printActivationResult(result);
+    finish(exitCodeForResult(result));
 }
 
 void WindowProbeRunner::printSnapshot() const
@@ -383,6 +447,20 @@ void WindowProbeRunner::printBackendCommandResult(const WindowProbeCommandResult
     *m_output << formatHumanResultText(m_options, result) << Qt::endl;
 }
 
+void WindowProbeRunner::printActivationResult(const control::WindowActivationResult &result) const
+{
+    if (m_output == nullptr || m_source == nullptr) {
+        return;
+    }
+
+    if (m_options.jsonOutput) {
+        *m_output << formatJsonResultBytes(m_options, m_source->backendName(), result) << Qt::endl;
+        return;
+    }
+
+    *m_output << formatHumanResultText(m_options, m_source->backendName(), result) << Qt::endl;
+}
+
 void configureParser(QCommandLineParser &parser)
 {
     parser.addHelpOption();
@@ -394,7 +472,9 @@ void configureParser(QCommandLineParser &parser)
                                         QStringLiteral("timeout-ms"),
                                         QString::number(PLASMA_BRIDGE_DEFAULT_PROBE_STARTUP_TIMEOUT_MS)));
     parser.addPositionalArgument(QStringLiteral("command"),
-                                 QStringLiteral("One of: list, active, setup, status, teardown."));
+                                 QStringLiteral("One of: list, active, activate, setup, status, teardown."));
+    parser.addPositionalArgument(QStringLiteral("window-id"),
+                                 QStringLiteral("Window id for the activate command."));
 }
 
 ParseOptionsResult parseOptions(const QCommandLineParser &parser)
@@ -402,15 +482,26 @@ ParseOptionsResult parseOptions(const QCommandLineParser &parser)
     ParseOptionsResult result;
 
     const QStringList positionalArguments = parser.positionalArguments();
-    if (positionalArguments.size() != 1) {
-        result.errorMessage = QStringLiteral("window_probe expects exactly one command: list, active, setup, status, or teardown.");
+    if (positionalArguments.isEmpty()) {
+        result.errorMessage = QStringLiteral("window_probe expects a command: list, active, activate, setup, status, or teardown.");
         return result;
     }
 
     const std::optional<Command> command = parseCommand(positionalArguments.constFirst());
     if (!command.has_value()) {
-        result.errorMessage = QStringLiteral("Unsupported command: %1. Expected list, active, setup, status, or teardown.")
+        result.errorMessage = QStringLiteral("Unsupported command: %1. Expected list, active, activate, setup, status, or teardown.")
                                   .arg(positionalArguments.constFirst());
+        return result;
+    }
+
+    const int expectedArgumentCount = *command == Command::Activate ? 2 : 1;
+    if (positionalArguments.size() != expectedArgumentCount) {
+        if (*command == Command::Activate) {
+            result.errorMessage = QStringLiteral("Command activate expects a window-id positional argument.");
+        } else {
+            result.errorMessage = QStringLiteral("Command %1 does not accept extra positional arguments.")
+                                      .arg(positionalArguments.constFirst());
+        }
         return result;
     }
 
@@ -423,6 +514,9 @@ ParseOptionsResult parseOptions(const QCommandLineParser &parser)
 
     WindowProbeOptions options;
     options.command = *command;
+    if (*command == Command::Activate) {
+        options.windowId = positionalArguments.at(1);
+    }
     options.timeoutMs = timeoutMs;
     options.jsonOutput = parser.isSet(QStringLiteral("json"));
 
@@ -438,6 +532,9 @@ std::optional<Command> parseCommand(const QString &value)
     }
     if (value == QStringLiteral("active")) {
         return Command::Active;
+    }
+    if (value == QStringLiteral("activate")) {
+        return Command::Activate;
     }
     if (value == QStringLiteral("setup")) {
         return Command::Setup;
@@ -484,6 +581,16 @@ QByteArray formatJsonResultBytes(const WindowProbeOptions &options, const Window
     return QJsonDocument(json).toJson(QJsonDocument::Indented);
 }
 
+QByteArray formatJsonResultBytes(const WindowProbeOptions &options,
+                                 const QString &backendName,
+                                 const control::WindowActivationResult &result)
+{
+    QJsonObject json = control::toJsonObject(result);
+    json[QStringLiteral("command")] = commandName(options.command);
+    json[QStringLiteral("backend")] = backendName;
+    return QJsonDocument(json).toJson(QJsonDocument::Indented);
+}
+
 QString formatHumanResultText(const WindowProbeOptions &options,
                               const QString &backendName,
                               const plasma_bridge::WindowSnapshot &snapshot)
@@ -517,6 +624,23 @@ QString formatHumanResultText(const WindowProbeOptions &options, const WindowPro
     stream << "Snapshot Cached: " << boolText(result.status.snapshotCached) << '\n';
     stream << "Snapshot Ready: " << boolText(result.status.snapshotReady) << '\n';
     return text;
+}
+
+QString formatHumanResultText(const WindowProbeOptions &options,
+                              const QString &backendName,
+                              const control::WindowActivationResult &result)
+{
+    QString text;
+    QTextStream stream(&text);
+    stream << "Command: " << commandName(options.command) << '\n';
+    stream << "Backend: " << backendName << '\n';
+    stream << control::formatHumanReadableResult(result);
+    return text;
+}
+
+int exitCodeForResult(const control::WindowActivationResult &result)
+{
+    return result.status == control::WindowActivationStatus::Accepted ? 0 : 1;
 }
 
 } // namespace plasma_bridge::tools::window_probe
