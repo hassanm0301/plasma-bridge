@@ -1,4 +1,5 @@
 .codex/
+.vscode/
 
 # CMake backend builds
 build/

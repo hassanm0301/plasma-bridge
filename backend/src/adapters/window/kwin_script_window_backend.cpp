@@ -26,6 +26,8 @@ const QString kKWinScriptBackendName = QStringLiteral("kwin-script-helper");
 const QString kKWinServiceName = QStringLiteral("org.kde.KWin");
 const QString kKWinObjectPath = QStringLiteral("/KWin");
 const QString kKWinInterfaceName = QStringLiteral("org.kde.KWin");
+const QString kKWinScriptingObjectPath = QStringLiteral("/Scripting");
+const QString kKWinScriptingInterfaceName = QStringLiteral("org.kde.kwin.Scripting");
 const QString kCacheDirectoryName = QStringLiteral("plasma-bridge/window_probe");
 const QString kSnapshotFileName = QStringLiteral("snapshot.json");
 const QString kServiceDirectoryName = QStringLiteral("dbus-1/services");
@@ -285,7 +287,11 @@ function activateWindowById(targetWindowId) {
     if (typeof workspace.raiseWindow === "function") {
         workspace.raiseWindow(targetWindow);
     }
-    workspace.activeWindow = targetWindow;
+    if (typeof workspace.activateWindow === "function") {
+        workspace.activateWindow(targetWindow);
+    } else {
+        workspace.activeWindow = targetWindow;
+    }
     publishSnapshot("window-activation-requested", targetWindowId);
     return true;
 }
@@ -515,6 +521,34 @@ bool stopHelperServiceBestEffort()
     return true;
 }
 
+bool unloadKWinScriptBestEffort()
+{
+    QDBusInterface scripting(kKWinServiceName,
+                             kKWinScriptingObjectPath,
+                             kKWinScriptingInterfaceName,
+                             QDBusConnection::sessionBus());
+    if (!scripting.isValid()) {
+        return true;
+    }
+
+    scripting.call(QStringLiteral("unloadScript"), QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_SCRIPT_ID));
+    return true;
+}
+
+bool startKWinScriptsBestEffort()
+{
+    QDBusInterface scripting(kKWinServiceName,
+                             kKWinScriptingObjectPath,
+                             kKWinScriptingInterfaceName,
+                             QDBusConnection::sessionBus());
+    if (!scripting.isValid()) {
+        return true;
+    }
+
+    scripting.call(QStringLiteral("start"));
+    return true;
+}
+
 std::optional<WindowSnapshot> snapshotFromJsonText(const QString &snapshotJson, QString *errorMessage = nullptr)
 {
     QJsonParseError parseError;
@@ -616,12 +650,15 @@ public:
             return result;
         }
 
+        stopHelperServiceBestEffort();
+        unloadKWinScriptBestEffort();
         setScriptEnabled(true);
         if (!reconfigureKWin(&errorMessage)) {
             result.message = errorMessage;
             result.status = computeBackendStatus();
             return result;
         }
+        startKWinScriptsBestEffort();
 
         result.ok = true;
         result.message = QStringLiteral("Installed and enabled the KWin script backend for window state.");
@@ -646,6 +683,7 @@ public:
         QString errorMessage;
         setScriptEnabled(false);
         stopHelperServiceBestEffort();
+        unloadKWinScriptBestEffort();
 
         if (!removePath(kwinScriptDirectoryPath(), &errorMessage)
             || !removePath(helperServiceFilePath(), &errorMessage)
