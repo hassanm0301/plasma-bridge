@@ -7,7 +7,7 @@ The WebSocket API uses one state endpoint, `ws://127.0.0.1:8081/ws`, for both au
 
 Repo files:
 
-- [OpenAPI](openapi.yaml): Swagger-compatible HTTP sink/source/window snapshot endpoints plus sink/source default, mute, and sink volume-control endpoints
+- [OpenAPI](openapi.yaml): Swagger-compatible HTTP sink/source/window snapshot endpoints plus sink/source default, mute, sink volume-control, and window activation endpoints
 - [AsyncAPI](asyncapi.yaml): WebSocket protocol for the unified live sink, source, and window state stream
 
 Hosted local docs from a running service:

@@ -2,10 +2,12 @@
 
 #include "api/audio_control_http_helpers.h"
 #include "api/json_envelope.h"
+#include "api/window_control_http_helpers.h"
 #include "common/audio_state.h"
 #include "common/window_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/window_activation_controller.h"
 #include "plasma_bridge_build_config.h"
 #include "state/audio_state_store.h"
 #include "state/window_state_store.h"
@@ -17,6 +19,8 @@
 #include <QJsonParseError>
 #include <QTcpSocket>
 #include <QUrl>
+
+#include <algorithm>
 
 namespace plasma_bridge::api
 {
@@ -407,6 +411,45 @@ QString errorMessageForMuteChangeStatus(const AudioControlTargetKind targetKind,
     return QStringLiteral("Audio device control is not ready yet.");
 }
 
+QString errorCodeForWindowActivationStatus(const control::WindowActivationStatus status)
+{
+    switch (status) {
+    case control::WindowActivationStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::WindowActivationStatus::NotReady:
+        return QStringLiteral("not_ready");
+    case control::WindowActivationStatus::WindowNotFound:
+        return QStringLiteral("window_not_found");
+    case control::WindowActivationStatus::WindowNotActivatable:
+        return QStringLiteral("window_not_activatable");
+    }
+
+    return QStringLiteral("not_ready");
+}
+
+QString errorMessageForWindowActivationStatus(const control::WindowActivationStatus status)
+{
+    switch (status) {
+    case control::WindowActivationStatus::Accepted:
+        return QStringLiteral("Window activation request accepted.");
+    case control::WindowActivationStatus::NotReady:
+        return QStringLiteral("Window activation control is not ready yet.");
+    case control::WindowActivationStatus::WindowNotFound:
+        return QStringLiteral("Requested window was not found.");
+    case control::WindowActivationStatus::WindowNotActivatable:
+        return QStringLiteral("Window exists but cannot be activated.");
+    }
+
+    return QStringLiteral("Window activation control is not ready yet.");
+}
+
+bool snapshotContainsWindow(const plasma_bridge::WindowSnapshot &snapshot, const QString &windowId)
+{
+    return std::any_of(snapshot.windows.cbegin(), snapshot.windows.cend(), [&windowId](const plasma_bridge::WindowState &window) {
+        return window.id == windowId;
+    });
+}
+
 } // namespace
 
 SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
@@ -420,6 +463,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                          nullptr,
                          audioVolumeController,
                          audioDeviceController,
+                         nullptr,
                          documentationHost,
                          documentationHttpPort,
                          documentationWsPort,
@@ -435,11 +479,33 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
                                        QObject *parent)
+    : SnapshotHttpServer(audioStateStore,
+                         windowStateStore,
+                         audioVolumeController,
+                         audioDeviceController,
+                         nullptr,
+                         documentationHost,
+                         documentationHttpPort,
+                         documentationWsPort,
+                         parent)
+{
+}
+
+SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                       state::WindowStateStore *windowStateStore,
+                                       control::AudioVolumeController *audioVolumeController,
+                                       control::AudioDeviceController *audioDeviceController,
+                                       control::WindowActivationController *windowActivationController,
+                                       const QString &documentationHost,
+                                       quint16 documentationHttpPort,
+                                       quint16 documentationWsPort,
+                                       QObject *parent)
     : QObject(parent)
     , m_audioStateStore(audioStateStore)
     , m_windowStateStore(windowStateStore)
     , m_audioVolumeController(audioVolumeController)
     , m_audioDeviceController(audioDeviceController)
+    , m_windowActivationController(windowActivationController)
     , m_documentationHost(documentationHost)
     , m_documentationHttpPort(documentationHttpPort)
     , m_documentationWsPort(documentationWsPort)
@@ -884,6 +950,85 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
         }
+    }
+
+    const WindowControlRouteParseResult windowControlRoute = parseWindowControlRoute(path);
+    if (windowControlRoute.match == WindowControlRouteMatch::InvalidWindowId) {
+        writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                               QStringLiteral("Window id must be a single path segment."));
+        return;
+    }
+
+    if (windowControlRoute.match == WindowControlRouteMatch::Match) {
+        if (method != QByteArrayLiteral("POST")) {
+            writeJsonErrorResponse(socket,
+                                   405,
+                                   QByteArrayLiteral("Method Not Allowed"),
+                                   QStringLiteral("method_not_allowed"),
+                                   QStringLiteral("Only POST is supported for this endpoint."),
+                                   {{QByteArrayLiteral("Allow"), QByteArrayLiteral("POST")}});
+            return;
+        }
+
+        if (contentLength > 0) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Request body is not supported for this endpoint."));
+            return;
+        }
+
+        if (m_windowStateStore == nullptr || !m_windowStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial window state is not ready yet."));
+            return;
+        }
+
+        if (m_windowActivationController == nullptr) {
+            writeJsonErrorResponse(socket,
+                                   503,
+                                   QByteArrayLiteral("Service Unavailable"),
+                                   QStringLiteral("not_ready"),
+                                   QStringLiteral("Window activation control is not available."));
+            return;
+        }
+
+        if (!snapshotContainsWindow(m_windowStateStore->windowState(), windowControlRoute.route.windowId)) {
+            control::WindowActivationResult result;
+            result.status = control::WindowActivationStatus::WindowNotFound;
+            result.windowId = windowControlRoute.route.windowId;
+            const int statusCode = httpStatusCodeForWindowActivationStatus(result.status);
+            writeJsonErrorResponse(socket,
+                                   statusCode,
+                                   reasonPhraseForStatusCode(statusCode),
+                                   errorCodeForWindowActivationStatus(result.status),
+                                   errorMessageForWindowActivationStatus(result.status),
+                                   {},
+                                   buildWindowActivationErrorDetails(result));
+            return;
+        }
+
+        control::WindowActivationResult result =
+            m_windowActivationController->activateWindow(windowControlRoute.route.windowId);
+        if (result.windowId.isEmpty()) {
+            result.windowId = windowControlRoute.route.windowId;
+        }
+
+        const int statusCode = httpStatusCodeForWindowActivationStatus(result.status);
+        if (result.status == control::WindowActivationStatus::Accepted) {
+            writeJsonResponse(socket,
+                              statusCode,
+                              reasonPhraseForStatusCode(statusCode),
+                              buildHttpSuccessEnvelope(buildWindowActivationPayload(result)));
+            return;
+        }
+
+        writeJsonErrorResponse(socket,
+                               statusCode,
+                               reasonPhraseForStatusCode(statusCode),
+                               errorCodeForWindowActivationStatus(result.status),
+                               errorMessageForWindowActivationStatus(result.status),
+                               {},
+                               buildWindowActivationErrorDetails(result));
+        return;
     }
 
     const SnapshotRoute snapshotRoute = snapshotRouteForPath(path);

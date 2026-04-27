@@ -32,9 +32,12 @@ private slots:
     void mapsVolumeControlFailures();
     void servesDeviceControlEndpoints();
     void mapsDeviceControlFailures();
+    void servesWindowActivationControlEndpoint();
+    void mapsWindowActivationControlFailures();
     void handlesMethodNotAllowedAndUnknownPath();
     void rejectsInvalidVolumeControlRequests();
     void rejectsInvalidDeviceControlRequests();
+    void rejectsInvalidWindowActivationControlRequests();
     void rejectsMalformedAndOversizedRequests();
     void servesDocsAndRewritesSpecHosts();
     void addsCorsHeadersForAllowedWebClientOrigins();
@@ -860,6 +863,178 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     sourceNotWritableReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::servesWindowActivationControlEndpoint()
+{
+    using Status = plasma_bridge::control::WindowActivationStatus;
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeWindowActivationController controller;
+    plasma_bridge::control::WindowActivationResult acceptedResult;
+    acceptedResult.status = Status::Accepted;
+    acceptedResult.windowId = QStringLiteral("window-terminal");
+    controller.setResult(acceptedResult);
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkRequest request(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/active")));
+    QNetworkReply *reply = manager.post(request, QByteArray());
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(reply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
+        QCOMPARE(body.value(QStringLiteral("windowId")).toString(), QStringLiteral("window-terminal"));
+        QCOMPARE(controller.lastWindowId(), QStringLiteral("window-terminal"));
+        QCOMPARE(controller.callCount(), 1);
+    }
+    reply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::mapsWindowActivationControlFailures()
+{
+    using Status = plasma_bridge::control::WindowActivationStatus;
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeWindowActivationController controller;
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkRequest missingRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/missing-window/active")));
+    QNetworkReply *missingReply = manager.post(missingRequest, QByteArray());
+    QSignalSpy missingSpy(missingReply, &QNetworkReply::finished);
+    QVERIFY(missingSpy.wait());
+    QCOMPARE(missingReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("window_not_found"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
+                 QStringLiteral("missing-window"));
+        QCOMPARE(controller.callCount(), 0);
+    }
+    missingReply->deleteLater();
+
+    plasma_bridge::control::WindowActivationResult notReadyResult;
+    notReadyResult.status = Status::NotReady;
+    notReadyResult.windowId = QStringLiteral("window-terminal");
+    controller.setResult(notReadyResult);
+
+    QNetworkRequest notReadyRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/active")));
+    QNetworkReply *notReadyReply = manager.post(notReadyRequest, QByteArray());
+    QSignalSpy notReadySpy(notReadyReply, &QNetworkReply::finished);
+    QVERIFY(notReadySpy.wait());
+    QCOMPARE(notReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notReadyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
+                 QStringLiteral("window-terminal"));
+    }
+    notReadyReply->deleteLater();
+
+    plasma_bridge::control::WindowActivationResult notActivatableResult;
+    notActivatableResult.status = Status::WindowNotActivatable;
+    notActivatableResult.windowId = QStringLiteral("window-terminal");
+    controller.setResult(notActivatableResult);
+
+    QNetworkRequest notActivatableRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/active")));
+    QNetworkReply *notActivatableReply = manager.post(notActivatableRequest, QByteArray());
+    QSignalSpy notActivatableSpy(notActivatableReply, &QNetworkReply::finished);
+    QVERIFY(notActivatableSpy.wait());
+    QCOMPARE(notActivatableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notActivatableReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("window_not_activatable"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
+                 QStringLiteral("window-terminal"));
+    }
+    notActivatableReply->deleteLater();
+
+    plasma_bridge::state::WindowStateStore notReadyWindowStore;
+    plasma_bridge::api::SnapshotHttpServer notReadyServer(&audioStore,
+                                                          &notReadyWindowStore,
+                                                          nullptr,
+                                                          nullptr,
+                                                          &controller,
+                                                          QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                          18080,
+                                                          18081);
+    QVERIFY(notReadyServer.listen(bindAddress(), 0));
+    QNetworkReply *storeNotReadyReply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(notReadyServer.serverPort(),
+                                                      QStringLiteral("/control/windows/window-terminal/active"))),
+        QByteArray());
+    QSignalSpy storeNotReadySpy(storeNotReadyReply, &QNetworkReply::finished);
+    QVERIFY(storeNotReadySpy.wait());
+    QCOMPARE(storeNotReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(storeNotReadyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    storeNotReadyReply->deleteLater();
+
+    plasma_bridge::api::SnapshotHttpServer missingControllerServer(&audioStore,
+                                                                   &windowStore,
+                                                                   nullptr,
+                                                                   nullptr,
+                                                                   nullptr,
+                                                                   QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                                   18080,
+                                                                   18081);
+    QVERIFY(missingControllerServer.listen(bindAddress(), 0));
+    QNetworkReply *missingControllerReply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(missingControllerServer.serverPort(),
+                                                      QStringLiteral("/control/windows/window-terminal/active"))),
+        QByteArray());
+    QSignalSpy missingControllerSpy(missingControllerReply, &QNetworkReply::finished);
+    QVERIFY(missingControllerSpy.wait());
+    QCOMPARE(missingControllerReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingControllerReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    missingControllerReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
 {
     plasma_bridge::state::AudioStateStore store;
@@ -967,6 +1142,19 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
         QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
     }
     muteGetReply->deleteLater();
+
+    QNetworkReply *windowActivationGetReply = manager.get(QNetworkRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/active"))));
+    QSignalSpy windowActivationGetSpy(windowActivationGetReply, &QNetworkReply::finished);
+    QVERIFY(windowActivationGetSpy.wait());
+    QCOMPARE(windowActivationGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
+    QCOMPARE(windowActivationGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(windowActivationGetReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
+    }
+    windowActivationGetReply->deleteLater();
 
     QNetworkReply *notFoundReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
                                                                                              QStringLiteral("/unknown"))));
@@ -1170,6 +1358,60 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     encodedSlashReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::rejectsInvalidWindowActivationControlRequests()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeWindowActivationController controller;
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *unexpectedBodyReply =
+        postJson(&manager,
+                 plasma_bridge::tests::httpUrl(server.serverPort(),
+                                               QStringLiteral("/control/windows/window-terminal/active")),
+                 QJsonObject{});
+    QSignalSpy unexpectedBodySpy(unexpectedBodyReply, &QNetworkReply::finished);
+    QVERIFY(unexpectedBodySpy.wait());
+    QCOMPARE(unexpectedBodyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(unexpectedBodyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
+    QCOMPARE(controller.callCount(), 0);
+    unexpectedBodyReply->deleteLater();
+
+    QNetworkReply *encodedSlashReply =
+        postBytes(&manager,
+                  plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                QStringLiteral("/control/windows/window%2Fpart/active")),
+                  QByteArray(),
+                  QByteArrayLiteral("application/json"));
+    QSignalSpy encodedSlashSpy(encodedSlashReply, &QNetworkReply::finished);
+    QVERIFY(encodedSlashSpy.wait());
+    QCOMPARE(encodedSlashReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(encodedSlashReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
+    QCOMPARE(controller.callCount(), 0);
+    encodedSlashReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::rejectsMalformedAndOversizedRequests()
 {
     plasma_bridge::state::AudioStateStore store;
@@ -1279,6 +1521,7 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/default")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/mute")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/mute")));
+    QVERIFY(openApiBody.contains(QStringLiteral("/control/windows/{windowId}/active")));
     QVERIFY(openApiBody.contains(QStringLiteral("payload:")));
     QVERIFY(openApiBody.contains(QStringLiteral("error:")));
     openApiReply->deleteLater();

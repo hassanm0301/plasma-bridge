@@ -16,13 +16,14 @@ The current implementation exposes local audio and window state:
 - set sink and source defaults over HTTP
 - set sink and source mute state over HTTP
 - set, increment, and decrement sink volume over HTTP
+- activate Plasma windows over HTTP
 - publish live sink, source, and window updates over WebSocket
 
 Optional snapshot probe tools are also available for local inspection:
 
 - `audio_probe`
 - `audio_control_probe`
-- `window_probe` for shared KWin-script-backed window listing, active-window lookup, and backend setup/status
+- `window_probe` for shared KWin-script-backed window listing, active-window lookup, activation, and backend setup/status
 
 Documentation:
 

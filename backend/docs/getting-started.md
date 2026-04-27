@@ -56,7 +56,7 @@ Current coverage includes:
 
 - unit tests for common audio-state serialization and formatting
 - unit tests for common window-state serialization and formatting
-- unit tests for volume and device-control result formatting
+- unit tests for volume, device-control, and window activation result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
 - unit tests for the `window_probe` runner helper
@@ -105,6 +105,7 @@ Optional window probe backend inspection:
 ./backend/build/tools/probes/window_probe/window_probe status
 ./backend/build/tools/probes/window_probe/window_probe --json list
 ./backend/build/tools/probes/window_probe/window_probe --json active
+./backend/build/tools/probes/window_probe/window_probe --json activate window-editor
 ```
 
 `plasma_bridge` auto-installs and enables the same KWin script helper backend on startup.
@@ -117,6 +118,7 @@ Check the HTTP endpoints:
 ```bash
 SINK_ID='alsa_output.usb-default.analog-stereo'
 SOURCE_ID='alsa_input.usb-default.analog-stereo'
+WINDOW_ID='window-editor'
 
 curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
@@ -141,6 +143,7 @@ curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/increme
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/decrement \
   -H 'Content-Type: application/json' \
   -d '{"value":0.15}'
+curl -X POST http://127.0.0.1:8080/control/windows/${WINDOW_ID}/active
 ```
 
 HTTP JSON responses now use a consistent envelope:
@@ -180,7 +183,7 @@ Server messages use the same explicit contract:
 ```
 
 You should receive one `fullState` message followed by `patch` messages as sink, source, or window state changes.
-Local HTTP default, mute, and volume-control writes will converge back through the same WebSocket state stream.
+Local HTTP default, mute, volume-control, and window activation writes will converge back through the same WebSocket state stream.
 The `fullState` payload includes `audio` and `windowState` once both configured stores are ready.
 The `audio` object includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
 The `windowState` object includes `activeWindowId`, `activeWindow`, and `windows`.
