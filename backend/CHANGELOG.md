@@ -1,4 +1,4 @@
-## [Unreleased]
+## [0.3.2] - 2026-04-27
 ### Added
 
 - HTTP endpoint to activate a Plasma window by id
