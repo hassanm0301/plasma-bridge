@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <limits>
 
 namespace plasma_bridge::api
 {
@@ -390,28 +391,81 @@ bool isJsonContentType(const QByteArray &contentType)
     return mediaType == QByteArrayLiteral("application/json");
 }
 
-bool isAllowedCorsOrigin(const QByteArray &origin)
+int defaultPortForScheme(const QString &scheme)
 {
-    const QUrl originUrl = QUrl::fromEncoded(origin.trimmed());
-    const QString path = originUrl.path();
-    if (!originUrl.isValid() || (!path.isEmpty() && path != QStringLiteral("/")) || originUrl.hasQuery()
-        || originUrl.hasFragment()) {
-        return false;
+    if (scheme == QStringLiteral("http")) {
+        return 80;
     }
-
-    const QString scheme = originUrl.scheme();
-    if (scheme != QStringLiteral("http") && scheme != QStringLiteral("https")) {
-        return false;
+    if (scheme == QStringLiteral("https")) {
+        return 443;
     }
-
-    const QString host = originUrl.host();
-    return host == QStringLiteral("127.0.0.1") || host == QStringLiteral("localhost") || host == QStringLiteral("::1");
+    return -1;
 }
 
-QList<QPair<QByteArray, QByteArray>> corsHeadersForRequest(const QHash<QByteArray, QByteArray> &headers)
+bool parseAllowedOriginUrl(const QUrl &originUrl,
+                           AllowedOrigin *outOrigin,
+                           QString *errorMessage)
+{
+    const QString path = originUrl.path();
+    const QString scheme = originUrl.scheme().trimmed().toLower();
+    const int defaultPort = defaultPortForScheme(scheme);
+    const QString host = originUrl.host(QUrl::FullyDecoded).trimmed().toLower();
+    const int port = originUrl.port(defaultPort);
+    const bool hasPath = !path.isEmpty() && path != QStringLiteral("/");
+    const bool hasCredentials = !originUrl.userName().isEmpty() || !originUrl.password().isEmpty();
+
+    if (!originUrl.isValid() || originUrl.isRelative() || defaultPort < 0 || host.isEmpty() || hasPath
+        || originUrl.hasQuery() || originUrl.hasFragment() || hasCredentials || port <= 0
+        || port > std::numeric_limits<quint16>::max()) {
+        if (errorMessage != nullptr) {
+            *errorMessage =
+                QStringLiteral("Origin must be an absolute http:// or https:// origin with no path, query, or fragment.");
+        }
+        return false;
+    }
+
+    if (outOrigin != nullptr) {
+        outOrigin->scheme = scheme;
+        outOrigin->host = host;
+        outOrigin->port = static_cast<quint16>(port);
+    }
+
+    return true;
+}
+
+bool matchesAllowedOrigin(const AllowedOrigin &candidate, const AllowedOrigin &allowedOrigin)
+{
+    return candidate.scheme == allowedOrigin.scheme && candidate.host == allowedOrigin.host
+        && candidate.port == allowedOrigin.port;
+}
+
+bool isImplicitLoopbackOrigin(const AllowedOrigin &origin)
+{
+    return origin.host == QStringLiteral("127.0.0.1") || origin.host == QStringLiteral("localhost")
+        || origin.host == QStringLiteral("::1");
+}
+
+bool isAllowedCorsOrigin(const QByteArray &origin, const QList<AllowedOrigin> &allowedOrigins)
+{
+    AllowedOrigin parsedOrigin;
+    if (!SnapshotHttpServer::parseAllowedOrigin(QString::fromUtf8(origin.trimmed()), &parsedOrigin)) {
+        return false;
+    }
+
+    if (isImplicitLoopbackOrigin(parsedOrigin)) {
+        return true;
+    }
+
+    return std::any_of(allowedOrigins.cbegin(), allowedOrigins.cend(), [&parsedOrigin](const AllowedOrigin &allowedOrigin) {
+        return matchesAllowedOrigin(parsedOrigin, allowedOrigin);
+    });
+}
+
+QList<QPair<QByteArray, QByteArray>> corsHeadersForRequest(const QHash<QByteArray, QByteArray> &headers,
+                                                           const QList<AllowedOrigin> &allowedOrigins)
 {
     const QByteArray origin = headers.value(QByteArrayLiteral("origin")).trimmed();
-    if (!isAllowedCorsOrigin(origin)) {
+    if (!isAllowedCorsOrigin(origin, allowedOrigins)) {
         return {};
     }
 
@@ -421,9 +475,10 @@ QList<QPair<QByteArray, QByteArray>> corsHeadersForRequest(const QHash<QByteArra
     };
 }
 
-QList<QPair<QByteArray, QByteArray>> corsPreflightHeadersForRequest(const QHash<QByteArray, QByteArray> &headers)
+QList<QPair<QByteArray, QByteArray>> corsPreflightHeadersForRequest(const QHash<QByteArray, QByteArray> &headers,
+                                                                    const QList<AllowedOrigin> &allowedOrigins)
 {
-    if (!isAllowedCorsOrigin(headers.value(QByteArrayLiteral("origin")))) {
+    if (!isAllowedCorsOrigin(headers.value(QByteArrayLiteral("origin")), allowedOrigins)) {
         return {};
     }
 
@@ -608,6 +663,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        const QString &documentationHost,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
+                                       const QList<AllowedOrigin> &allowedOrigins,
                                        QObject *parent)
     : SnapshotHttpServer(audioStateStore,
                          nullptr,
@@ -617,6 +673,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                          documentationHost,
                          documentationHttpPort,
                          documentationWsPort,
+                         allowedOrigins,
                          parent)
 {
 }
@@ -628,6 +685,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        const QString &documentationHost,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
+                                       const QList<AllowedOrigin> &allowedOrigins,
                                        QObject *parent)
     : SnapshotHttpServer(audioStateStore,
                          windowStateStore,
@@ -637,6 +695,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                          documentationHost,
                          documentationHttpPort,
                          documentationWsPort,
+                         allowedOrigins,
                          parent)
 {
 }
@@ -649,6 +708,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        const QString &documentationHost,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
+                                       const QList<AllowedOrigin> &allowedOrigins,
                                        QObject *parent)
     : QObject(parent)
     , m_audioStateStore(audioStateStore)
@@ -659,8 +719,14 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
     , m_documentationHost(documentationHost)
     , m_documentationHttpPort(documentationHttpPort)
     , m_documentationWsPort(documentationWsPort)
+    , m_allowedOrigins(allowedOrigins)
 {
     connect(&m_server, &QTcpServer::newConnection, this, &SnapshotHttpServer::handleNewConnection);
+}
+
+bool SnapshotHttpServer::parseAllowedOrigin(const QString &value, AllowedOrigin *outOrigin, QString *errorMessage)
+{
+    return parseAllowedOriginUrl(QUrl(value.trimmed(), QUrl::StrictMode), outOrigin, errorMessage);
 }
 
 bool SnapshotHttpServer::listen(const QHostAddress &address, quint16 port)
@@ -802,7 +868,7 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
-    m_corsHeaders.insert(socket, corsHeadersForRequest(headers));
+    m_corsHeaders.insert(socket, corsHeadersForRequest(headers, m_allowedOrigins));
 
     bool hasContentLength = false;
     qsizetype contentLength = 0;
@@ -826,7 +892,7 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
                           QByteArrayLiteral("No Content"),
                           QByteArrayLiteral("text/plain; charset=utf-8"),
                           {},
-                          corsPreflightHeadersForRequest(headers));
+                          corsPreflightHeadersForRequest(headers, m_allowedOrigins));
         return;
     }
 

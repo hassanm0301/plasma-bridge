@@ -31,6 +31,7 @@ void CliBinariesFeatureTest::plasmaBridgeHelpAndValidationErrors()
     const ProcessResult help = runProcess(plasmaBridgeBin, {QStringLiteral("--help")});
     QCOMPARE(help.exitCode, 0);
     QVERIFY(help.standardOutput.contains(QStringLiteral("--host")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("--allow-origin")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("--ws-port")));
 
     const ProcessResult invalidHost = runProcess(plasmaBridgeBin, {QStringLiteral("--host"), QStringLiteral("not-an-address")});
@@ -44,6 +45,11 @@ void CliBinariesFeatureTest::plasmaBridgeHelpAndValidationErrors()
     const ProcessResult invalidWsPort = runProcess(plasmaBridgeBin, {QStringLiteral("--ws-port"), QStringLiteral("abc")});
     QCOMPARE(invalidWsPort.exitCode, 1);
     QVERIFY(invalidWsPort.standardError.contains(QStringLiteral("Invalid WebSocket port")));
+
+    const ProcessResult invalidAllowedOrigin =
+        runProcess(plasmaBridgeBin, {QStringLiteral("--allow-origin"), QStringLiteral("http://example.test/dashboard")});
+    QCOMPARE(invalidAllowedOrigin.exitCode, 1);
+    QVERIFY(invalidAllowedOrigin.standardError.contains(QStringLiteral("Invalid allowed origin")));
 }
 
 void CliBinariesFeatureTest::audioProbeHelpAndHermeticFailurePaths()

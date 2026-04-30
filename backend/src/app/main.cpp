@@ -44,6 +44,34 @@ QString urlHost(const QString &host)
     return host.contains(QLatin1Char(':')) && !host.startsWith(QLatin1Char('[')) ? QStringLiteral("[%1]").arg(host) : host;
 }
 
+bool parseAllowedOrigins(const QStringList &values,
+                         QList<plasma_bridge::api::AllowedOrigin> *outOrigins,
+                         QString *errorValue,
+                         QString *errorMessage)
+{
+    if (outOrigins == nullptr) {
+        return false;
+    }
+
+    outOrigins->clear();
+    for (const QString &value : values) {
+        plasma_bridge::api::AllowedOrigin origin;
+        QString parseError;
+        if (!plasma_bridge::api::SnapshotHttpServer::parseAllowedOrigin(value, &origin, &parseError)) {
+            if (errorValue != nullptr) {
+                *errorValue = value;
+            }
+            if (errorMessage != nullptr) {
+                *errorMessage = parseError;
+            }
+            return false;
+        }
+        outOrigins->append(origin);
+    }
+
+    return true;
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -74,10 +102,14 @@ int main(int argc, char *argv[])
                                         .arg(QString::number(PLASMA_BRIDGE_DEFAULT_WS_PORT)),
                                     QStringLiteral("ws-port"),
                                     QString::number(PLASMA_BRIDGE_DEFAULT_WS_PORT));
+    QCommandLineOption allowOriginOption(QStringLiteral("allow-origin"),
+                                         QStringLiteral("Additional browser origin allowed by CORS. Repeat to allow multiple origins."),
+                                         QStringLiteral("origin"));
 
     parser.addOption(hostOption);
     parser.addOption(portOption);
     parser.addOption(wsPortOption);
+    parser.addOption(allowOriginOption);
     parser.process(app);
 
     QHostAddress bindAddress;
@@ -103,6 +135,15 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    QList<plasma_bridge::api::AllowedOrigin> allowedOrigins;
+    QString invalidOriginValue;
+    QString invalidOriginMessage;
+    if (!parseAllowedOrigins(parser.values(allowOriginOption), &allowedOrigins, &invalidOriginValue, &invalidOriginMessage)) {
+        QTextStream error(stderr);
+        error << "Invalid allowed origin: " << invalidOriginValue << ". " << invalidOriginMessage << Qt::endl;
+        return 1;
+    }
+
     PulseAudioQt::Context::setApplicationId(QStringLiteral(PLASMA_BRIDGE_APP_ID));
 
     plasma_bridge::audio::PulseAudioStateObserver observer;
@@ -122,7 +163,8 @@ int main(int argc, char *argv[])
                                                       &windowActivationController,
                                                       parser.value(hostOption),
                                                       port,
-                                                      wsPort);
+                                                      wsPort,
+                                                      allowedOrigins);
     if (!httpServer.listen(bindAddress, port)) {
         QTextStream error(stderr);
         error << "Failed to listen on " << parser.value(hostOption) << ':' << port << ": "

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`plasma_bridge` is a standalone service that runs in a KDE Plasma user session and exposes local desktop state to local clients.
+`plasma_bridge` is a standalone service that runs in a KDE Plasma user session and exposes local desktop state to localhost clients by default.
 
 ## Current Scope
 
@@ -41,7 +41,7 @@ The checked-in API specs remain the source of truth, while the interactive Swagg
 
 ## Platform Assumptions
 
-The current build targets KDE Plasma on Linux, reads audio state from the Plasma session's audio stack, and reads service window state through the KWin script helper backend. By default, the service binds only to localhost.
+The current build targets KDE Plasma on Linux, reads audio state from the Plasma session's audio stack, and reads service window state through the KWin script helper backend. By default, the service binds only to localhost, and HTTP CORS access is limited to loopback browser origins unless the operator explicitly adds `--allow-origin` entries.
 
 ## Defaults
 

@@ -1,6 +1,6 @@
 # Plasma Bridge Backend
 
-`plasma_bridge` is a Qt 6 service for KDE Plasma that exposes desktop state and local audio controls to local clients.
+`plasma_bridge` is a Qt 6 service for KDE Plasma that exposes desktop state and local audio controls to localhost clients by default, with optional LAN access when explicitly configured.
 
 The current implementation exposes local audio and window state:
 
@@ -37,5 +37,7 @@ Default local endpoints:
 - HTTP API: `http://127.0.0.1:8080`
 - WebSocket state stream: `ws://127.0.0.1:8081/ws`
 - Hosted docs: `http://127.0.0.1:8080/docs/`
+
+To allow another machine on the same network to reach the backend, start it with a non-loopback `--host`. For browser-based dashboards on other machines, also add one or more `--allow-origin` values that match the dashboard's web origin.
 
 Automated tests use Qt Test and CTest. See [Getting Started](docs/getting-started.md) for how to build and run the unit and feature suites from the monorepo root.

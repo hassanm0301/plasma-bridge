@@ -41,6 +41,7 @@ private slots:
     void rejectsMalformedAndOversizedRequests();
     void servesDocsAndRewritesSpecHosts();
     void addsCorsHeadersForAllowedWebClientOrigins();
+    void addsCorsHeadersForConfiguredLanOrigins();
 
 private:
     static QHostAddress bindAddress();
@@ -1582,6 +1583,59 @@ void SnapshotHttpServerFeatureTest::addsCorsHeadersForAllowedWebClientOrigins()
 
     QNetworkRequest disallowedRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/docs/openapi.yaml")));
     disallowedRequest.setRawHeader("Origin", QByteArrayLiteral("http://example.test"));
+    QNetworkReply *disallowedReply = manager.get(disallowedRequest);
+    QSignalSpy disallowedSpy(disallowedReply, &QNetworkReply::finished);
+    QVERIFY(disallowedSpy.wait());
+    QCOMPARE(disallowedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    QVERIFY(disallowedReply->rawHeader("Access-Control-Allow-Origin").isEmpty());
+    disallowedReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::addsCorsHeadersForConfiguredLanOrigins()
+{
+    plasma_bridge::state::AudioStateStore store;
+    store.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::api::AllowedOrigin allowedOrigin;
+    QString parseError;
+    QVERIFY(plasma_bridge::api::SnapshotHttpServer::parseAllowedOrigin(QStringLiteral("http://192.168.1.25:5173"),
+                                                                       &allowedOrigin,
+                                                                       &parseError));
+
+    plasma_bridge::api::SnapshotHttpServer server(&store,
+                                                  nullptr,
+                                                  nullptr,
+                                                  QStringLiteral("192.168.1.10"),
+                                                  19080,
+                                                  19081,
+                                                  {allowedOrigin});
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkRequest openApiRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/docs/openapi.yaml")));
+    openApiRequest.setRawHeader("Origin", QByteArrayLiteral("http://192.168.1.25:5173"));
+    QNetworkReply *openApiReply = manager.get(openApiRequest);
+    QSignalSpy openApiSpy(openApiReply, &QNetworkReply::finished);
+    QVERIFY(openApiSpy.wait());
+    QCOMPARE(openApiReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    QCOMPARE(openApiReply->rawHeader("Access-Control-Allow-Origin"), QByteArrayLiteral("http://192.168.1.25:5173"));
+    openApiReply->deleteLater();
+
+    QNetworkRequest preflightRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                   QStringLiteral("/snapshot/audio/sinks")));
+    preflightRequest.setRawHeader("Origin", QByteArrayLiteral("http://192.168.1.25:5173"));
+    preflightRequest.setRawHeader("Access-Control-Request-Method", QByteArrayLiteral("GET"));
+    QNetworkReply *preflightReply = manager.sendCustomRequest(preflightRequest, QByteArrayLiteral("OPTIONS"));
+    QSignalSpy preflightSpy(preflightReply, &QNetworkReply::finished);
+    QVERIFY(preflightSpy.wait());
+    QCOMPARE(preflightReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 204);
+    QCOMPARE(preflightReply->rawHeader("Access-Control-Allow-Origin"), QByteArrayLiteral("http://192.168.1.25:5173"));
+    QVERIFY(preflightReply->rawHeader("Access-Control-Allow-Methods").contains("GET"));
+    preflightReply->deleteLater();
+
+    QNetworkRequest disallowedRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/docs/openapi.yaml")));
+    disallowedRequest.setRawHeader("Origin", QByteArrayLiteral("http://192.168.1.30:5173"));
     QNetworkReply *disallowedReply = manager.get(disallowedRequest);
     QSignalSpy disallowedSpy(disallowedReply, &QNetworkReply::finished);
     QVERIFY(disallowedSpy.wait());

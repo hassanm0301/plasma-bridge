@@ -28,17 +28,26 @@ class WindowStateStore;
 namespace plasma_bridge::api
 {
 
+struct AllowedOrigin {
+    QString scheme;
+    QString host;
+    quint16 port = 0;
+};
+
 class SnapshotHttpServer final : public QObject
 {
     Q_OBJECT
 
 public:
+    static bool parseAllowedOrigin(const QString &value, AllowedOrigin *outOrigin, QString *errorMessage = nullptr);
+
     explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                 control::AudioVolumeController *audioVolumeController,
                                 control::AudioDeviceController *audioDeviceController,
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
                                 quint16 documentationWsPort,
+                                const QList<AllowedOrigin> &allowedOrigins = {},
                                 QObject *parent = nullptr);
     explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                 state::WindowStateStore *windowStateStore,
@@ -48,6 +57,7 @@ public:
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
                                 quint16 documentationWsPort,
+                                const QList<AllowedOrigin> &allowedOrigins = {},
                                 QObject *parent = nullptr);
     explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                 state::WindowStateStore *windowStateStore,
@@ -56,6 +66,7 @@ public:
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
                                 quint16 documentationWsPort,
+                                const QList<AllowedOrigin> &allowedOrigins = {},
                                 QObject *parent = nullptr);
 
     bool listen(const QHostAddress &address, quint16 port);
@@ -94,6 +105,7 @@ private:
     QString m_documentationHost;
     quint16 m_documentationHttpPort = 0;
     quint16 m_documentationWsPort = 0;
+    QList<AllowedOrigin> m_allowedOrigins;
     QHash<QTcpSocket *, QByteArray> m_pendingRequests;
     QHash<QTcpSocket *, QList<QPair<QByteArray, QByteArray>>> m_corsHeaders;
     QTcpServer m_server;

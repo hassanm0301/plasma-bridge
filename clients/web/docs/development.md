@@ -20,7 +20,7 @@ npm install
 npm run dev
 ```
 
-The dev server binds to `127.0.0.1` by default. The backend allows browser requests from loopback web origins such as `http://127.0.0.1:5173`, `http://127.0.0.1:5174`, and `http://localhost:5173`.
+The dev server binds to `0.0.0.0` by default so it can be opened from another machine on the same network. The backend still allows browser requests only from loopback web origins unless you start `plasma_bridge` with matching `--allow-origin` entries for the remote dashboard origin.
 
 ## Build
 

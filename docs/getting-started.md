@@ -23,6 +23,8 @@ Default backend endpoints:
 - WebSocket: `ws://127.0.0.1:8081/ws`
 - Hosted docs: `http://127.0.0.1:8080/docs/`
 
+The backend binds to localhost by default. To reach it from another machine on the same network, start it with a non-loopback `--host`. If the other machine will use the browser dashboard, also pass `--allow-origin http://<web-host>:5173` or a matching web origin.
+
 For full backend setup, verification, and test instructions, see [backend/docs/getting-started.md](../backend/docs/getting-started.md).
 
 ## Web Client
@@ -39,6 +41,8 @@ Open the Vite dev server URL. The dashboard auto-connects with the default backe
 
 - HTTP: `http://127.0.0.1:8080`
 - WebSocket: `ws://127.0.0.1:8081/ws`
+
+The Vite dev server binds on all interfaces, so you can open it from another machine on the same network. The dashboard still defaults to localhost backend endpoints, so remote users must update Settings to point at the backend machine.
 
 See [clients/web](../clients/web/) for web-specific docs.
 

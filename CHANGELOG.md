@@ -1,3 +1,21 @@
+## [Unreleased]
+### Added
+
+- `plasma_bridge` now accepts repeatable `--allow-origin` flags to grant CORS access to additional browser origins when the backend is exposed beyond localhost.
+
+### Fixed
+
+- Configured non-loopback browser origins now receive CORS headers for backend responses and HTTP preflight requests.
+
+### Changed
+
+- The web client's Vite dev and preview servers now bind on all interfaces to simplify LAN testing.
+- Backend and web docs now explain localhost-only defaults, LAN exposure, and remote browser setup requirements.
+
+### Removed
+
+- Nothing
+
 ## [0.4.0] - 2026-04-27
 ### Added
 

@@ -20,6 +20,8 @@ The backend binds to localhost by default:
 - HTTP on `127.0.0.1:8080`
 - WebSocket on `ws://127.0.0.1:8081/ws`
 
+Operators can expose the service on a LAN by starting `plasma_bridge` with a non-loopback `--host`. Browser-based clients on other machines also need an explicit `--allow-origin` entry because the backend only grants CORS access to loopback browser origins by default.
+
 ## Contract Boundary
 
 The checked-in specs under `specs/` are the contract between the backend and clients. Backend changes that alter HTTP or WebSocket behavior should update those specs in the same change.

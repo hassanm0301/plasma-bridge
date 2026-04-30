@@ -83,12 +83,21 @@ Supported flags:
 - `--host`: bind address, default `127.0.0.1`
 - `--port`: HTTP port, default `8080`
 - `--ws-port`: WebSocket port, default `8081`
+- `--allow-origin`: repeatable browser origin allowlist entry for CORS, default loopback-only
 
 Example:
 
 ```bash
 ./backend/build/src/app/plasma_bridge --host 127.0.0.1 --port 8080 --ws-port 8081
 ```
+
+LAN browser example:
+
+```bash
+./backend/build/src/app/plasma_bridge --host 0.0.0.0 --allow-origin http://192.168.x.y:5173
+```
+
+`--host` controls which network interfaces accept TCP connections. `--allow-origin` controls which browser origins receive CORS permission on HTTP responses. Non-browser clients such as `curl` only need reachability; browser dashboards need both.
 
 On startup, the service prints one HTTP listener, one WebSocket listener, and the hosted docs URLs.
 
@@ -165,6 +174,8 @@ Hosted docs and runtime-served specs:
 - `http://127.0.0.1:8080/docs/ws`
 - `http://127.0.0.1:8080/docs/openapi.yaml`
 - `http://127.0.0.1:8080/docs/asyncapi.yaml`
+
+When the service is exposed on the LAN, replace `127.0.0.1` with the backend machine's address. Remote browser dashboards still need their own origin listed with `--allow-origin`.
 
 For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws` and send:
 
