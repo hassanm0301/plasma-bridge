@@ -2,8 +2,10 @@
 
 #include "api/json_envelope.h"
 #include "common/audio_state.h"
+#include "common/media_state.h"
 #include "common/window_state.h"
 #include "state/audio_state_store.h"
+#include "state/media_state_store.h"
 #include "state/window_state_store.h"
 
 #include <QHostAddress>
@@ -11,6 +13,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QStringList>
 #include <QTimer>
 #include <QWebSocket>
 
@@ -35,11 +38,15 @@ QJsonValue stringOrNull(const QString &value)
 }
 
 QJsonObject buildFullStatePayload(const state::AudioStateStore *audioStateStore,
+                                  const state::MediaStateStore *mediaStateStore,
                                   const state::WindowStateStore *windowStateStore)
 {
     QJsonObject payload;
     if (audioStateStore != nullptr && audioStateStore->isReady()) {
         payload[QStringLiteral("audio")] = plasma_bridge::toJsonObject(audioStateStore->audioState());
+    }
+    if (mediaStateStore != nullptr && mediaStateStore->isReady()) {
+        payload[QStringLiteral("media")] = plasma_bridge::toJsonObject(mediaStateStore->mediaState());
     }
     if (windowStateStore != nullptr && windowStateStore->isReady()) {
         payload[QStringLiteral("windowState")] = plasma_bridge::toJsonObject(windowStateStore->windowState());
@@ -63,6 +70,28 @@ QJsonObject buildAudioPatchMessage(const QString &reason,
     payload[QStringLiteral("reason")] = stringOrNull(reason);
     payload[QStringLiteral("sinkId")] = stringOrNull(sinkId);
     payload[QStringLiteral("sourceId")] = stringOrNull(sourceId);
+    payload[QStringLiteral("playerId")] = QJsonValue(QJsonValue::Null);
+    payload[QStringLiteral("windowId")] = QJsonValue(QJsonValue::Null);
+    payload[QStringLiteral("changes")] = changes;
+    return buildWebSocketSuccessEnvelope(QStringLiteral("patch"), payload);
+}
+
+QJsonObject buildMediaPatchMessage(const QString &reason,
+                                   const QString &playerId,
+                                   const plasma_bridge::MediaState &state)
+{
+    QJsonObject change;
+    change[QStringLiteral("path")] = QStringLiteral("media");
+    change[QStringLiteral("value")] = plasma_bridge::toJsonObject(state);
+
+    QJsonArray changes;
+    changes.append(change);
+
+    QJsonObject payload;
+    payload[QStringLiteral("reason")] = stringOrNull(reason);
+    payload[QStringLiteral("sinkId")] = QJsonValue(QJsonValue::Null);
+    payload[QStringLiteral("sourceId")] = QJsonValue(QJsonValue::Null);
+    payload[QStringLiteral("playerId")] = stringOrNull(playerId);
     payload[QStringLiteral("windowId")] = QJsonValue(QJsonValue::Null);
     payload[QStringLiteral("changes")] = changes;
     return buildWebSocketSuccessEnvelope(QStringLiteral("patch"), payload);
@@ -83,6 +112,7 @@ QJsonObject buildWindowPatchMessage(const QString &reason,
     payload[QStringLiteral("reason")] = stringOrNull(reason);
     payload[QStringLiteral("sinkId")] = QJsonValue(QJsonValue::Null);
     payload[QStringLiteral("sourceId")] = QJsonValue(QJsonValue::Null);
+    payload[QStringLiteral("playerId")] = QJsonValue(QJsonValue::Null);
     payload[QStringLiteral("windowId")] = stringOrNull(windowId);
     payload[QStringLiteral("changes")] = changes;
     return buildWebSocketSuccessEnvelope(QStringLiteral("patch"), payload);
@@ -98,8 +128,17 @@ QJsonObject buildErrorMessage(const QString &code, const QString &message)
 StateWebSocketServer::StateWebSocketServer(state::AudioStateStore *audioStateStore,
                                            state::WindowStateStore *windowStateStore,
                                            QObject *parent)
+    : StateWebSocketServer(audioStateStore, nullptr, windowStateStore, parent)
+{
+}
+
+StateWebSocketServer::StateWebSocketServer(state::AudioStateStore *audioStateStore,
+                                           state::MediaStateStore *mediaStateStore,
+                                           state::WindowStateStore *windowStateStore,
+                                           QObject *parent)
     : QObject(parent)
     , m_audioStateStore(audioStateStore)
+    , m_mediaStateStore(mediaStateStore)
     , m_windowStateStore(windowStateStore)
     , m_server(QStringLiteral("plasma_bridge_state"), QWebSocketServer::NonSecureMode)
 {
@@ -110,6 +149,13 @@ StateWebSocketServer::StateWebSocketServer(state::AudioStateStore *audioStateSto
                 &state::AudioStateStore::audioStateChanged,
                 this,
                 &StateWebSocketServer::handleAudioStateChanged);
+    }
+
+    if (m_mediaStateStore != nullptr) {
+        connect(m_mediaStateStore,
+                &state::MediaStateStore::mediaStateChanged,
+                this,
+                &StateWebSocketServer::handleMediaStateChanged);
     }
 
     if (m_windowStateStore != nullptr) {
@@ -264,7 +310,33 @@ void StateWebSocketServer::handleAudioStateChanged(const QString &reason, const 
             continue;
         }
 
-        sendPatch(socket, reason, sinkId, sourceId);
+        sendAudioPatch(socket, reason, sinkId, sourceId);
+    }
+}
+
+void StateWebSocketServer::handleMediaStateChanged(const QString &reason, const QString &playerId)
+{
+    if (m_mediaStateStore == nullptr || !m_mediaStateStore->isReady()) {
+        return;
+    }
+
+    for (auto it = m_clients.begin(); it != m_clients.end(); ++it) {
+        QWebSocket *socket = it.key();
+        ClientSession &session = it.value();
+
+        if (!session.helloReceived) {
+            continue;
+        }
+
+        if (!session.fullStateSent) {
+            if (!isConfiguredStateReady()) {
+                continue;
+            }
+            sendFullState(socket);
+            continue;
+        }
+
+        sendMediaPatch(socket, reason, playerId);
     }
 }
 
@@ -297,29 +369,45 @@ void StateWebSocketServer::handleWindowStateChanged(const QString &reason, const
 bool StateWebSocketServer::isConfiguredStateReady() const
 {
     const bool hasAudioState = m_audioStateStore != nullptr;
+    const bool hasMediaState = m_mediaStateStore != nullptr;
     const bool hasWindowState = m_windowStateStore != nullptr;
-    if (!hasAudioState && !hasWindowState) {
+    if (!hasAudioState && !hasMediaState && !hasWindowState) {
         return false;
     }
 
-    return (!hasAudioState || m_audioStateStore->isReady()) && (!hasWindowState || m_windowStateStore->isReady());
+    return (!hasAudioState || m_audioStateStore->isReady()) && (!hasMediaState || m_mediaStateStore->isReady())
+        && (!hasWindowState || m_windowStateStore->isReady());
 }
 
 QString StateWebSocketServer::notReadyMessage() const
 {
     const bool needsAudio = m_audioStateStore != nullptr && !m_audioStateStore->isReady();
+    const bool needsMedia = m_mediaStateStore != nullptr && !m_mediaStateStore->isReady();
     const bool needsWindow = m_windowStateStore != nullptr && !m_windowStateStore->isReady();
 
-    if (needsAudio && needsWindow) {
-        return QStringLiteral("Initial audio and window state are not ready yet.");
-    }
+    QStringList missingStates;
     if (needsAudio) {
-        return QStringLiteral("Initial audio state is not ready yet.");
+        missingStates.append(QStringLiteral("audio"));
+    }
+    if (needsMedia) {
+        missingStates.append(QStringLiteral("media"));
     }
     if (needsWindow) {
-        return QStringLiteral("Initial window state is not ready yet.");
+        missingStates.append(QStringLiteral("window"));
     }
-    return QStringLiteral("Initial state is not ready yet.");
+
+    if (missingStates.isEmpty()) {
+        return QStringLiteral("Initial state is not ready yet.");
+    }
+    if (missingStates.size() == 1) {
+        return QStringLiteral("Initial %1 state is not ready yet.").arg(missingStates.first());
+    }
+    if (missingStates.size() == 2) {
+        return QStringLiteral("Initial %1 and %2 state are not ready yet.").arg(missingStates.at(0), missingStates.at(1));
+    }
+
+    return QStringLiteral("Initial %1, %2, and %3 state are not ready yet.")
+        .arg(missingStates.at(0), missingStates.at(1), missingStates.at(2));
 }
 
 void StateWebSocketServer::sendFullState(QWebSocket *socket)
@@ -335,21 +423,31 @@ void StateWebSocketServer::sendFullState(QWebSocket *socket)
     ClientSession &session = m_clients[socket];
     socket->sendTextMessage(QJsonDocument(buildWebSocketSuccessEnvelope(
                               QStringLiteral("fullState"),
-                              buildFullStatePayload(m_audioStateStore, m_windowStateStore)))
+                              buildFullStatePayload(m_audioStateStore, m_mediaStateStore, m_windowStateStore)))
                                 .toJson(QJsonDocument::Compact));
     session.fullStateSent = true;
 }
 
-void StateWebSocketServer::sendPatch(QWebSocket *socket,
-                                     const QString &reason,
-                                     const QString &sinkId,
-                                     const QString &sourceId)
+void StateWebSocketServer::sendAudioPatch(QWebSocket *socket,
+                                          const QString &reason,
+                                          const QString &sinkId,
+                                          const QString &sourceId)
 {
     if (socket == nullptr || !m_clients.contains(socket) || m_audioStateStore == nullptr || !m_audioStateStore->isReady()) {
         return;
     }
 
     socket->sendTextMessage(QJsonDocument(buildAudioPatchMessage(reason, sinkId, sourceId, m_audioStateStore->audioState()))
+                                .toJson(QJsonDocument::Compact));
+}
+
+void StateWebSocketServer::sendMediaPatch(QWebSocket *socket, const QString &reason, const QString &playerId)
+{
+    if (socket == nullptr || !m_clients.contains(socket) || m_mediaStateStore == nullptr || !m_mediaStateStore->isReady()) {
+        return;
+    }
+
+    socket->sendTextMessage(QJsonDocument(buildMediaPatchMessage(reason, playerId, m_mediaStateStore->mediaState()))
                                 .toJson(QJsonDocument::Compact));
 }
 

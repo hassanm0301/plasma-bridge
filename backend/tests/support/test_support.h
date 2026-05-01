@@ -1,9 +1,11 @@
 #pragma once
 
 #include "common/audio_state.h"
+#include "common/media_state.h"
 #include "common/window_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/media_controller.h"
 #include "tools/probes/audio_control_probe/audio_control_probe_runner.h"
 #include "tools/probes/audio_probe/audio_probe_runner.h"
 #include "tools/probes/window_probe/window_probe_runner.h"
@@ -17,6 +19,10 @@ namespace plasma_bridge::tests
 
 AudioState sampleAudioState();
 AudioState alternateAudioState();
+MediaPlayerState sampleMediaPlayerState();
+MediaPlayerState alternateMediaPlayerState();
+MediaState sampleMediaState();
+MediaState sampleMediaStateWithoutPlayer();
 WindowSnapshot sampleWindowSnapshot();
 WindowSnapshot sampleWindowSnapshotWithoutActiveWindow();
 void ensureDocsResourcesInitialized();
@@ -71,6 +77,31 @@ private:
     WindowSnapshot m_snapshot;
     bool m_ready = false;
     int m_startCount = 0;
+};
+
+class FakeMediaSource final : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit FakeMediaSource(QObject *parent = nullptr);
+
+    void setState(const MediaState &state, bool ready);
+    const MediaState &currentState() const;
+    bool hasInitialState() const;
+
+    void emitInitialStateReady(const MediaState &state);
+    void emitMediaStateChanged(const QString &reason, const QString &playerId, const MediaState &state);
+    void emitConnectionFailure(const QString &message);
+
+signals:
+    void initialStateReady();
+    void mediaStateChanged(const QString &reason, const QString &playerId);
+    void connectionFailed(const QString &message);
+
+private:
+    MediaState m_state;
+    bool m_ready = false;
 };
 
 class FakeWindowProbeBackendController final : public tools::window_probe::WindowProbeBackendController
@@ -199,6 +230,40 @@ public:
 private:
     control::WindowActivationResult m_result;
     QString m_lastWindowId;
+    int m_callCount = 0;
+};
+
+class FakeMediaController final : public control::MediaController
+{
+public:
+    using Operation = control::MediaControlAction;
+
+    void setResult(Operation operation, const control::MediaControlResult &result);
+
+    control::MediaControlResult play() override;
+    control::MediaControlResult pause() override;
+    control::MediaControlResult playPause() override;
+    control::MediaControlResult next() override;
+    control::MediaControlResult previous() override;
+    control::MediaControlResult seek(qint64 positionMs) override;
+
+    Operation lastOperation() const;
+    QString lastPlayerId() const;
+    std::optional<qint64> lastPositionMs() const;
+    int callCount() const;
+
+private:
+    control::MediaControlResult invoke(Operation operation, std::optional<qint64> positionMs = std::nullopt);
+
+    control::MediaControlResult m_playResult;
+    control::MediaControlResult m_pauseResult;
+    control::MediaControlResult m_playPauseResult;
+    control::MediaControlResult m_nextResult;
+    control::MediaControlResult m_previousResult;
+    control::MediaControlResult m_seekResult;
+    Operation m_lastOperation = Operation::PlayPause;
+    QString m_lastPlayerId;
+    std::optional<qint64> m_lastPositionMs;
     int m_callCount = 0;
 };
 

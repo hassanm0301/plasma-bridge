@@ -2,10 +2,13 @@
 #include "adapters/audio/pulse_audio_device_controller.h"
 #include "adapters/audio/pulse_audio_state_observer.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
+#include "adapters/media/mpris_media_controller.h"
+#include "adapters/media/mpris_media_observer.h"
 #include "adapters/window/kwin_script_window_backend.h"
 #include "api/snapshot_http_server.h"
 #include "api/state_websocket_server.h"
 #include "state/audio_state_store.h"
+#include "state/media_state_store.h"
 #include "state/window_state_store.h"
 
 #include <PulseAudioQt/Context>
@@ -83,7 +86,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationVersion(QStringLiteral(PLASMA_BRIDGE_VERSION));
 
     QCommandLineParser parser;
-    parser.setApplicationDescription(QStringLiteral("Serve audio and window state over HTTP and WebSocket."));
+    parser.setApplicationDescription(QStringLiteral("Serve audio, media, and window state over HTTP and WebSocket."));
     parser.addHelpOption();
     parser.addVersionOption();
 
@@ -151,15 +154,21 @@ int main(int argc, char *argv[])
     plasma_bridge::audio::PulseAudioDeviceController deviceController;
     plasma_bridge::state::AudioStateStore audioStateStore;
     audioStateStore.attachObserver(&observer);
+    plasma_bridge::media::MprisMediaObserver mediaObserver;
+    plasma_bridge::state::MediaStateStore mediaStateStore;
+    mediaStateStore.attachObserver(&mediaObserver);
+    plasma_bridge::media::MprisMediaController mediaController(&mediaStateStore);
     plasma_bridge::window::KWinScriptWindowObserver windowObserver;
     plasma_bridge::state::WindowStateStore windowStateStore;
     windowStateStore.attachObserver(&windowObserver);
     plasma_bridge::window::KWinScriptWindowActivationController windowActivationController;
 
     plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore,
+                                                      &mediaStateStore,
                                                       &windowStateStore,
                                                       &volumeController,
                                                       &deviceController,
+                                                      &mediaController,
                                                       &windowActivationController,
                                                       parser.value(hostOption),
                                                       port,
@@ -172,7 +181,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    plasma_bridge::api::StateWebSocketServer webSocketServer(&audioStateStore, &windowStateStore);
+    plasma_bridge::api::StateWebSocketServer webSocketServer(&audioStateStore, &mediaStateStore, &windowStateStore);
     if (!webSocketServer.listen(bindAddress, wsPort)) {
         QTextStream error(stderr);
         error << "Failed to listen on " << parser.value(hostOption) << ':' << wsPort << " for WebSocket: "
@@ -184,12 +193,17 @@ int main(int argc, char *argv[])
         QTextStream error(stderr);
         error << message << Qt::endl;
     });
+    QObject::connect(&mediaObserver, &plasma_bridge::media::MprisMediaObserver::connectionFailed, &app, [](const QString &message) {
+        QTextStream error(stderr);
+        error << message << Qt::endl;
+    });
     QObject::connect(&windowObserver, &plasma_bridge::window::KWinScriptWindowObserver::connectionFailed, &app, [](const QString &message) {
         QTextStream error(stderr);
         error << message << Qt::endl;
     });
 
     observer.start();
+    mediaObserver.start();
     windowObserver.start();
 
     QTextStream output(stdout);

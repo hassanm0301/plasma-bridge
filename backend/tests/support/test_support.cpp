@@ -83,6 +83,68 @@ AudioState alternateAudioState()
     return state;
 }
 
+MediaPlayerState sampleMediaPlayerState()
+{
+    MediaPlayerState player;
+    player.playerId = QStringLiteral("org.mpris.MediaPlayer2.spotify");
+    player.identity = QStringLiteral("Spotify");
+    player.desktopEntry = QStringLiteral("spotify");
+    player.playbackStatus = MediaPlaybackStatus::Playing;
+    player.title = QStringLiteral("Song A");
+    player.artists = {QStringLiteral("Artist One"), QStringLiteral("Artist Two")};
+    player.album = QStringLiteral("Album A");
+    player.trackLengthMs = 182000;
+    player.positionMs = 64000;
+    player.canPlay = true;
+    player.canPause = true;
+    player.canGoNext = true;
+    player.canGoPrevious = true;
+    player.canControl = true;
+    player.canSeek = true;
+    player.appIconUrl = QStringLiteral("/icons/apps/spotify");
+    player.artworkUrl = QStringLiteral("https://cdn.example.test/artwork/song-a.jpg");
+    player.trackId = QStringLiteral("/org/mpris/MediaPlayer2/TrackList/0");
+    player.updateSequence = 5;
+    return player;
+}
+
+MediaPlayerState alternateMediaPlayerState()
+{
+    MediaPlayerState player = sampleMediaPlayerState();
+    player.playerId = QStringLiteral("org.mpris.MediaPlayer2.firefox.instance1234");
+    player.identity = QStringLiteral("Firefox");
+    player.desktopEntry = QStringLiteral("firefox");
+    player.playbackStatus = MediaPlaybackStatus::Paused;
+    player.title = QStringLiteral("Video B");
+    player.artists = {QStringLiteral("Channel Example")};
+    player.album = QStringLiteral("YouTube");
+    player.trackLengthMs = 361000;
+    player.positionMs = 91000;
+    player.canPlay = true;
+    player.canPause = true;
+    player.canGoNext = false;
+    player.canGoPrevious = false;
+    player.canControl = true;
+    player.canSeek = true;
+    player.appIconUrl = QStringLiteral("/icons/apps/firefox");
+    player.artworkUrl = QStringLiteral("https://cdn.example.test/artwork/video-b.jpg");
+    player.trackId = QStringLiteral("/org/mpris/MediaPlayer2/TrackList/1");
+    player.updateSequence = 9;
+    return player;
+}
+
+MediaState sampleMediaState()
+{
+    MediaState state;
+    state.player = sampleMediaPlayerState();
+    return state;
+}
+
+MediaState sampleMediaStateWithoutPlayer()
+{
+    return {};
+}
+
 WindowSnapshot sampleWindowSnapshot()
 {
     WindowSnapshot snapshot;
@@ -259,6 +321,45 @@ void FakeWindowProbeSource::emitConnectionFailure(const QString &message)
 int FakeWindowProbeSource::startCount() const
 {
     return m_startCount;
+}
+
+FakeMediaSource::FakeMediaSource(QObject *parent)
+    : QObject(parent)
+{
+}
+
+void FakeMediaSource::setState(const MediaState &state, const bool ready)
+{
+    m_state = state;
+    m_ready = ready;
+}
+
+const MediaState &FakeMediaSource::currentState() const
+{
+    return m_state;
+}
+
+bool FakeMediaSource::hasInitialState() const
+{
+    return m_ready;
+}
+
+void FakeMediaSource::emitInitialStateReady(const MediaState &state)
+{
+    setState(state, true);
+    emit initialStateReady();
+}
+
+void FakeMediaSource::emitMediaStateChanged(const QString &reason, const QString &playerId, const MediaState &state)
+{
+    m_state = state;
+    m_ready = true;
+    emit mediaStateChanged(reason, playerId);
+}
+
+void FakeMediaSource::emitConnectionFailure(const QString &message)
+{
+    emit connectionFailed(message);
 }
 
 FakeWindowProbeBackendController::FakeWindowProbeBackendController(QObject *parent)
@@ -569,6 +670,119 @@ QString FakeWindowActivationController::lastWindowId() const
 int FakeWindowActivationController::callCount() const
 {
     return m_callCount;
+}
+
+void FakeMediaController::setResult(const Operation operation, const control::MediaControlResult &result)
+{
+    switch (operation) {
+    case Operation::Play:
+        m_playResult = result;
+        break;
+    case Operation::Pause:
+        m_pauseResult = result;
+        break;
+    case Operation::PlayPause:
+        m_playPauseResult = result;
+        break;
+    case Operation::Next:
+        m_nextResult = result;
+        break;
+    case Operation::Previous:
+        m_previousResult = result;
+        break;
+    case Operation::Seek:
+        m_seekResult = result;
+        break;
+    }
+}
+
+control::MediaControlResult FakeMediaController::play()
+{
+    return invoke(Operation::Play);
+}
+
+control::MediaControlResult FakeMediaController::pause()
+{
+    return invoke(Operation::Pause);
+}
+
+control::MediaControlResult FakeMediaController::playPause()
+{
+    return invoke(Operation::PlayPause);
+}
+
+control::MediaControlResult FakeMediaController::next()
+{
+    return invoke(Operation::Next);
+}
+
+control::MediaControlResult FakeMediaController::previous()
+{
+    return invoke(Operation::Previous);
+}
+
+control::MediaControlResult FakeMediaController::seek(const qint64 positionMs)
+{
+    return invoke(Operation::Seek, positionMs);
+}
+
+FakeMediaController::Operation FakeMediaController::lastOperation() const
+{
+    return m_lastOperation;
+}
+
+QString FakeMediaController::lastPlayerId() const
+{
+    return m_lastPlayerId;
+}
+
+std::optional<qint64> FakeMediaController::lastPositionMs() const
+{
+    return m_lastPositionMs;
+}
+
+int FakeMediaController::callCount() const
+{
+    return m_callCount;
+}
+
+control::MediaControlResult FakeMediaController::invoke(const Operation operation, const std::optional<qint64> positionMs)
+{
+    m_lastOperation = operation;
+    m_lastPositionMs = positionMs;
+    ++m_callCount;
+
+    control::MediaControlResult result;
+    switch (operation) {
+    case Operation::Play:
+        result = m_playResult;
+        break;
+    case Operation::Pause:
+        result = m_pauseResult;
+        break;
+    case Operation::PlayPause:
+        result = m_playPauseResult;
+        break;
+    case Operation::Next:
+        result = m_nextResult;
+        break;
+    case Operation::Previous:
+        result = m_previousResult;
+        break;
+    case Operation::Seek:
+        result = m_seekResult;
+        break;
+    }
+
+    if (result.playerId.isEmpty()) {
+        result.playerId = QStringLiteral("org.mpris.MediaPlayer2.synthetic");
+    }
+    m_lastPlayerId = result.playerId;
+    result.action = operation;
+    if (!result.positionMs.has_value()) {
+        result.positionMs = positionMs;
+    }
+    return result;
 }
 
 } // namespace plasma_bridge::tests

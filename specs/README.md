@@ -3,12 +3,12 @@
 `plasma_bridge` publishes its API documentation as checked-in spec files plus hosted local docs pages.
 The checked-in OpenAPI and AsyncAPI files are the source of truth for the backend and future clients. The interactive viewers are served locally by the app using browser assets downloaded into the backend build tree during `cmake --build`.
 Window snapshot and WebSocket state are sourced from the shared KWin script helper backend.
-The WebSocket API uses one state endpoint, `ws://127.0.0.1:8081/ws`, for both audio and window updates.
+The WebSocket API uses one state endpoint, `ws://127.0.0.1:8081/ws`, for audio, media, and window updates.
 
 Repo files:
 
-- [OpenAPI](openapi.yaml): Swagger-compatible HTTP sink/source/window snapshot endpoints plus sink/source default, mute, sink volume-control, and window activation endpoints
-- [AsyncAPI](asyncapi.yaml): WebSocket protocol for the unified live sink, source, and window state stream
+- [OpenAPI](openapi.yaml): Swagger-compatible HTTP audio/media/window snapshot endpoints plus sink/source default, mute, sink volume-control, media transport/seek, icon-serving, and window activation endpoints
+- [AsyncAPI](asyncapi.yaml): WebSocket protocol for the unified live sink, source, media, and window state stream
 
 Hosted local docs from a running service:
 

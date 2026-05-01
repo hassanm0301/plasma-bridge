@@ -16,12 +16,14 @@ namespace plasma_bridge::control
 {
 class AudioDeviceController;
 class AudioVolumeController;
+class MediaController;
 class WindowActivationController;
 }
 
 namespace plasma_bridge::state
 {
 class AudioStateStore;
+class MediaStateStore;
 class WindowStateStore;
 }
 
@@ -50,9 +52,31 @@ public:
                                 const QList<AllowedOrigin> &allowedOrigins = {},
                                 QObject *parent = nullptr);
     explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                state::MediaStateStore *mediaStateStore,
+                                control::AudioVolumeController *audioVolumeController,
+                                control::AudioDeviceController *audioDeviceController,
+                                control::MediaController *mediaController,
+                                const QString &documentationHost,
+                                quint16 documentationHttpPort,
+                                quint16 documentationWsPort,
+                                const QList<AllowedOrigin> &allowedOrigins = {},
+                                QObject *parent = nullptr);
+    explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                 state::WindowStateStore *windowStateStore,
                                 control::AudioVolumeController *audioVolumeController,
                                 control::AudioDeviceController *audioDeviceController,
+                                control::WindowActivationController *windowActivationController,
+                                const QString &documentationHost,
+                                quint16 documentationHttpPort,
+                                quint16 documentationWsPort,
+                                const QList<AllowedOrigin> &allowedOrigins = {},
+                                QObject *parent = nullptr);
+    explicit SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                state::MediaStateStore *mediaStateStore,
+                                state::WindowStateStore *windowStateStore,
+                                control::AudioVolumeController *audioVolumeController,
+                                control::AudioDeviceController *audioDeviceController,
+                                control::MediaController *mediaController,
                                 control::WindowActivationController *windowActivationController,
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
@@ -98,9 +122,11 @@ private:
                                 QJsonObject details = {});
 
     state::AudioStateStore *m_audioStateStore = nullptr;
+    state::MediaStateStore *m_mediaStateStore = nullptr;
     state::WindowStateStore *m_windowStateStore = nullptr;
     control::AudioVolumeController *m_audioVolumeController = nullptr;
     control::AudioDeviceController *m_audioDeviceController = nullptr;
+    control::MediaController *m_mediaController = nullptr;
     control::WindowActivationController *m_windowActivationController = nullptr;
     QString m_documentationHost;
     quint16 m_documentationHttpPort = 0;

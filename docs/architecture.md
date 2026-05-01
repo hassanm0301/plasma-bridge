@@ -13,7 +13,7 @@ Plasma Remote Toolbar is organized as a monorepo with one implemented backend, o
 
 ## Current Runtime
 
-The implemented runtime is `plasma_bridge`, a standalone service that runs inside a KDE Plasma user session. It reads local audio and window state, exposes HTTP snapshot and control endpoints including window activation, and publishes live updates over a WebSocket state stream.
+The implemented runtime is `plasma_bridge`, a standalone service that runs inside a KDE Plasma user session. It reads local audio, media-session, and window state, exposes HTTP snapshot and control endpoints including media transport and seek control plus window activation, and publishes live updates over a WebSocket state stream.
 
 The backend binds to localhost by default:
 
@@ -28,7 +28,7 @@ The checked-in specs under `specs/` are the contract between the backend and cli
 
 ## Web Client
 
-The web client is a Vite, React, and TypeScript app. It auto-connects to the backend WebSocket state stream, renders live window and audio state, and uses HTTP control endpoints for sink volume plus sink/source mute writes. Endpoint and theme settings live in a Settings popup. The web client uses the repository-wide version and changelog instead of client-specific release metadata.
+The web client is a Vite, React, and TypeScript app. It auto-connects to the backend WebSocket state stream, renders live window, media, and audio state, and uses HTTP control endpoints for window activation, media transport and seek, and sink volume plus sink/source mute writes. Endpoint and theme settings live in a Settings popup. The web client uses the repository-wide version and changelog instead of client-specific release metadata.
 
 ## Documentation Boundary
 

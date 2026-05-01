@@ -1,5 +1,7 @@
 #include "state/audio_state_store.h"
+#include "state/media_state_store.h"
 #include "state/window_state_store.h"
+#include "adapters/media/media_observer.h"
 #include "adapters/window/window_observer.h"
 #include "tests/support/test_support.h"
 
@@ -18,6 +20,9 @@ private slots:
     void defaultSourceFallsBackToIsDefault();
     void defaultSinkRequiresReadyState();
     void defaultSourceRequiresReadyState();
+    void mediaStateStoreTransitionsReadinessAndSignals();
+    void mediaStateStoreAttachesGenericObserver();
+    void currentPlayerRequiresReadyMediaState();
     void updateWindowStateTransitionsReadinessAndNormalizesActiveWindow();
     void windowStateStoreAttachesGenericObserver();
     void activeWindowRequiresReadyWindowState();
@@ -71,6 +76,47 @@ public:
 
     int m_startCount = 0;
     plasma_bridge::WindowSnapshot m_snapshot;
+    bool m_ready = false;
+};
+
+class FakeMediaObserver final : public plasma_bridge::media::MediaObserver
+{
+    Q_OBJECT
+
+public:
+    using MediaObserver::MediaObserver;
+
+    void start() override
+    {
+    }
+
+    const plasma_bridge::MediaState &currentState() const override
+    {
+        return m_state;
+    }
+
+    bool hasInitialState() const override
+    {
+        return m_ready;
+    }
+
+    void emitInitialMediaState(const plasma_bridge::MediaState &state)
+    {
+        m_state = state;
+        m_ready = true;
+        emit initialStateReady();
+    }
+
+    void emitMediaChange(const plasma_bridge::MediaState &state,
+                         const QString &reason,
+                         const QString &playerId)
+    {
+        m_state = state;
+        m_ready = true;
+        emit mediaStateChanged(reason, playerId);
+    }
+
+    plasma_bridge::MediaState m_state;
     bool m_ready = false;
 };
 
@@ -173,6 +219,67 @@ void AudioStateStoreTest::defaultSourceRequiresReadyState()
     plasma_bridge::state::AudioStateStore store;
     store.updateAudioState(plasma_bridge::tests::sampleAudioState(), false, QStringLiteral("initial"));
     QVERIFY(!store.defaultSource().has_value());
+}
+
+void AudioStateStoreTest::mediaStateStoreTransitionsReadinessAndSignals()
+{
+    plasma_bridge::state::MediaStateStore store;
+    QSignalSpy readySpy(&store, &plasma_bridge::state::MediaStateStore::readyChanged);
+    QSignalSpy stateSpy(&store, &plasma_bridge::state::MediaStateStore::mediaStateChanged);
+
+    const plasma_bridge::MediaState initial = plasma_bridge::tests::sampleMediaStateWithoutPlayer();
+    store.updateMediaState(initial, false, QStringLiteral("initial"));
+
+    QCOMPARE(store.isReady(), false);
+    QCOMPARE(readySpy.count(), 0);
+    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(stateSpy.takeFirst().at(0).toString(), QStringLiteral("initial"));
+
+    const plasma_bridge::MediaState updated = plasma_bridge::tests::sampleMediaState();
+    store.updateMediaState(updated, true, QStringLiteral("player-updated"), updated.player->playerId);
+
+    QCOMPARE(store.isReady(), true);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(readySpy.takeFirst().at(0).toBool(), true);
+    QCOMPARE(stateSpy.count(), 1);
+    const QList<QVariant> args = stateSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("player-updated"));
+    QCOMPARE(args.at(1).toString(), updated.player->playerId);
+    QVERIFY(store.currentPlayer().has_value());
+    QCOMPARE(store.currentPlayer()->playerId, updated.player->playerId);
+}
+
+void AudioStateStoreTest::mediaStateStoreAttachesGenericObserver()
+{
+    plasma_bridge::state::MediaStateStore store;
+    FakeMediaObserver observer;
+    QSignalSpy readySpy(&store, &plasma_bridge::state::MediaStateStore::readyChanged);
+    QSignalSpy stateSpy(&store, &plasma_bridge::state::MediaStateStore::mediaStateChanged);
+
+    store.attachObserver(&observer);
+    observer.emitInitialMediaState(plasma_bridge::tests::sampleMediaState());
+
+    QCOMPARE(store.isReady(), true);
+    QCOMPARE(readySpy.count(), 1);
+    QCOMPARE(stateSpy.count(), 1);
+    QCOMPARE(stateSpy.takeFirst().at(0).toString(), QStringLiteral("initial"));
+
+    observer.emitMediaChange(plasma_bridge::tests::sampleMediaStateWithoutPlayer(),
+                             QStringLiteral("player-removed"),
+                             QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+
+    QCOMPARE(stateSpy.count(), 1);
+    const QList<QVariant> args = stateSpy.takeFirst();
+    QCOMPARE(args.at(0).toString(), QStringLiteral("player-removed"));
+    QCOMPARE(args.at(1).toString(), QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+    QVERIFY(!store.currentPlayer().has_value());
+}
+
+void AudioStateStoreTest::currentPlayerRequiresReadyMediaState()
+{
+    plasma_bridge::state::MediaStateStore store;
+    store.updateMediaState(plasma_bridge::tests::sampleMediaState(), false, QStringLiteral("initial"));
+    QVERIFY(!store.currentPlayer().has_value());
 }
 
 void AudioStateStoreTest::updateWindowStateTransitionsReadinessAndNormalizesActiveWindow()

@@ -1,5 +1,6 @@
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/media_controller.h"
 #include "control/window_activation_controller.h"
 
 #include <QtTest>
@@ -36,6 +37,18 @@ private slots:
     void statusName_data();
     void statusName();
     void activationJsonAndHumanFormatting();
+};
+
+class MediaControllerFormattingTest : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void actionName_data();
+    void actionName();
+    void statusName_data();
+    void statusName();
+    void controlJsonAndHumanFormatting();
 };
 
 void AudioVolumeControllerFormattingTest::statusName_data()
@@ -210,6 +223,82 @@ void WindowActivationControllerFormattingTest::activationJsonAndHumanFormatting(
     QVERIFY(text.contains(QStringLiteral("Window: window-editor")));
 }
 
+void MediaControllerFormattingTest::actionName_data()
+{
+    QTest::addColumn<int>("action");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("play") << static_cast<int>(plasma_bridge::control::MediaControlAction::Play) << QStringLiteral("play");
+    QTest::newRow("pause") << static_cast<int>(plasma_bridge::control::MediaControlAction::Pause) << QStringLiteral("pause");
+    QTest::newRow("play-pause")
+        << static_cast<int>(plasma_bridge::control::MediaControlAction::PlayPause) << QStringLiteral("play_pause");
+    QTest::newRow("next") << static_cast<int>(plasma_bridge::control::MediaControlAction::Next) << QStringLiteral("next");
+    QTest::newRow("previous")
+        << static_cast<int>(plasma_bridge::control::MediaControlAction::Previous) << QStringLiteral("previous");
+    QTest::newRow("seek") << static_cast<int>(plasma_bridge::control::MediaControlAction::Seek) << QStringLiteral("seek");
+}
+
+void MediaControllerFormattingTest::actionName()
+{
+    QFETCH(int, action);
+    QFETCH(QString, expected);
+
+    QCOMPARE(plasma_bridge::control::mediaControlActionName(
+                 static_cast<plasma_bridge::control::MediaControlAction>(action)),
+             expected);
+}
+
+void MediaControllerFormattingTest::statusName_data()
+{
+    QTest::addColumn<int>("status");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("accepted")
+        << static_cast<int>(plasma_bridge::control::MediaControlStatus::Accepted) << QStringLiteral("accepted");
+    QTest::newRow("not-ready")
+        << static_cast<int>(plasma_bridge::control::MediaControlStatus::NotReady) << QStringLiteral("not_ready");
+    QTest::newRow("no-current-player")
+        << static_cast<int>(plasma_bridge::control::MediaControlStatus::NoCurrentPlayer)
+        << QStringLiteral("no_current_player");
+    QTest::newRow("action-not-supported")
+        << static_cast<int>(plasma_bridge::control::MediaControlStatus::ActionNotSupported)
+        << QStringLiteral("action_not_supported");
+    QTest::newRow("player-unavailable")
+        << static_cast<int>(plasma_bridge::control::MediaControlStatus::PlayerUnavailable)
+        << QStringLiteral("player_unavailable");
+}
+
+void MediaControllerFormattingTest::statusName()
+{
+    QFETCH(int, status);
+    QFETCH(QString, expected);
+
+    QCOMPARE(plasma_bridge::control::mediaControlStatusName(
+                 static_cast<plasma_bridge::control::MediaControlStatus>(status)),
+             expected);
+}
+
+void MediaControllerFormattingTest::controlJsonAndHumanFormatting()
+{
+    plasma_bridge::control::MediaControlResult result;
+    result.status = plasma_bridge::control::MediaControlStatus::ActionNotSupported;
+    result.action = plasma_bridge::control::MediaControlAction::PlayPause;
+    result.playerId = QStringLiteral("org.mpris.MediaPlayer2.spotify");
+    result.positionMs = 88000;
+
+    const QJsonObject json = plasma_bridge::control::toJsonObject(result);
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("action_not_supported"));
+    QCOMPARE(json.value(QStringLiteral("action")).toString(), QStringLiteral("play_pause"));
+    QCOMPARE(json.value(QStringLiteral("playerId")).toString(), QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+    QCOMPARE(json.value(QStringLiteral("positionMs")).toInteger(), 88000);
+
+    const QString text = plasma_bridge::control::formatHumanReadableResult(result);
+    QVERIFY(text.contains(QStringLiteral("Status: action_not_supported")));
+    QVERIFY(text.contains(QStringLiteral("Action: play_pause")));
+    QVERIFY(text.contains(QStringLiteral("Player: org.mpris.MediaPlayer2.spotify")));
+    QVERIFY(text.contains(QStringLiteral("Position Ms: 88000")));
+}
+
 int main(int argc, char *argv[])
 {
     int status = 0;
@@ -223,6 +312,10 @@ int main(int argc, char *argv[])
     }
     {
         WindowActivationControllerFormattingTest test;
+        status |= QTest::qExec(&test, argc, argv);
+    }
+    {
+        MediaControllerFormattingTest test;
         status |= QTest::qExec(&test, argc, argv);
     }
     return status;

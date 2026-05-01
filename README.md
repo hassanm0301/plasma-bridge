@@ -27,4 +27,6 @@ Default backend endpoints:
 - WebSocket state stream: `ws://127.0.0.1:8081/ws`
 - Hosted docs: `http://127.0.0.1:8080/docs/`
 
+The backend currently serves audio snapshots and controls, current media-session snapshots and transport controls, and Plasma window snapshots plus activation. The React dashboard renders those as a taskbar-style windows strip, a current-media card with artwork, large transport icons, draggable progress, and elapsed/total time, plus sink/source controls.
+
 These defaults are localhost-only. To expose the backend on your LAN, start `plasma_bridge` with a non-loopback `--host`. If a browser app on another machine should call the backend, also pass one or more `--allow-origin` values for those web origins.

@@ -7,8 +7,9 @@ This guide is for contributors who want to understand where behavior lives befor
 - `backend/src/app/`: application entry point, CLI flags, service wiring, and startup output
 - `backend/src/api/`: HTTP server, WebSocket server, JSON envelope helpers, hosted docs assets
 - `backend/src/adapters/audio/`: PulseAudioQt observers and controllers
+- `backend/src/adapters/media/`: MPRIS observer and media controller
 - `backend/src/adapters/window/`: KWin script helper backend and window observer interface
-- `backend/src/state/`: in-memory stores that hold the canonical audio and window snapshots
+- `backend/src/state/`: in-memory stores that hold the canonical audio, media, and window snapshots
 - `backend/src/common/`: shared state models, JSON serialization, formatting, and generated build config
 - `backend/tools/probes/`: standalone inspection and control tools used for local debugging
 - `backend/tests/`: Qt Test unit and feature coverage plus fake probe helpers
@@ -17,7 +18,7 @@ This guide is for contributors who want to understand where behavior lives befor
 ## Runtime Shape
 
 The app wires adapters into state stores, then serves those stores through HTTP and WebSocket transports.
-HTTP reads, local audio controls, and window activation controls are handled by `SnapshotHttpServer`.
+HTTP reads, local audio controls, media transport and seek controls, and window activation controls are handled by `SnapshotHttpServer`.
 Live updates are handled by `StateWebSocketServer` on one endpoint, `/ws`.
 
 The WebSocket flow is:
@@ -25,7 +26,7 @@ The WebSocket flow is:
 1. Client connects to `ws://127.0.0.1:8081/ws`.
 2. Client sends a `hello` envelope with the supported `protocolVersion`.
 3. Server sends one `fullState` envelope after configured stores are ready.
-4. Server sends `patch` envelopes whenever audio or window state changes.
+4. Server sends `patch` envelopes whenever audio, media, or window state changes.
 
 All public HTTP and WebSocket messages use explicit envelopes. Keep that convention for new API behavior:
 
@@ -73,4 +74,4 @@ cmake --build backend/build --target plasma_bridge
 ./backend/build/src/app/plasma_bridge
 ```
 
-Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `window_probe setup`, `window_probe status`, and `window_probe activate <window-id>` when diagnosing the shared KWin script helper backend directly.
+Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `media_probe --json current` and `media_probe --json play-pause` when diagnosing MPRIS media behavior, and `window_probe setup`, `window_probe status`, and `window_probe activate <window-id>` when diagnosing the shared KWin script helper backend directly.

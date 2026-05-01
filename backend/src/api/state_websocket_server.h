@@ -13,6 +13,7 @@ class QWebSocket;
 namespace plasma_bridge::state
 {
 class AudioStateStore;
+class MediaStateStore;
 class WindowStateStore;
 }
 
@@ -28,6 +29,10 @@ class StateWebSocketServer final : public QObject
 
 public:
     explicit StateWebSocketServer(state::AudioStateStore *audioStateStore,
+                                  state::WindowStateStore *windowStateStore = nullptr,
+                                  QObject *parent = nullptr);
+    explicit StateWebSocketServer(state::AudioStateStore *audioStateStore,
+                                  state::MediaStateStore *mediaStateStore,
                                   state::WindowStateStore *windowStateStore = nullptr,
                                   QObject *parent = nullptr);
 
@@ -48,15 +53,18 @@ private:
     void handleTextMessage(QWebSocket *socket, const QString &message);
     void handleBinaryMessage(QWebSocket *socket);
     void handleAudioStateChanged(const QString &reason, const QString &sinkId, const QString &sourceId);
+    void handleMediaStateChanged(const QString &reason, const QString &playerId);
     void handleWindowStateChanged(const QString &reason, const QString &windowId);
     bool isConfiguredStateReady() const;
     QString notReadyMessage() const;
     void sendFullState(QWebSocket *socket);
-    void sendPatch(QWebSocket *socket, const QString &reason, const QString &sinkId, const QString &sourceId);
+    void sendAudioPatch(QWebSocket *socket, const QString &reason, const QString &sinkId, const QString &sourceId);
+    void sendMediaPatch(QWebSocket *socket, const QString &reason, const QString &playerId);
     void sendWindowPatch(QWebSocket *socket, const QString &reason, const QString &windowId);
     void sendError(QWebSocket *socket, const QString &code, const QString &message, bool closeAfter);
 
     state::AudioStateStore *m_audioStateStore = nullptr;
+    state::MediaStateStore *m_mediaStateStore = nullptr;
     state::WindowStateStore *m_windowStateStore = nullptr;
     QHash<QWebSocket *, ClientSession> m_clients;
     QWebSocketServer m_server;

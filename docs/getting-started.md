@@ -42,7 +42,7 @@ Open the Vite dev server URL. The dashboard auto-connects with the default backe
 - HTTP: `http://127.0.0.1:8080`
 - WebSocket: `ws://127.0.0.1:8081/ws`
 
-The Vite dev server binds on all interfaces, so you can open it from another machine on the same network. The dashboard still defaults to localhost backend endpoints, so remote users must update Settings to point at the backend machine.
+The Vite dev server binds on all interfaces, so you can open it from another machine on the same network. The dashboard still defaults to localhost backend endpoints, so remote users must update Settings to point at the backend machine. The main screen shows windows first, then the current media session with icon transport controls and draggable progress, then audio sinks and sources.
 
 See [clients/web](../clients/web/) for web-specific docs.
 
@@ -52,4 +52,4 @@ The Flutter mobile app is pending. Its setup and development commands should liv
 
 ## Specs
 
-The checked-in API contracts live in [specs](../specs/). The backend also serves runtime-adjusted copies from `/docs/openapi.yaml` and `/docs/asyncapi.yaml` while running.
+The checked-in API contracts live in [specs](../specs/). The backend also serves runtime-adjusted copies from `/docs/openapi.yaml` and `/docs/asyncapi.yaml` while running. The current runtime includes audio, current-media, and window state on both transports, plus HTTP media seek control.

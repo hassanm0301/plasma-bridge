@@ -2,15 +2,24 @@
 ### Added
 
 - `plasma_bridge` now accepts repeatable `--allow-origin` flags to grant CORS access to additional browser origins when the backend is exposed beyond localhost.
+- Current MPRIS media-session snapshots on HTTP and WebSocket, including player metadata, app icon URLs, and best-effort artwork URLs.
+- HTTP media transport control endpoints for play, pause, play-pause, next, previous, and absolute seek.
+- `media_probe` for local current-session inspection and transport control.
+- A current-media section in the React dashboard between windows and sinks/sources, including artwork or app-icon rendering plus previous, play/pause, and next controls.
+- Media playback progress reporting and seek support, including draggable web timeline controls with elapsed and total track time.
 
 ### Fixed
 
 - Configured non-loopback browser origins now receive CORS headers for backend responses and HTTP preflight requests.
+- Media resume from the web dashboard now uses the toggle-style play/pause action for better MPRIS compatibility across players.
 
 ### Changed
 
 - The web client's Vite dev and preview servers now bind on all interfaces to simplify LAN testing.
 - Backend and web docs now explain localhost-only defaults, LAN exposure, and remote browser setup requirements.
+- The WebSocket state protocol version is now `3` to include top-level media state and `playerId` patch metadata.
+- Media state now includes playback position and seek capability, and the backend refreshes the selected player's position while it is playing.
+- The dashboard media controls now use centered icon-only transport buttons with a larger visual emphasis.
 
 ### Removed
 

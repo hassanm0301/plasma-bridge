@@ -18,6 +18,7 @@ private slots:
     void plasmaBridgeHelpAndValidationErrors();
     void audioProbeHelpAndHermeticFailurePaths();
     void audioControlProbeHelpAndValidationErrors();
+    void mediaProbeHelpAndHermeticPaths();
     void windowProbeHelpAndHermeticPaths();
 
 private:
@@ -111,6 +112,62 @@ void CliBinariesFeatureTest::audioControlProbeHelpAndValidationErrors()
                                                  {QStringLiteral("set-default-source")});
     QCOMPARE(missingArgs.exitCode, 1);
     QVERIFY(missingArgs.standardError.contains(QStringLiteral("expects")));
+}
+
+void CliBinariesFeatureTest::mediaProbeHelpAndHermeticPaths()
+{
+    const QString mediaProbeBin = QString::fromUtf8(TEST_MEDIA_PROBE_BIN);
+    const QString fakeMediaProbeCliBin = QString::fromUtf8(TEST_FAKE_MEDIA_PROBE_CLI_BIN);
+
+    const ProcessResult help = runProcess(mediaProbeBin, {QStringLiteral("--help")});
+    QCOMPARE(help.exitCode, 0);
+    QVERIFY(help.standardOutput.contains(QStringLiteral("--watch")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("--json")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("--timeout-ms")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("play-pause")));
+
+    const ProcessResult invalidCommand = runProcess(mediaProbeBin, {QStringLiteral("seek")});
+    QCOMPARE(invalidCommand.exitCode, 1);
+    QVERIFY(invalidCommand.standardError.contains(QStringLiteral("Unsupported command")));
+
+    const ProcessResult invalidWatch = runProcess(mediaProbeBin, {QStringLiteral("--watch"), QStringLiteral("play")});
+    QCOMPARE(invalidWatch.exitCode, 1);
+    QVERIFY(invalidWatch.standardError.contains(QStringLiteral("--watch")));
+
+    const ProcessResult timeout = runProcess(fakeMediaProbeCliBin,
+                                             {QStringLiteral("--scenario"),
+                                              QStringLiteral("timeout"),
+                                              QStringLiteral("--timeout-ms"),
+                                              QStringLiteral("20")});
+    QCOMPARE(timeout.exitCode, 1);
+    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for MPRIS media state.")));
+
+    const ProcessResult failure = runProcess(fakeMediaProbeCliBin, {QStringLiteral("--scenario"), QStringLiteral("failure")});
+    QCOMPARE(failure.exitCode, 1);
+    QVERIFY(failure.standardError.contains(QStringLiteral("Synthetic media failure.")));
+
+    const ProcessResult current = runProcess(fakeMediaProbeCliBin,
+                                             {QStringLiteral("--scenario"), QStringLiteral("current"), QStringLiteral("--json")});
+    QCOMPARE(current.exitCode, 0);
+    QVERIFY(current.standardOutput.contains(QStringLiteral("\"event\": \"mediaState\"")));
+    QVERIFY(current.standardOutput.contains(QStringLiteral("\"playerId\": \"org.mpris.MediaPlayer2.spotify\"")));
+
+    const ProcessResult noPlayer = runProcess(fakeMediaProbeCliBin,
+                                              {QStringLiteral("--scenario"),
+                                               QStringLiteral("no-player"),
+                                               QStringLiteral("--json"),
+                                               QStringLiteral("current")});
+    QCOMPARE(noPlayer.exitCode, 0);
+    QVERIFY(noPlayer.standardOutput.contains(QStringLiteral("\"player\": null")));
+
+    const ProcessResult playPauseFailure = runProcess(fakeMediaProbeCliBin,
+                                                      {QStringLiteral("--scenario"),
+                                                       QStringLiteral("control-failure"),
+                                                       QStringLiteral("--json"),
+                                                       QStringLiteral("play-pause")});
+    QCOMPARE(playPauseFailure.exitCode, 1);
+    QVERIFY(playPauseFailure.standardOutput.contains(QStringLiteral("\"command\": \"play-pause\"")));
+    QVERIFY(playPauseFailure.standardOutput.contains(QStringLiteral("\"status\": \"action_not_supported\"")));
 }
 
 void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()

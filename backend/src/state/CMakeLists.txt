@@ -1,5 +1,7 @@
 add_library(plasma_bridge_state STATIC
+    ${PROJECT_SOURCE_DIR}/src/adapters/media/media_observer.h
     audio_state_store.cpp
+    media_state_store.cpp
     window_state_store.cpp
 )
 

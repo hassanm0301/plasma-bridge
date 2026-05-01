@@ -1,5 +1,6 @@
 #include "api/state_websocket_server.h"
 #include "state/audio_state_store.h"
+#include "state/media_state_store.h"
 #include "state/window_state_store.h"
 #include "tests/support/test_support.h"
 
@@ -23,6 +24,8 @@ private slots:
     void rejectsUnsupportedProtocolVersionAndBinaryMessages();
     void sendsNotReadyThenFullStateAfterReadiness();
     void sendsPatchMessagesToAllReadyClients();
+    void sendsMediaNotReadyThenFullStateAfterReadiness();
+    void sendsMediaPatchMessagesToAllReadyClients();
     void sendsWindowNotReadyThenFullStateAfterReadiness();
     void sendsWindowPatchMessagesToAllReadyClients();
 
@@ -301,6 +304,127 @@ void StateWebSocketServerFeatureTest::sendsPatchMessagesToAllReadyClients()
     QCOMPARE(payloadObject(defaultSourcePatch).value(QStringLiteral("sourceId")).toString(),
              QStringLiteral("alsa_input.usb-default.analog-stereo"));
     QVERIFY(payloadObject(defaultSourcePatch).value(QStringLiteral("windowId")).isNull());
+
+    QSignalSpy firstDisconnectedSpy(&firstSocket, &QWebSocket::disconnected);
+    QSignalSpy secondDisconnectedSpy(&secondSocket, &QWebSocket::disconnected);
+    firstSocket.close();
+    secondSocket.close();
+    QTRY_COMPARE(firstDisconnectedSpy.count(), 1);
+    QTRY_COMPARE(secondDisconnectedSpy.count(), 1);
+}
+
+void StateWebSocketServerFeatureTest::sendsMediaNotReadyThenFullStateAfterReadiness()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::MediaStateStore mediaStore;
+
+    plasma_bridge::api::StateWebSocketServer server(&audioStore, &mediaStore);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QWebSocket socket;
+    QSignalSpy connectedSpy(&socket, &QWebSocket::connected);
+    QSignalSpy messageSpy(&socket, &QWebSocket::textMessageReceived);
+    QSignalSpy disconnectedSpy(&socket, &QWebSocket::disconnected);
+
+    socket.open(plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath()));
+    QTRY_COMPARE(connectedSpy.count(), 1);
+    socket.sendTextMessage(helloMessage());
+
+    QTRY_COMPARE(messageSpy.count(), 1);
+    {
+        const QJsonObject error = takeMessage(messageSpy);
+        QCOMPARE(error.value(QStringLiteral("type")).toString(), QStringLiteral("error"));
+        QCOMPARE(errorObject(error).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    QCOMPARE(disconnectedSpy.count(), 0);
+
+    mediaStore.updateMediaState(plasma_bridge::tests::sampleMediaState(), true, QStringLiteral("initial"));
+
+    QTRY_COMPARE(messageSpy.count(), 1);
+    const QJsonObject fullState = takeMessage(messageSpy);
+    QCOMPARE(fullState.value(QStringLiteral("type")).toString(), QStringLiteral("fullState"));
+    QVERIFY(fullState.value(QStringLiteral("error")).isNull());
+    QVERIFY(payloadObject(fullState).contains(QStringLiteral("audio")));
+    const QJsonObject media = payloadObject(fullState).value(QStringLiteral("media")).toObject();
+    QCOMPARE(media.value(QStringLiteral("player")).toObject().value(QStringLiteral("playerId")).toString(),
+             QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+    QCOMPARE(media.value(QStringLiteral("player")).toObject().value(QStringLiteral("positionMs")).toInteger(), 64000);
+    QCOMPARE(media.value(QStringLiteral("player")).toObject().value(QStringLiteral("canSeek")).toBool(), true);
+
+    socket.close();
+    QTRY_COMPARE(disconnectedSpy.count(), 1);
+}
+
+void StateWebSocketServerFeatureTest::sendsMediaPatchMessagesToAllReadyClients()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::MediaStateStore mediaStore;
+    mediaStore.updateMediaState(plasma_bridge::tests::sampleMediaState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::api::StateWebSocketServer server(&audioStore, &mediaStore);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QWebSocket firstSocket;
+    QWebSocket secondSocket;
+    QSignalSpy firstConnectedSpy(&firstSocket, &QWebSocket::connected);
+    QSignalSpy secondConnectedSpy(&secondSocket, &QWebSocket::connected);
+    QSignalSpy firstMessageSpy(&firstSocket, &QWebSocket::textMessageReceived);
+    QSignalSpy secondMessageSpy(&secondSocket, &QWebSocket::textMessageReceived);
+
+    const QUrl url = plasma_bridge::tests::wsUrl(server.serverPort(), plasma_bridge::api::StateWebSocketServer::endpointPath());
+    firstSocket.open(url);
+    secondSocket.open(url);
+
+    QTRY_COMPARE(firstConnectedSpy.count(), 1);
+    QTRY_COMPARE(secondConnectedSpy.count(), 1);
+
+    firstSocket.sendTextMessage(helloMessage());
+    secondSocket.sendTextMessage(helloMessage());
+
+    QTRY_COMPARE(firstMessageSpy.count(), 1);
+    QTRY_COMPARE(secondMessageSpy.count(), 1);
+    const QJsonObject firstFullState = takeMessage(firstMessageSpy);
+    const QJsonObject secondFullState = takeMessage(secondMessageSpy);
+    QVERIFY(payloadObject(firstFullState).contains(QStringLiteral("media")));
+    QVERIFY(payloadObject(secondFullState).contains(QStringLiteral("media")));
+
+    mediaStore.updateMediaState(plasma_bridge::tests::sampleMediaStateWithoutPlayer(),
+                                true,
+                                QStringLiteral("player-removed"),
+                                QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+
+    QTRY_COMPARE(firstMessageSpy.count(), 1);
+    QTRY_COMPARE(secondMessageSpy.count(), 1);
+
+    const QJsonObject firstPatch = takeMessage(firstMessageSpy);
+    const QJsonObject secondPatch = takeMessage(secondMessageSpy);
+    QCOMPARE(firstPatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QCOMPARE(payloadObject(firstPatch).value(QStringLiteral("reason")).toString(), QStringLiteral("player-removed"));
+    QCOMPARE(payloadObject(firstPatch).value(QStringLiteral("playerId")).toString(),
+             QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+    const QJsonObject change = payloadObject(firstPatch).value(QStringLiteral("changes")).toArray().at(0).toObject();
+    QCOMPARE(change.value(QStringLiteral("path")).toString(), QStringLiteral("media"));
+    QVERIFY(change.value(QStringLiteral("value")).toObject().value(QStringLiteral("player")).isNull());
+    QCOMPARE(payloadObject(secondPatch).value(QStringLiteral("playerId")).toString(),
+             QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+
+    plasma_bridge::MediaState progressedState = plasma_bridge::tests::sampleMediaState();
+    progressedState.player->positionMs = 71000;
+    mediaStore.updateMediaState(progressedState,
+                                true,
+                                QStringLiteral("position-updated"),
+                                QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+
+    QTRY_COMPARE(firstMessageSpy.count(), 1);
+    const QJsonObject progressPatch = takeMessage(firstMessageSpy);
+    QCOMPARE(progressPatch.value(QStringLiteral("type")).toString(), QStringLiteral("patch"));
+    QCOMPARE(payloadObject(progressPatch).value(QStringLiteral("reason")).toString(), QStringLiteral("position-updated"));
+    const QJsonObject progressChange = payloadObject(progressPatch).value(QStringLiteral("changes")).toArray().at(0).toObject();
+    QCOMPARE(progressChange.value(QStringLiteral("path")).toString(), QStringLiteral("media"));
+    QCOMPARE(progressChange.value(QStringLiteral("value")).toObject().value(QStringLiteral("player")).toObject().value(QStringLiteral("positionMs")).toInteger(),
+             71000);
 
     QSignalSpy firstDisconnectedSpy(&firstSocket, &QWebSocket::disconnected);
     QSignalSpy secondDisconnectedSpy(&secondSocket, &QWebSocket::disconnected);

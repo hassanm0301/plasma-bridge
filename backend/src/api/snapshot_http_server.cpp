@@ -2,14 +2,18 @@
 
 #include "api/audio_control_http_helpers.h"
 #include "api/json_envelope.h"
+#include "api/media_control_http_helpers.h"
 #include "api/window_control_http_helpers.h"
 #include "common/audio_state.h"
+#include "common/media_state.h"
 #include "common/window_state.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/media_controller.h"
 #include "control/window_activation_controller.h"
 #include "plasma_bridge_build_config.h"
 #include "state/audio_state_store.h"
+#include "state/media_state_store.h"
 #include "state/window_state_store.h"
 
 #include <QDir>
@@ -26,6 +30,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <limits>
 
@@ -40,6 +45,7 @@ const QString kSinksPath = QStringLiteral("/snapshot/audio/sinks");
 const QString kDefaultSinkPath = QStringLiteral("/snapshot/audio/default-sink");
 const QString kSourcesPath = QStringLiteral("/snapshot/audio/sources");
 const QString kDefaultSourcePath = QStringLiteral("/snapshot/audio/default-source");
+const QString kMediaCurrentPath = QStringLiteral("/snapshot/media/current");
 const QString kWindowsPath = QStringLiteral("/snapshot/windows");
 const QString kActiveWindowPath = QStringLiteral("/snapshot/windows/active");
 const QString kAppIconPathPrefix = QStringLiteral("/icons/apps/");
@@ -63,6 +69,7 @@ enum class SnapshotRoute {
     DefaultSink,
     Sources,
     DefaultSource,
+    MediaCurrent,
     Windows,
     ActiveWindow,
 };
@@ -80,6 +87,9 @@ SnapshotRoute snapshotRouteForPath(const QString &path)
     }
     if (path == kDefaultSourcePath) {
         return SnapshotRoute::DefaultSource;
+    }
+    if (path == kMediaCurrentPath) {
+        return SnapshotRoute::MediaCurrent;
     }
     if (path == kWindowsPath) {
         return SnapshotRoute::Windows;
@@ -648,6 +658,42 @@ QString errorMessageForWindowActivationStatus(const control::WindowActivationSta
     return QStringLiteral("Window activation control is not ready yet.");
 }
 
+QString errorCodeForMediaControlStatus(const control::MediaControlStatus status)
+{
+    switch (status) {
+    case control::MediaControlStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::MediaControlStatus::NotReady:
+        return QStringLiteral("not_ready");
+    case control::MediaControlStatus::NoCurrentPlayer:
+        return QStringLiteral("no_current_player");
+    case control::MediaControlStatus::ActionNotSupported:
+        return QStringLiteral("action_not_supported");
+    case control::MediaControlStatus::PlayerUnavailable:
+        return QStringLiteral("player_unavailable");
+    }
+
+    return QStringLiteral("not_ready");
+}
+
+QString errorMessageForMediaControlStatus(const control::MediaControlStatus status)
+{
+    switch (status) {
+    case control::MediaControlStatus::Accepted:
+        return QStringLiteral("Media control request accepted.");
+    case control::MediaControlStatus::NotReady:
+        return QStringLiteral("Media control is not ready yet.");
+    case control::MediaControlStatus::NoCurrentPlayer:
+        return QStringLiteral("No current media player is available.");
+    case control::MediaControlStatus::ActionNotSupported:
+        return QStringLiteral("Current media player does not support that action.");
+    case control::MediaControlStatus::PlayerUnavailable:
+        return QStringLiteral("Current media player is unavailable.");
+    }
+
+    return QStringLiteral("Media control is not ready yet.");
+}
+
 bool snapshotContainsWindow(const plasma_bridge::WindowSnapshot &snapshot, const QString &windowId)
 {
     return std::any_of(snapshot.windows.cbegin(), snapshot.windows.cend(), [&windowId](const plasma_bridge::WindowState &window) {
@@ -667,8 +713,35 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        QObject *parent)
     : SnapshotHttpServer(audioStateStore,
                          nullptr,
+                         nullptr,
                          audioVolumeController,
                          audioDeviceController,
+                         nullptr,
+                         nullptr,
+                         documentationHost,
+                         documentationHttpPort,
+                         documentationWsPort,
+                         allowedOrigins,
+                         parent)
+{
+}
+
+SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                       state::MediaStateStore *mediaStateStore,
+                                       control::AudioVolumeController *audioVolumeController,
+                                       control::AudioDeviceController *audioDeviceController,
+                                       control::MediaController *mediaController,
+                                       const QString &documentationHost,
+                                       quint16 documentationHttpPort,
+                                       quint16 documentationWsPort,
+                                       const QList<AllowedOrigin> &allowedOrigins,
+                                       QObject *parent)
+    : SnapshotHttpServer(audioStateStore,
+                         mediaStateStore,
+                         nullptr,
+                         audioVolumeController,
+                         audioDeviceController,
+                         mediaController,
                          nullptr,
                          documentationHost,
                          documentationHttpPort,
@@ -688,9 +761,11 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        const QList<AllowedOrigin> &allowedOrigins,
                                        QObject *parent)
     : SnapshotHttpServer(audioStateStore,
+                         nullptr,
                          windowStateStore,
                          audioVolumeController,
                          audioDeviceController,
+                         nullptr,
                          nullptr,
                          documentationHost,
                          documentationHttpPort,
@@ -698,6 +773,34 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                          allowedOrigins,
                          parent)
 {
+}
+
+SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
+                                       state::MediaStateStore *mediaStateStore,
+                                       state::WindowStateStore *windowStateStore,
+                                       control::AudioVolumeController *audioVolumeController,
+                                       control::AudioDeviceController *audioDeviceController,
+                                       control::MediaController *mediaController,
+                                       control::WindowActivationController *windowActivationController,
+                                       const QString &documentationHost,
+                                       quint16 documentationHttpPort,
+                                       quint16 documentationWsPort,
+                                       const QList<AllowedOrigin> &allowedOrigins,
+                                       QObject *parent)
+    : QObject(parent)
+    , m_audioStateStore(audioStateStore)
+    , m_mediaStateStore(mediaStateStore)
+    , m_windowStateStore(windowStateStore)
+    , m_audioVolumeController(audioVolumeController)
+    , m_audioDeviceController(audioDeviceController)
+    , m_mediaController(mediaController)
+    , m_windowActivationController(windowActivationController)
+    , m_documentationHost(documentationHost)
+    , m_documentationHttpPort(documentationHttpPort)
+    , m_documentationWsPort(documentationWsPort)
+    , m_allowedOrigins(allowedOrigins)
+{
+    connect(&m_server, &QTcpServer::newConnection, this, &SnapshotHttpServer::handleNewConnection);
 }
 
 SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
@@ -710,18 +813,19 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        quint16 documentationWsPort,
                                        const QList<AllowedOrigin> &allowedOrigins,
                                        QObject *parent)
-    : QObject(parent)
-    , m_audioStateStore(audioStateStore)
-    , m_windowStateStore(windowStateStore)
-    , m_audioVolumeController(audioVolumeController)
-    , m_audioDeviceController(audioDeviceController)
-    , m_windowActivationController(windowActivationController)
-    , m_documentationHost(documentationHost)
-    , m_documentationHttpPort(documentationHttpPort)
-    , m_documentationWsPort(documentationWsPort)
-    , m_allowedOrigins(allowedOrigins)
+    : SnapshotHttpServer(audioStateStore,
+                         nullptr,
+                         windowStateStore,
+                         audioVolumeController,
+                         audioDeviceController,
+                         nullptr,
+                         windowActivationController,
+                         documentationHost,
+                         documentationHttpPort,
+                         documentationWsPort,
+                         allowedOrigins,
+                         parent)
 {
-    connect(&m_server, &QTcpServer::newConnection, this, &SnapshotHttpServer::handleNewConnection);
 }
 
 bool SnapshotHttpServer::parseAllowedOrigin(const QString &value, AllowedOrigin *outOrigin, QString *errorMessage)
@@ -1288,6 +1392,95 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
         return;
     }
 
+    const MediaControlRouteParseResult mediaControlRoute = parseMediaControlRoute(path);
+    if (mediaControlRoute.match == MediaControlRouteMatch::Match) {
+        if (method != QByteArrayLiteral("POST")) {
+            writeJsonErrorResponse(socket,
+                                   405,
+                                   QByteArrayLiteral("Method Not Allowed"),
+                                   QStringLiteral("method_not_allowed"),
+                                   QStringLiteral("Only POST is supported for this endpoint."),
+                                   {{QByteArrayLiteral("Allow"), QByteArrayLiteral("POST")}});
+            return;
+        }
+
+        if (m_mediaController == nullptr) {
+            writeJsonErrorResponse(socket,
+                                   503,
+                                   QByteArrayLiteral("Service Unavailable"),
+                                   QStringLiteral("not_ready"),
+                                   QStringLiteral("Media control is not available."));
+            return;
+        }
+
+        if (mediaControlRoute.route.action != control::MediaControlAction::Seek && contentLength > 0) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Request body is not supported for this endpoint."));
+            return;
+        }
+
+        control::MediaControlResult result;
+        if (mediaControlRoute.route.action == control::MediaControlAction::Seek) {
+            QJsonObject object;
+            if (!requireJsonObjectBody(&object)) {
+                return;
+            }
+
+            const QJsonValue positionField = object.value(QStringLiteral("positionMs"));
+            const double positionValue = positionField.toDouble(std::numeric_limits<double>::quiet_NaN());
+            if (!positionField.isDouble() || !std::isfinite(positionValue) || positionValue < 0.0
+                || std::floor(positionValue) != positionValue
+                || positionValue > static_cast<double>(std::numeric_limits<qint64>::max())) {
+                writeJsonErrorResponse(socket,
+                                       400,
+                                       QByteArrayLiteral("Bad Request"),
+                                       QStringLiteral("bad_request"),
+                                       QStringLiteral("Request body must contain a non-negative integer positionMs field."));
+                return;
+            }
+
+            result = m_mediaController->seek(static_cast<qint64>(positionValue));
+        } else {
+            switch (mediaControlRoute.route.action) {
+            case control::MediaControlAction::Play:
+                result = m_mediaController->play();
+                break;
+            case control::MediaControlAction::Pause:
+                result = m_mediaController->pause();
+                break;
+            case control::MediaControlAction::PlayPause:
+                result = m_mediaController->playPause();
+                break;
+            case control::MediaControlAction::Next:
+                result = m_mediaController->next();
+                break;
+            case control::MediaControlAction::Previous:
+                result = m_mediaController->previous();
+                break;
+            case control::MediaControlAction::Seek:
+                break;
+            }
+        }
+
+        const int statusCode = httpStatusCodeForMediaControlStatus(result.status);
+        if (result.status == control::MediaControlStatus::Accepted) {
+            writeJsonResponse(socket,
+                              statusCode,
+                              reasonPhraseForStatusCode(statusCode),
+                              buildHttpSuccessEnvelope(buildMediaControlPayload(result)));
+            return;
+        }
+
+        writeJsonErrorResponse(socket,
+                               statusCode,
+                               reasonPhraseForStatusCode(statusCode),
+                               errorCodeForMediaControlStatus(result.status),
+                               errorMessageForMediaControlStatus(result.status),
+                               {},
+                               buildMediaControlErrorDetails(result));
+        return;
+    }
+
     const SnapshotRoute snapshotRoute = snapshotRouteForPath(path);
     if (snapshotRoute == SnapshotRoute::None) {
         writeJsonErrorResponse(socket, 404, QByteArrayLiteral("Not Found"), QStringLiteral("not_found"),
@@ -1398,6 +1591,18 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
                           buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(*defaultSource)));
         return;
     }
+    case SnapshotRoute::MediaCurrent:
+        if (m_mediaStateStore == nullptr || !m_mediaStateStore->isReady()) {
+            writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),
+                                   QStringLiteral("Initial media state is not ready yet."));
+            return;
+        }
+
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(m_mediaStateStore->mediaState())));
+        return;
     case SnapshotRoute::None:
         break;
     }

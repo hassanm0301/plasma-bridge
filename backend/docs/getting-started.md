@@ -21,7 +21,7 @@ The first build downloads the pinned Swagger UI and AsyncAPI browser assets into
 The optional probe tools can be built from the same tree:
 
 ```bash
-cmake --build backend/build --target audio_probe audio_control_probe window_probe
+cmake --build backend/build --target audio_probe audio_control_probe media_probe window_probe
 ```
 
 ## Test
@@ -55,18 +55,18 @@ ctest --test-dir backend/build --output-on-failure -R test_state_websocket_serve
 Current coverage includes:
 
 - unit tests for common audio-state serialization and formatting
-- unit tests for common window-state serialization and formatting
-- unit tests for volume, device-control, and window activation result formatting
+- unit tests for common media/window-state serialization and formatting
+- unit tests for volume, device-control, media-control, and window activation result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
-- unit tests for the `window_probe` runner helper
+- unit tests for the `media_probe` and `window_probe` runner helpers
 - feature tests for the HTTP snapshot and control server
 - feature tests for the WebSocket server
-- CLI coverage for `plasma_bridge`, `audio_probe`, `audio_control_probe`, and `window_probe`
+- CLI coverage for `plasma_bridge`, `audio_probe`, `audio_control_probe`, `media_probe`, and `window_probe`
 
 ## Run
 
-Start the service from a KDE Plasma user session. Window snapshots use the KWin script helper backend; audio endpoints remain available when window state is not ready.
+Start the service from a KDE Plasma user session. Window snapshots use the KWin script helper backend; audio endpoints remain available when window state is not ready, and media endpoints become ready after the first MPRIS scan even if no player is currently selected.
 
 ```bash
 ./backend/build/src/app/plasma_bridge
@@ -110,6 +110,9 @@ To list all available flags:
 Optional window probe backend inspection:
 
 ```bash
+./backend/build/tools/probes/media_probe/media_probe --json current
+./backend/build/tools/probes/media_probe/media_probe --json play-pause
+./backend/build/tools/probes/media_probe/media_probe --watch
 ./backend/build/tools/probes/window_probe/window_probe setup
 ./backend/build/tools/probes/window_probe/window_probe status
 ./backend/build/tools/probes/window_probe/window_probe --json list
@@ -133,6 +136,7 @@ curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
 curl http://127.0.0.1:8080/snapshot/audio/sources
 curl http://127.0.0.1:8080/snapshot/audio/default-source
+curl http://127.0.0.1:8080/snapshot/media/current
 curl http://127.0.0.1:8080/snapshot/windows
 curl http://127.0.0.1:8080/snapshot/windows/active
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/default
@@ -152,6 +156,14 @@ curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/increme
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/volume/decrement \
   -H 'Content-Type: application/json' \
   -d '{"value":0.15}'
+curl -X POST http://127.0.0.1:8080/control/media/current/play
+curl -X POST http://127.0.0.1:8080/control/media/current/pause
+curl -X POST http://127.0.0.1:8080/control/media/current/play-pause
+curl -X POST http://127.0.0.1:8080/control/media/current/next
+curl -X POST http://127.0.0.1:8080/control/media/current/previous
+curl -X POST http://127.0.0.1:8080/control/media/current/seek \
+  -H 'Content-Type: application/json' \
+  -d '{"positionMs":90000}'
 curl -X POST http://127.0.0.1:8080/control/windows/${WINDOW_ID}/active
 ```
 
@@ -182,7 +194,7 @@ For WebSocket monitoring, connect to `ws://127.0.0.1:8081/ws` and send:
 ```json
 {
   "type": "hello",
-  "payload": { "protocolVersion": 2 },
+  "payload": { "protocolVersion": 3 },
   "error": null
 }
 ```
@@ -193,12 +205,13 @@ Server messages use the same explicit contract:
 { "type": "fullState", "payload": { ... }, "error": null }
 ```
 
-You should receive one `fullState` message followed by `patch` messages as sink, source, or window state changes.
-Local HTTP default, mute, volume-control, and window activation writes will converge back through the same WebSocket state stream.
-The `fullState` payload includes `audio` and `windowState` once both configured stores are ready.
+You should receive one `fullState` message followed by `patch` messages as sink, source, media, or window state changes.
+Local HTTP default, mute, volume-control, media transport, media seek, and window activation writes will converge back through the same WebSocket state stream.
+The `fullState` payload includes `audio`, `media`, and `windowState` once all configured stores are ready.
 The `audio` object includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
+The `media` object includes `player`, which is either the selected current player object or `null`. When a player is available, it includes playback metadata, capability flags, backend-relative icon URLs, best-effort artwork URLs, current `positionMs`, and `trackLengthMs`.
 The `windowState` object includes `activeWindowId`, `activeWindow`, and `windows`.
-Patch payloads use one stable shape with `reason`, `sinkId`, `sourceId`, `windowId`, and `changes`; IDs unrelated to a given patch are `null`.
+Patch payloads use one stable shape with `reason`, `sinkId`, `sourceId`, `playerId`, `windowId`, and `changes`; IDs unrelated to a given patch are `null`.
 Connections to `/` and other unknown WebSocket paths are rejected.
 
 Repo API specs:

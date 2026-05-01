@@ -2,14 +2,14 @@ asyncapi: 3.1.0
 info:
   title: plasma_bridge WebSocket API
   version: '@PLASMA_BRIDGE_VERSION@'
-  description: Live WebSocket monitoring for KDE Plasma audio and window state. The service exposes one implemented WebSocket endpoint at `@PLASMA_BRIDGE_WS_PATH@`.
+  description: Live WebSocket monitoring for KDE Plasma audio, media, and window state. The service exposes one implemented WebSocket endpoint at `@PLASMA_BRIDGE_WS_PATH@`.
 defaultContentType: application/json
 servers:
   local:
     host: '@PLASMA_BRIDGE_DEFAULT_WS_HOSTPORT@'
     protocol: ws
     title: Local WebSocket server
-    summary: WebSocket server for live audio and window state.
+    summary: WebSocket server for live audio, media, and window state.
 channels:
   state:
     address: '@PLASMA_BRIDGE_WS_PATH@'
@@ -37,7 +37,7 @@ operations:
     channel:
       $ref: '#/channels/state'
     title: Send full state
-    summary: Send the initial audio and window snapshot after a successful hello.
+    summary: Send the initial audio, media, and window snapshot after a successful hello.
     description: The full state is sent once the configured state stores are ready.
     messages:
       - $ref: '#/channels/state/messages/fullState'
@@ -46,8 +46,8 @@ operations:
     channel:
       $ref: '#/channels/state'
     title: Send patch
-    summary: Send an audio or window update after observed state changes.
-    description: Each patch replaces one top-level subtree, either `audio` or `windowState`. Local HTTP control writes may trigger the same patch stream after the observer republishes state.
+    summary: Send an audio, media, or window update after observed state changes.
+    description: Each patch replaces one top-level subtree, either `audio`, `media`, or `windowState`. Local HTTP control writes may trigger the same patch stream after the observer republishes state.
     messages:
       - $ref: '#/channels/state/messages/patch'
   sendError:
@@ -120,6 +120,91 @@ components:
           type:
             - string
             - 'null'
+    MediaPlayerState:
+      type: object
+      additionalProperties: false
+      required:
+        - playerId
+        - identity
+        - desktopEntry
+        - playbackStatus
+        - title
+        - artists
+        - album
+        - trackLengthMs
+        - positionMs
+        - canPlay
+        - canPause
+        - canGoNext
+        - canGoPrevious
+        - canControl
+        - canSeek
+        - appIconUrl
+        - artworkUrl
+      properties:
+        playerId:
+          type: string
+        identity:
+          type:
+            - string
+            - 'null'
+        desktopEntry:
+          type:
+            - string
+            - 'null'
+        playbackStatus:
+          type: string
+          enum: [unknown, playing, paused, stopped]
+        title:
+          type:
+            - string
+            - 'null'
+        artists:
+          type: array
+          items:
+            type: string
+        album:
+          type:
+            - string
+            - 'null'
+        trackLengthMs:
+          type:
+            - integer
+            - 'null'
+        positionMs:
+          type:
+            - integer
+            - 'null'
+        canPlay:
+          type: boolean
+        canPause:
+          type: boolean
+        canGoNext:
+          type: boolean
+        canGoPrevious:
+          type: boolean
+        canControl:
+          type: boolean
+        canSeek:
+          type: boolean
+        appIconUrl:
+          type:
+            - string
+            - 'null'
+        artworkUrl:
+          type:
+            - string
+            - 'null'
+    MediaState:
+      type: object
+      additionalProperties: false
+      required:
+        - player
+      properties:
+        player:
+          oneOf:
+            - $ref: '#/components/schemas/MediaPlayerState'
+            - $ref: '#/components/schemas/NullValue'
     WindowGeometry:
       type: object
       additionalProperties: false
@@ -236,10 +321,13 @@ components:
       additionalProperties: false
       required:
         - audio
+        - media
         - windowState
       properties:
         audio:
           $ref: '#/components/schemas/AudioState'
+        media:
+          $ref: '#/components/schemas/MediaState'
         windowState:
           $ref: '#/components/schemas/WindowSnapshot'
     AudioPatchChange:
@@ -254,6 +342,18 @@ components:
           const: audio
         value:
           $ref: '#/components/schemas/AudioState'
+    MediaPatchChange:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - value
+      properties:
+        path:
+          type: string
+          const: media
+        value:
+          $ref: '#/components/schemas/MediaState'
     WindowPatchChange:
       type: object
       additionalProperties: false
@@ -269,6 +369,7 @@ components:
     PatchChange:
       oneOf:
         - $ref: '#/components/schemas/AudioPatchChange'
+        - $ref: '#/components/schemas/MediaPatchChange'
         - $ref: '#/components/schemas/WindowPatchChange'
     HelloData:
       type: object
@@ -286,6 +387,7 @@ components:
         - reason
         - sinkId
         - sourceId
+        - playerId
         - windowId
         - changes
       properties:
@@ -298,6 +400,10 @@ components:
             - string
             - 'null'
         sourceId:
+          type:
+            - string
+            - 'null'
+        playerId:
           type:
             - string
             - 'null'
@@ -408,7 +514,7 @@ components:
     FullState:
       name: fullState
       title: Full state
-      summary: Initial audio and window snapshot sent after a successful hello.
+      summary: Initial audio, media, and window snapshot sent after a successful hello.
       payload:
         $ref: '#/components/schemas/FullStateMessage'
       examples:
@@ -436,6 +542,25 @@ components:
                     isVirtual: false
                     backendApi: alsa
                 selectedSourceId: source-main
+              media:
+                player:
+                  playerId: org.mpris.MediaPlayer2.spotify
+                  identity: Spotify
+                  desktopEntry: spotify
+                  playbackStatus: playing
+                  title: Song A
+                  artists: [Artist One, Artist Two]
+                  album: Album A
+                  trackLengthMs: 182000
+                  positionMs: 64000
+                  canPlay: true
+                  canPause: true
+                  canGoNext: true
+                  canGoPrevious: true
+                  canControl: true
+                  canSeek: true
+                  appIconUrl: /icons/apps/spotify
+                  artworkUrl: https://cdn.example.test/artwork/song-a.jpg
               windowState:
                 activeWindowId: window-editor
                 activeWindow:
@@ -462,7 +587,7 @@ components:
     Patch:
       name: patch
       title: Patch
-      summary: Audio or window change event.
+      summary: Audio, media, or window change event.
       payload:
         $ref: '#/components/schemas/PatchMessage'
       examples:
@@ -472,6 +597,7 @@ components:
               reason: sink-updated
               sinkId: sink-main
               sourceId: null
+              playerId: null
               windowId: null
               changes:
                 - path: audio
@@ -500,9 +626,53 @@ components:
         - payload:
             type: patch
             payload:
+              reason: player-removed
+              sinkId: null
+              sourceId: null
+              playerId: org.mpris.MediaPlayer2.spotify
+              windowId: null
+              changes:
+                - path: media
+                  value:
+                    player: null
+            error: null
+        - payload:
+            type: patch
+            payload:
+              reason: position-updated
+              sinkId: null
+              sourceId: null
+              playerId: org.mpris.MediaPlayer2.spotify
+              windowId: null
+              changes:
+                - path: media
+                  value:
+                    player:
+                      playerId: org.mpris.MediaPlayer2.spotify
+                      identity: Spotify
+                      desktopEntry: spotify
+                      playbackStatus: playing
+                      title: Song A
+                      artists: [Artist One, Artist Two]
+                      album: Album A
+                      trackLengthMs: 182000
+                      positionMs: 71000
+                      canPlay: true
+                      canPause: true
+                      canGoNext: true
+                      canGoPrevious: true
+                      canControl: true
+                      canSeek: true
+                      appIconUrl: /icons/apps/spotify
+                      artworkUrl: https://cdn.example.test/artwork/song-a.jpg
+            error: null
+        - payload:
+            type: patch
+            payload:
               reason: active-window-changed
               sinkId: null
               sourceId: null
+              playerId: null
               windowId: window-editor
               changes:
                 - path: windowState
@@ -541,4 +711,4 @@ components:
             payload: null
             error:
               code: not_ready
-              message: Initial audio and window state are not ready yet.
+              message: Initial audio, media, and window state are not ready yet.

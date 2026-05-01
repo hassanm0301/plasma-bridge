@@ -15,6 +15,7 @@
 #include "api/snapshot_http_server.h"
 #undef private
 #include "state/audio_state_store.h"
+#include "state/media_state_store.h"
 #include "state/window_state_store.h"
 #include "tests/support/test_support.h"
 
@@ -25,18 +26,22 @@ class SnapshotHttpServerFeatureTest : public QObject
 private slots:
     void initTestCase();
     void servesSnapshotAndDefaultSinkEndpoints();
+    void servesMediaSnapshotAndControlEndpoints();
     void servesWindowSnapshotEndpoints();
     void reportsNotReadyAndMissingDefaultSink();
+    void reportsMediaNotReady();
     void reportsWindowNotReadyAndNoActiveWindow();
     void servesVolumeControlEndpoints();
     void mapsVolumeControlFailures();
     void servesDeviceControlEndpoints();
     void mapsDeviceControlFailures();
+    void mapsMediaControlFailures();
     void servesWindowActivationControlEndpoint();
     void mapsWindowActivationControlFailures();
     void handlesMethodNotAllowedAndUnknownPath();
     void rejectsInvalidVolumeControlRequests();
     void rejectsInvalidDeviceControlRequests();
+    void rejectsInvalidMediaControlRequests();
     void rejectsInvalidWindowActivationControlRequests();
     void rejectsMalformedAndOversizedRequests();
     void servesDocsAndRewritesSpecHosts();
@@ -181,6 +186,97 @@ void SnapshotHttpServerFeatureTest::servesSnapshotAndDefaultSinkEndpoints()
     defaultSourceReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::servesMediaSnapshotAndControlEndpoints()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::MediaStateStore mediaStore;
+    mediaStore.updateMediaState(plasma_bridge::tests::sampleMediaState(), true, QStringLiteral("initial"));
+    plasma_bridge::tests::FakeMediaController mediaController;
+
+    plasma_bridge::control::MediaControlResult accepted;
+    accepted.status = plasma_bridge::control::MediaControlStatus::Accepted;
+    accepted.playerId = QStringLiteral("org.mpris.MediaPlayer2.spotify");
+    mediaController.setResult(plasma_bridge::control::MediaControlAction::PlayPause, accepted);
+    mediaController.setResult(plasma_bridge::control::MediaControlAction::Next, accepted);
+    mediaController.setResult(plasma_bridge::control::MediaControlAction::Seek, accepted);
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &mediaStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &mediaController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *currentReply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/media/current"))));
+    QSignalSpy currentSpy(currentReply, &QNetworkReply::finished);
+    QVERIFY(currentSpy.wait());
+    QCOMPARE(currentReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(currentReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject player = payloadObject(envelope).value(QStringLiteral("player")).toObject();
+        QCOMPARE(player.value(QStringLiteral("playerId")).toString(), QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+        QCOMPARE(player.value(QStringLiteral("playbackStatus")).toString(), QStringLiteral("playing"));
+        QCOMPARE(player.value(QStringLiteral("positionMs")).toInteger(), 64000);
+        QCOMPARE(player.value(QStringLiteral("trackLengthMs")).toInteger(), 182000);
+        QCOMPARE(player.value(QStringLiteral("canSeek")).toBool(), true);
+        QCOMPARE(player.value(QStringLiteral("appIconUrl")).toString(), QStringLiteral("/icons/apps/spotify"));
+    }
+    currentReply->deleteLater();
+
+    QNetworkReply *playPauseReply = postBytes(&manager,
+                                              plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                            QStringLiteral("/control/media/current/play-pause")),
+                                              {},
+                                              QByteArrayLiteral("application/json"));
+    QSignalSpy playPauseSpy(playPauseReply, &QNetworkReply::finished);
+    QVERIFY(playPauseSpy.wait());
+    QCOMPARE(playPauseReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(playPauseReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
+        QCOMPARE(body.value(QStringLiteral("action")).toString(), QStringLiteral("play_pause"));
+        QCOMPARE(body.value(QStringLiteral("playerId")).toString(), QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+    }
+    playPauseReply->deleteLater();
+
+    QNetworkReply *nextReply = postBytes(&manager,
+                                         plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                       QStringLiteral("/control/media/current/next")),
+                                         {},
+                                         QByteArrayLiteral("application/json"));
+    QSignalSpy nextSpy(nextReply, &QNetworkReply::finished);
+    QVERIFY(nextSpy.wait());
+    QCOMPARE(nextReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    nextReply->deleteLater();
+
+    QNetworkReply *seekReply = postJson(&manager,
+                                        plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                      QStringLiteral("/control/media/current/seek")),
+                                        QJsonObject{{QStringLiteral("positionMs"), 90000}});
+    QSignalSpy seekSpy(seekReply, &QNetworkReply::finished);
+    QVERIFY(seekSpy.wait());
+    QCOMPARE(seekReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(seekReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
+        QCOMPARE(body.value(QStringLiteral("action")).toString(), QStringLiteral("seek"));
+        QCOMPARE(body.value(QStringLiteral("positionMs")).toInteger(), 90000);
+    }
+    QCOMPARE(mediaController.lastOperation(), plasma_bridge::control::MediaControlAction::Seek);
+    QCOMPARE(mediaController.lastPositionMs().value_or(-1), 90000);
+    seekReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::servesWindowSnapshotEndpoints()
 {
     plasma_bridge::state::AudioStateStore audioStore;
@@ -322,6 +418,36 @@ void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()
         QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_found"));
     }
     missingSourceReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::reportsMediaNotReady()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::MediaStateStore mediaStore;
+    plasma_bridge::tests::FakeMediaController mediaController;
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &mediaStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &mediaController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkReply *reply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/media/current"))));
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(reply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    reply->deleteLater();
 }
 
 void SnapshotHttpServerFeatureTest::reportsWindowNotReadyAndNoActiveWindow()
@@ -868,6 +994,85 @@ void SnapshotHttpServerFeatureTest::mapsDeviceControlFailures()
     sourceNotWritableReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::mapsMediaControlFailures()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::MediaStateStore mediaStore;
+    mediaStore.updateMediaState(plasma_bridge::tests::sampleMediaStateWithoutPlayer(), true, QStringLiteral("initial"));
+    plasma_bridge::tests::FakeMediaController mediaController;
+
+    plasma_bridge::control::MediaControlResult noPlayer;
+    noPlayer.status = plasma_bridge::control::MediaControlStatus::NoCurrentPlayer;
+    mediaController.setResult(plasma_bridge::control::MediaControlAction::Play, noPlayer);
+
+    plasma_bridge::control::MediaControlResult unsupported;
+    unsupported.status = plasma_bridge::control::MediaControlStatus::ActionNotSupported;
+    unsupported.playerId = QStringLiteral("org.mpris.MediaPlayer2.spotify");
+    mediaController.setResult(plasma_bridge::control::MediaControlAction::Pause, unsupported);
+    plasma_bridge::control::MediaControlResult seekUnsupported = unsupported;
+    seekUnsupported.positionMs = 42000;
+    mediaController.setResult(plasma_bridge::control::MediaControlAction::Seek, seekUnsupported);
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &mediaStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &mediaController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *noPlayerReply = postBytes(&manager,
+                                             plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                           QStringLiteral("/control/media/current/play")),
+                                             {},
+                                             QByteArrayLiteral("application/json"));
+    QSignalSpy noPlayerSpy(noPlayerReply, &QNetworkReply::finished);
+    QVERIFY(noPlayerSpy.wait());
+    QCOMPARE(noPlayerReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(noPlayerReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("no_current_player"));
+    }
+    noPlayerReply->deleteLater();
+
+    QNetworkReply *unsupportedReply = postBytes(&manager,
+                                                plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                              QStringLiteral("/control/media/current/pause")),
+                                                {},
+                                                QByteArrayLiteral("application/json"));
+    QSignalSpy unsupportedSpy(unsupportedReply, &QNetworkReply::finished);
+    QVERIFY(unsupportedSpy.wait());
+    QCOMPARE(unsupportedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(unsupportedReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("action_not_supported"));
+        QCOMPARE(errorObject(body).value(QStringLiteral("details")).toObject().value(QStringLiteral("playerId")).toString(),
+                 QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+    }
+    unsupportedReply->deleteLater();
+
+    QNetworkReply *seekUnsupportedReply = postJson(&manager,
+                                                   plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                                 QStringLiteral("/control/media/current/seek")),
+                                                   QJsonObject{{QStringLiteral("positionMs"), 42000}});
+    QSignalSpy seekUnsupportedSpy(seekUnsupportedReply, &QNetworkReply::finished);
+    QVERIFY(seekUnsupportedSpy.wait());
+    QCOMPARE(seekUnsupportedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(seekUnsupportedReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("action_not_supported"));
+        const QJsonObject details = errorObject(body).value(QStringLiteral("details")).toObject();
+        QCOMPARE(details.value(QStringLiteral("playerId")).toString(), QStringLiteral("org.mpris.MediaPlayer2.spotify"));
+        QCOMPARE(details.value(QStringLiteral("positionMs")).toInteger(), 42000);
+    }
+    seekUnsupportedReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::servesWindowActivationControlEndpoint()
 {
     using Status = plasma_bridge::control::WindowActivationStatus;
@@ -1363,6 +1568,87 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidDeviceControlRequests()
     encodedSlashReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::rejectsInvalidMediaControlRequests()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::MediaStateStore mediaStore;
+    mediaStore.updateMediaState(plasma_bridge::tests::sampleMediaState(), true, QStringLiteral("initial"));
+    plasma_bridge::tests::FakeMediaController mediaController;
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &mediaStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &mediaController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *getReply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/media/current/play"))));
+    QSignalSpy getSpy(getReply, &QNetworkReply::finished);
+    QVERIFY(getSpy.wait());
+    QCOMPARE(getReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
+    getReply->deleteLater();
+
+    QNetworkReply *bodyReply = postJson(&manager,
+                                        plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                      QStringLiteral("/control/media/current/play")),
+                                        QJsonObject{{QStringLiteral("ignored"), true}});
+    QSignalSpy bodySpy(bodyReply, &QNetworkReply::finished);
+    QVERIFY(bodySpy.wait());
+    QCOMPARE(bodyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(bodyReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
+    bodyReply->deleteLater();
+
+    QNetworkReply *wrongContentTypeReply =
+        postBytes(&manager,
+                  plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/media/current/seek")),
+                  QByteArrayLiteral("{\"positionMs\":42000}"),
+                  QByteArrayLiteral("text/plain"));
+    QSignalSpy wrongContentTypeSpy(wrongContentTypeReply, &QNetworkReply::finished);
+    QVERIFY(wrongContentTypeSpy.wait());
+    QCOMPARE(wrongContentTypeReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 415);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(wrongContentTypeReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("unsupported_media_type"));
+    }
+    wrongContentTypeReply->deleteLater();
+
+    QNetworkReply *missingPositionReply = postJson(&manager,
+                                                   plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                                 QStringLiteral("/control/media/current/seek")),
+                                                   QJsonObject{});
+    QSignalSpy missingPositionSpy(missingPositionReply, &QNetworkReply::finished);
+    QVERIFY(missingPositionSpy.wait());
+    QCOMPARE(missingPositionReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingPositionReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
+    missingPositionReply->deleteLater();
+
+    QNetworkReply *negativePositionReply = postJson(&manager,
+                                                    plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                                                  QStringLiteral("/control/media/current/seek")),
+                                                    QJsonObject{{QStringLiteral("positionMs"), -1}});
+    QSignalSpy negativePositionSpy(negativePositionReply, &QNetworkReply::finished);
+    QVERIFY(negativePositionSpy.wait());
+    QCOMPARE(negativePositionReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(negativePositionReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
+    negativePositionReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::rejectsInvalidWindowActivationControlRequests()
 {
     plasma_bridge::state::AudioStateStore audioStore;
@@ -1539,7 +1825,7 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     const QString asyncApiBody = QString::fromUtf8(readReplyBody(asyncApiReply));
     QVERIFY(asyncApiBody.contains(QStringLiteral("localhost:19081")));
     QVERIFY(asyncApiBody.contains(QStringLiteral("address: '/ws'")));
-    QVERIFY(asyncApiBody.contains(QStringLiteral("protocolVersion: 2")));
+    QVERIFY(asyncApiBody.contains(QStringLiteral("protocolVersion: 3")));
     QVERIFY(asyncApiBody.contains(QStringLiteral("payload:")));
     QVERIFY(asyncApiBody.contains(QStringLiteral("error:")));
     asyncApiReply->deleteLater();

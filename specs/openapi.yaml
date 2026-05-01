@@ -2,7 +2,7 @@ openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
   version: '@PLASMA_BRIDGE_VERSION@'
-  summary: Audio and window snapshot endpoints plus local audio and window control endpoints for KDE Plasma.
+  summary: Audio, media, and window snapshot endpoints plus local audio, media, and window control endpoints for KDE Plasma.
 servers:
   - url: '@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@'
 tags:
@@ -10,6 +10,8 @@ tags:
     description: Read the current output-device snapshot and default sink.
   - name: Snapshots / Sources
     description: Read the current input-device snapshot and default source.
+  - name: Snapshots / Media
+    description: Read the current selected media session.
   - name: Snapshots / Windows
     description: Read the current window snapshot and active window.
   - name: Control / Defaults
@@ -18,6 +20,8 @@ tags:
     description: Change the mute state for a sink or source.
   - name: Control / Sink Volume
     description: Set or adjust normalized sink volume values.
+  - name: Control / Media
+    description: Control the currently selected MPRIS media session.
   - name: Control / Windows
     description: Activate existing Plasma windows.
 paths:
@@ -241,6 +245,66 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial audio state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /snapshot/media/current:
+    get:
+      tags:
+        - Snapshots / Media
+      operationId: getCurrentMediaSession
+      summary: Get the current media session
+      description: Returns the selected current MPRIS media session, or `player: null` when no session is currently selected.
+      responses:
+        '200':
+          description: Current media session result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaStateEnvelope'
+              examples:
+                current:
+                  value:
+                    payload:
+                      player:
+                        playerId: org.mpris.MediaPlayer2.spotify
+                        identity: Spotify
+                        desktopEntry: spotify
+                        playbackStatus: playing
+                        title: Song A
+                        artists: [Artist One, Artist Two]
+                        album: Album A
+                        trackLengthMs: 182000
+                        positionMs: 64000
+                        canPlay: true
+                        canPause: true
+                        canGoNext: true
+                        canGoPrevious: true
+                        canControl: true
+                        canSeek: true
+                        appIconUrl: /icons/apps/spotify
+                        artworkUrl: https://cdn.example.test/artwork/song-a.jpg
+                    error: null
+                noPlayer:
+                  value:
+                    payload:
+                      player: null
+                    error: null
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Initial media state is not ready yet.
           content:
             application/json:
               schema:
@@ -484,6 +548,318 @@ paths:
                         windowId: window-editor
         '503':
           description: Initial window state or window activation control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/media/current/play:
+    post:
+      tags:
+        - Control / Media
+      operationId: playCurrentMedia
+      summary: Play the current media session
+      description: Requests `Play` on the selected current MPRIS media session.
+      responses:
+        '200':
+          description: Media control request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaControlEnvelope'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No current media player is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Current media player does not support this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Media control is not ready yet or the current player is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/media/current/pause:
+    post:
+      tags:
+        - Control / Media
+      operationId: pauseCurrentMedia
+      summary: Pause the current media session
+      description: Requests `Pause` on the selected current MPRIS media session.
+      responses:
+        '200':
+          description: Media control request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaControlEnvelope'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No current media player is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Current media player does not support this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Media control is not ready yet or the current player is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/media/current/play-pause:
+    post:
+      tags:
+        - Control / Media
+      operationId: playPauseCurrentMedia
+      summary: Toggle play/pause on the current media session
+      description: Requests `PlayPause` on the selected current MPRIS media session.
+      responses:
+        '200':
+          description: Media control request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaControlEnvelope'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No current media player is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Current media player does not support this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Media control is not ready yet or the current player is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/media/current/next:
+    post:
+      tags:
+        - Control / Media
+      operationId: nextCurrentMediaTrack
+      summary: Skip to the next track on the current media session
+      description: Requests `Next` on the selected current MPRIS media session.
+      responses:
+        '200':
+          description: Media control request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaControlEnvelope'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No current media player is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Current media player does not support this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Media control is not ready yet or the current player is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/media/current/previous:
+    post:
+      tags:
+        - Control / Media
+      operationId: previousCurrentMediaTrack
+      summary: Return to the previous track on the current media session
+      description: Requests `Previous` on the selected current MPRIS media session.
+      responses:
+        '200':
+          description: Media control request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaControlEnvelope'
+        '400':
+          description: Unexpected request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No current media player is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Current media player does not support this action.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Media control is not ready yet or the current player is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/media/current/seek:
+    post:
+      tags:
+        - Control / Media
+      operationId: seekCurrentMedia
+      summary: Seek within the current media session
+      description: Requests `SetPosition` on the selected current MPRIS media session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaSeekRequest'
+      responses:
+        '200':
+          description: Media seek request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaControlEnvelope'
+        '400':
+          description: Invalid seek request body or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: No current media player is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Current media player does not support seeking.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '415':
+          description: Content type must be JSON.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: Media control is not ready yet or the current player is unavailable.
           content:
             application/json:
               schema:
@@ -1107,6 +1483,91 @@ components:
             - string
             - 'null'
           description: Identifier of the current default input source.
+    MediaPlayerState:
+      type: object
+      additionalProperties: false
+      required:
+        - playerId
+        - identity
+        - desktopEntry
+        - playbackStatus
+        - title
+        - artists
+        - album
+        - trackLengthMs
+        - positionMs
+        - canPlay
+        - canPause
+        - canGoNext
+        - canGoPrevious
+        - canControl
+        - canSeek
+        - appIconUrl
+        - artworkUrl
+      properties:
+        playerId:
+          type: string
+        identity:
+          type:
+            - string
+            - 'null'
+        desktopEntry:
+          type:
+            - string
+            - 'null'
+        playbackStatus:
+          type: string
+          enum: [unknown, playing, paused, stopped]
+        title:
+          type:
+            - string
+            - 'null'
+        artists:
+          type: array
+          items:
+            type: string
+        album:
+          type:
+            - string
+            - 'null'
+        trackLengthMs:
+          type:
+            - integer
+            - 'null'
+        positionMs:
+          type:
+            - integer
+            - 'null'
+        canPlay:
+          type: boolean
+        canPause:
+          type: boolean
+        canGoNext:
+          type: boolean
+        canGoPrevious:
+          type: boolean
+        canControl:
+          type: boolean
+        canSeek:
+          type: boolean
+        appIconUrl:
+          type:
+            - string
+            - 'null'
+        artworkUrl:
+          type:
+            - string
+            - 'null'
+    MediaState:
+      type: object
+      additionalProperties: false
+      required:
+        - player
+      properties:
+        player:
+          oneOf:
+            - $ref: '#/components/schemas/MediaPlayerState'
+            - $ref: '#/components/schemas/NullValue'
     WindowGeometry:
       type: object
       additionalProperties: false
@@ -1228,6 +1689,35 @@ components:
           oneOf:
             - $ref: '#/components/schemas/WindowState'
             - $ref: '#/components/schemas/NullValue'
+    MediaControlPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - action
+        - playerId
+        - positionMs
+      properties:
+        action:
+          type: string
+          enum: [play, pause, play_pause, next, previous, seek]
+        playerId:
+          type:
+            - string
+            - 'null'
+        positionMs:
+          type:
+            - integer
+            - 'null'
+    MediaSeekRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - positionMs
+      properties:
+        positionMs:
+          type: integer
+          minimum: 0
+          description: Absolute playback position in milliseconds.
     VolumeValueRequest:
       type: object
       additionalProperties: false
@@ -1358,6 +1848,17 @@ components:
           $ref: '#/components/schemas/AudioInputState'
         error:
           $ref: '#/components/schemas/NullValue'
+    MediaStateEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/MediaState'
+        error:
+          $ref: '#/components/schemas/NullValue'
     WindowSnapshotEnvelope:
       type: object
       additionalProperties: false
@@ -1422,6 +1923,17 @@ components:
       properties:
         payload:
           $ref: '#/components/schemas/VolumeChangePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    MediaControlEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/MediaControlPayload'
         error:
           $ref: '#/components/schemas/NullValue'
     WindowActivationEnvelope:

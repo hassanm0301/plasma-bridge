@@ -2,6 +2,7 @@
 
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/media_controller.h"
 #include "control/window_activation_controller.h"
 
 #include <cmath>
@@ -35,6 +36,11 @@ QJsonValue numberOrNull(const std::optional<double> &value)
     }
 
     return QJsonValue(*value);
+}
+
+QJsonValue integerOrNull(const std::optional<qint64> &value)
+{
+    return value.has_value() ? QJsonValue(*value) : QJsonValue(QJsonValue::Null);
 }
 
 } // namespace
@@ -120,6 +126,21 @@ QJsonObject buildVolumePayload(const control::VolumeChangeResult &result)
 QJsonObject buildVolumeErrorDetails(const control::VolumeChangeResult &result)
 {
     return buildVolumePayload(result);
+}
+
+QJsonObject buildMediaControlPayload(const control::MediaControlResult &result)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("action")] = control::mediaControlActionName(result.action);
+    payload[QStringLiteral("playerId")] =
+        result.playerId.isEmpty() ? QJsonValue(QJsonValue::Null) : QJsonValue(result.playerId);
+    payload[QStringLiteral("positionMs")] = integerOrNull(result.positionMs);
+    return payload;
+}
+
+QJsonObject buildMediaControlErrorDetails(const control::MediaControlResult &result)
+{
+    return buildMediaControlPayload(result);
 }
 
 QJsonObject buildWindowActivationPayload(const control::WindowActivationResult &result)

@@ -13,6 +13,7 @@ target_link_libraries(plasma_bridge_test_support
         plasma_bridge_api
         plasma_bridge_audio_control_probe_tool
         plasma_bridge_audio_probe_tool
+        plasma_bridge_media_probe_tool
         plasma_bridge_window_probe_tool
         plasma_bridge_common
         plasma_bridge_control
@@ -28,6 +29,10 @@ add_executable(fake_audio_probe_cli
 
 add_executable(fake_window_probe_cli
     helpers/fake_window_probe_cli.cpp
+)
+
+add_executable(fake_media_probe_cli
+    helpers/fake_media_probe_cli.cpp
 )
 
 target_include_directories(fake_audio_probe_cli
@@ -53,6 +58,19 @@ target_link_libraries(fake_window_probe_cli
     PRIVATE
         plasma_bridge_test_support
         plasma_bridge_window_probe_tool
+        Qt6::Core
+)
+
+target_include_directories(fake_media_probe_cli
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(fake_media_probe_cli
+    PRIVATE
+        plasma_bridge_test_support
+        plasma_bridge_media_probe_tool
         Qt6::Core
 )
 
@@ -99,6 +117,11 @@ plasma_bridge_add_qt_test(test_window_control_http_helpers
 )
 target_link_libraries(test_window_control_http_helpers PRIVATE plasma_bridge_api)
 
+plasma_bridge_add_qt_test(test_media_control_http_helpers
+    unit/test_media_control_http_helpers.cpp
+)
+target_link_libraries(test_media_control_http_helpers PRIVATE plasma_bridge_api)
+
 plasma_bridge_add_qt_test(test_json_envelope
     unit/test_json_envelope.cpp
 )
@@ -123,6 +146,11 @@ plasma_bridge_add_qt_test(test_window_probe_runner
     unit/test_window_probe_runner.cpp
 )
 target_link_libraries(test_window_probe_runner PRIVATE plasma_bridge_window_probe_tool)
+
+plasma_bridge_add_qt_test(test_media_probe_runner
+    unit/test_media_probe_runner.cpp
+)
+target_link_libraries(test_media_probe_runner PRIVATE plasma_bridge_media_probe_tool)
 
 plasma_bridge_add_qt_test(test_snapshot_http_server
     feature/test_snapshot_http_server.cpp
@@ -150,7 +178,9 @@ target_compile_definitions(test_cli_binaries
         TEST_PLASMA_BRIDGE_BIN="$<TARGET_FILE:plasma_bridge>"
         TEST_AUDIO_PROBE_BIN="$<TARGET_FILE:audio_probe>"
         TEST_AUDIO_CONTROL_PROBE_BIN="$<TARGET_FILE:audio_control_probe>"
+        TEST_MEDIA_PROBE_BIN="$<TARGET_FILE:media_probe>"
         TEST_WINDOW_PROBE_BIN="$<TARGET_FILE:window_probe>"
         TEST_FAKE_AUDIO_PROBE_CLI_BIN="$<TARGET_FILE:fake_audio_probe_cli>"
+        TEST_FAKE_MEDIA_PROBE_CLI_BIN="$<TARGET_FILE:fake_media_probe_cli>"
         TEST_FAKE_WINDOW_PROBE_CLI_BIN="$<TARGET_FILE:fake_window_probe_cli>"
 )
