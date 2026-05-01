@@ -1,6 +1,7 @@
 import { normalizeHttpBaseUrl } from "./endpoints";
 
 type DeviceKind = "sinks" | "sources";
+type MediaAction = "play" | "pause" | "play-pause" | "next" | "previous";
 
 interface ApiEnvelope {
   error?: {
@@ -14,6 +15,14 @@ export function controlPath(kind: DeviceKind, deviceId: string, action: "mute" |
 
 export function windowControlPath(windowId: string, action: "active"): string {
   return `/control/windows/${encodeURIComponent(windowId)}/${action}`;
+}
+
+export function mediaControlPath(action: MediaAction): string {
+  return `/control/media/current/${action}`;
+}
+
+export function mediaSeekPath(): string {
+  return "/control/media/current/seek";
 }
 
 async function postJson(httpBaseUrl: string, path: string, body: unknown): Promise<void> {
@@ -67,4 +76,12 @@ export function setDeviceMuted(
 
 export function activateWindow(httpBaseUrl: string, windowId: string): Promise<void> {
   return postEmpty(httpBaseUrl, windowControlPath(windowId, "active"));
+}
+
+export function controlMedia(httpBaseUrl: string, action: MediaAction): Promise<void> {
+  return postEmpty(httpBaseUrl, mediaControlPath(action));
+}
+
+export function seekMedia(httpBaseUrl: string, positionMs: number): Promise<void> {
+  return postJson(httpBaseUrl, mediaSeekPath(), { positionMs });
 }

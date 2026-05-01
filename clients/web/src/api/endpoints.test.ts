@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  WEBSOCKET_PROTOCOL_VERSION,
   buildOpenApiUrl,
   normalizeHttpBaseUrl,
   normalizeWebSocketUrl
@@ -35,5 +36,9 @@ describe("endpoint helpers", () => {
     expect(() => normalizeWebSocketUrl("http://127.0.0.1:8080")).toThrow(
       "WebSocket endpoint must start with ws:// or wss://."
     );
+  });
+
+  it("uses websocket protocol version 3 for media-aware state streams", () => {
+    expect(WEBSOCKET_PROTOCOL_VERSION).toBe(3);
   });
 });

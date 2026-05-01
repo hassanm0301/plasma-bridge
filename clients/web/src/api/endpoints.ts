@@ -1,6 +1,6 @@
 export const DEFAULT_HTTP_BASE_URL = "http://127.0.0.1:8080";
 export const DEFAULT_WS_URL = "ws://127.0.0.1:8081/ws";
-export const WEBSOCKET_PROTOCOL_VERSION = 2;
+export const WEBSOCKET_PROTOCOL_VERSION = 3;
 
 export function normalizeHttpBaseUrl(value: string): string {
   const trimmed = value.trim();

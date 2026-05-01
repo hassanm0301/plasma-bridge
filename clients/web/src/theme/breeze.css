@@ -344,6 +344,203 @@ input:focus-visible {
   gap: 18px;
 }
 
+.media-card {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--view);
+  color: var(--text);
+}
+
+.media-status-playing {
+  border-color: color-mix(in srgb, var(--accent-strong) 62%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 26%, var(--view));
+}
+
+.media-art-frame {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--view-alt) 72%, transparent);
+  overflow: hidden;
+}
+
+.media-art,
+.media-app-icon {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-app-icon {
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.media-art-fallback {
+  color: var(--muted);
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.media-copy {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.media-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.media-main h3,
+.media-subtitle,
+.media-meta {
+  margin: 0;
+  min-width: 0;
+}
+
+.media-main h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.media-subtitle,
+.media-meta {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-subtitle {
+  margin-top: 3px;
+  font-size: 0.88rem;
+}
+
+.media-meta {
+  font-size: 0.8rem;
+}
+
+.media-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.media-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.media-source span,
+.media-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-source-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.media-status-pill {
+  min-height: 24px;
+  padding: 2px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--view-alt);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.media-progress {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.media-progress-time {
+  min-width: 44px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.media-progress-time:last-child {
+  text-align: right;
+}
+
+.media-progress-slider {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--accent-strong);
+}
+
+.media-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.media-transport-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.media-transport-primary {
+  width: 46px;
+  min-width: 46px;
+  min-height: 46px;
+}
+
+.media-transport-button svg {
+  width: 28px;
+  height: 28px;
+}
+
+.media-transport-primary svg {
+  width: 34px;
+  height: 34px;
+}
+
+.media-transport-button:hover:not(:disabled) {
+  color: var(--accent-strong);
+}
+
 .device-list {
   display: grid;
   gap: 8px;
@@ -593,6 +790,15 @@ input:focus-visible {
   .settings-status {
     grid-template-columns: 1fr;
   }
+
+  .media-card {
+    grid-template-columns: 1fr;
+  }
+
+  .media-art-frame {
+    width: 72px;
+    height: 72px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -613,7 +819,25 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .media-main {
+    grid-template-columns: 1fr;
+  }
+
+  .media-meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .media-progress {
+    grid-template-columns: 1fr;
+  }
+
+  .media-progress-time:last-child {
+    text-align: left;
+  }
+
   .mute-button,
+  .media-transport-button,
   .primary-action,
   .quiet-button,
   .settings-button,

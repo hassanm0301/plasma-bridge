@@ -16,6 +16,32 @@ export interface AudioState {
   selectedSourceId: string | null;
 }
 
+export type MediaPlaybackStatus = "unknown" | "playing" | "paused" | "stopped";
+
+export interface MediaPlayerState {
+  playerId: string;
+  identity: string | null;
+  desktopEntry: string | null;
+  playbackStatus: MediaPlaybackStatus;
+  title: string | null;
+  artists: string[];
+  album: string | null;
+  trackLengthMs: number | null;
+  positionMs: number | null;
+  canPlay: boolean;
+  canPause: boolean;
+  canGoNext: boolean;
+  canGoPrevious: boolean;
+  canControl: boolean;
+  canSeek: boolean;
+  appIconUrl: string | null;
+  artworkUrl: string | null;
+}
+
+export interface MediaState {
+  player: MediaPlayerState | null;
+}
+
 export interface WindowGeometry {
   x: number;
   y: number;
@@ -52,6 +78,7 @@ export interface WindowSnapshot {
 
 export interface BackendState {
   audio: AudioState | null;
+  media: MediaState | null;
   windowState: WindowSnapshot | null;
 }
 
@@ -59,6 +86,7 @@ export interface FullStateMessage {
   type: "fullState";
   payload: {
     audio?: AudioState;
+    media?: MediaState;
     windowState?: WindowSnapshot;
   };
   error: null;
@@ -67,10 +95,19 @@ export interface FullStateMessage {
 export interface PatchMessage {
   type: "patch";
   payload: {
+    reason?: string | null;
+    sinkId?: string | null;
+    sourceId?: string | null;
+    playerId?: string | null;
+    windowId?: string | null;
     changes: Array<
       | {
           path: "audio";
           value: AudioState;
+        }
+      | {
+          path: "media";
+          value: MediaState;
         }
       | {
           path: "windowState";

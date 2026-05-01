@@ -2,12 +2,14 @@ import type {
   AudioDeviceState,
   BackendMessage,
   BackendState,
+  MediaPlayerState,
   WindowSnapshot,
   WindowState
 } from "./models";
 
 export const emptyBackendState: BackendState = {
   audio: null,
+  media: null,
   windowState: null
 };
 
@@ -15,6 +17,7 @@ export function applyBackendMessage(state: BackendState, message: BackendMessage
   if (message.type === "fullState") {
     return {
       audio: message.payload.audio ?? state.audio,
+      media: message.payload.media ?? state.media,
       windowState: message.payload.windowState ?? state.windowState
     };
   }
@@ -26,6 +29,9 @@ export function applyBackendMessage(state: BackendState, message: BackendMessage
   return message.payload.changes.reduce<BackendState>((nextState, change) => {
     if (change.path === "audio") {
       return { ...nextState, audio: change.value };
+    }
+    if (change.path === "media") {
+      return { ...nextState, media: change.value };
     }
     return { ...nextState, windowState: change.value };
   }, state);
@@ -73,4 +79,38 @@ export function audioDevicesWithSelectedFirst(
 
 export function displayWindowTitle(window: WindowState): string {
   return window.title || window.appId || window.resourceName || "Untitled window";
+}
+
+export function mediaToggleAction(player: MediaPlayerState): "play-pause" | null {
+  return player.canControl ? "play-pause" : null;
+}
+
+export function mediaPrimaryActionLabel(player: MediaPlayerState): string {
+  return player.playbackStatus === "playing" ? "Pause" : "Play";
+}
+
+export function formatDurationMs(value: number | null): string {
+  if (value === null || !Number.isFinite(value) || value < 0) {
+    return "--:--";
+  }
+
+  const totalSeconds = Math.floor(value / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+export function clampMediaPosition(positionMs: number, trackLengthMs: number | null): number {
+  const minimum = Math.max(0, Math.floor(positionMs));
+  if (trackLengthMs === null || !Number.isFinite(trackLengthMs) || trackLengthMs < 0) {
+    return minimum;
+  }
+
+  return Math.min(minimum, Math.floor(trackLengthMs));
 }

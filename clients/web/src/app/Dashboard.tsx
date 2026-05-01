@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { checkHttpEndpoint, type CheckState } from "../api/connectivity";
-import { activateWindow, setDeviceMuted, setSinkVolume } from "../api/controls";
-import type { AudioDeviceState } from "../api/models";
+import { activateWindow, controlMedia, seekMedia, setDeviceMuted, setSinkVolume } from "../api/controls";
+import type { AudioDeviceState, MediaPlayerState } from "../api/models";
 import { initialEndpointSettings, persistEndpointSettings, type EndpointSettings } from "../api/settings";
 import { audioDevicesWithSelectedFirst } from "../api/state";
 import { useStateStream, type StreamStatus } from "../api/useStateStream";
 import { AudioSection } from "../components/AudioSection";
+import { MediaSection } from "../components/MediaSection";
 import { SettingsDialog } from "../components/SettingsDialog";
 import { WindowTaskbar } from "../components/WindowTaskbar";
 import type { ThemeMode } from "../theme/theme";
@@ -69,6 +70,10 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
     setVolumeDrafts({});
   }, [stream.state.audio]);
 
+  useEffect(() => {
+    setRowErrors((current) => ({ ...current, media: "" }));
+  }, [stream.state.media?.player?.playerId]);
+
   const sinks = useMemo(
     () => audioDevicesWithSelectedFirst(stream.state.audio?.sinks ?? [], stream.state.audio?.selectedSinkId ?? null),
     [stream.state.audio]
@@ -78,6 +83,7 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
     [stream.state.audio]
   );
   const showConnectionSummary = stream.status !== "connected" || httpStatus.state === "unreachable";
+  const currentMediaPlayer = stream.state.media?.player ?? null;
 
   const runDeviceAction = async (deviceId: string, actionKey: string, action: () => Promise<void>) => {
     setPendingActions((current) => ({ ...current, [actionKey]: true }));
@@ -109,6 +115,28 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
     }
   };
 
+  const runMediaAction = async (
+    player: MediaPlayerState | null,
+    actionName: "play" | "pause" | "play-pause" | "next" | "previous" | "seek",
+    action: () => Promise<void>
+  ) => {
+    const actionKey = `media:${actionName}`;
+    const errorKey = "media";
+    setPendingActions((current) => ({ ...current, [actionKey]: true }));
+    setRowErrors((current) => ({ ...current, [errorKey]: "" }));
+    try {
+      await action();
+    } catch (error) {
+      const prefix = player?.identity || player?.desktopEntry || player?.playerId || "Current player";
+      setRowErrors((current) => ({
+        ...current,
+        [errorKey]: `${prefix}: ${error instanceof Error ? error.message : "Request failed."}`
+      }));
+    } finally {
+      setPendingActions((current) => ({ ...current, [actionKey]: false }));
+    }
+  };
+
   const commitSinkVolume = (sinkId: string, value: number) => {
     void runDeviceAction(sinkId, `volume:${sinkId}`, () => setSinkVolume(settings.httpBaseUrl, sinkId, value));
   };
@@ -127,6 +155,26 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
 
   const activateTaskbarWindow = (windowId: string) => {
     void runWindowAction(windowId, `window-active:${windowId}`, () => activateWindow(settings.httpBaseUrl, windowId));
+  };
+
+  const performMediaAction = (actionName: "play" | "pause" | "play-pause" | "next" | "previous") => {
+    void runMediaAction(currentMediaPlayer, actionName, () => controlMedia(settings.httpBaseUrl, actionName));
+  };
+
+  const togglePlayback = () => {
+    if (currentMediaPlayer === null) {
+      return;
+    }
+
+    if (!currentMediaPlayer.canControl) {
+      return;
+    }
+
+    performMediaAction("play-pause");
+  };
+
+  const seekCurrentMedia = (positionMs: number) => {
+    void runMediaAction(currentMediaPlayer, "seek", () => seekMedia(settings.httpBaseUrl, positionMs));
   };
 
   const saveSettings = (nextSettings: EndpointSettings) => {
@@ -174,6 +222,17 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
         pendingActions={pendingActions}
         errors={rowErrors}
         onWindowActivate={activateTaskbarWindow}
+      />
+
+      <MediaSection
+        player={currentMediaPlayer}
+        httpBaseUrl={settings.httpBaseUrl}
+        pendingActions={pendingActions}
+        error={rowErrors.media ?? ""}
+        onPrevious={() => performMediaAction("previous")}
+        onTogglePlayPause={togglePlayback}
+        onNext={() => performMediaAction("next")}
+        onSeek={seekCurrentMedia}
       />
 
       <div className="audio-grid">

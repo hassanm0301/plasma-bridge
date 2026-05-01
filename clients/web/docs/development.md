@@ -37,6 +37,6 @@ npm test
 ## Source Map
 
 - `src/app/`: app shell and dashboard orchestration
-- `src/api/`: endpoint normalization, settings persistence, WebSocket state reduction, and HTTP controls for audio and window activation
-- `src/components/`: reusable settings, window, audio, and form components
+- `src/api/`: endpoint normalization, settings persistence, WebSocket state reduction, and HTTP controls for audio, current media transport/seek, and window activation
+- `src/components/`: reusable settings, window, media, audio, and form components, including the media progress/timeline UI
 - `src/theme/`: Breeze-inspired theme tokens and persistence
