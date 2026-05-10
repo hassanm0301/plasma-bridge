@@ -366,7 +366,7 @@ FakeWindowProbeBackendController::FakeWindowProbeBackendController(QObject *pare
     : WindowProbeBackendController(parent)
 {
     const tools::window_probe::WindowProbeBackendStatus defaultStatus{
-        QStringLiteral("kwin-script-helper"), true, true, true, false, true, true};
+        QStringLiteral("kwin-script-helper"), true, true, false, true, true, true};
     m_setupResult = {true, QStringLiteral("Synthetic setup success."), defaultStatus};
     m_statusResult = {true, QStringLiteral("Synthetic status success."), defaultStatus};
     m_teardownResult = {true,

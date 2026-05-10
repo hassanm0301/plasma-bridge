@@ -201,7 +201,7 @@ void CliBinariesFeatureTest::windowProbeHelpAndHermeticPaths()
                                               QStringLiteral("20"),
                                               QStringLiteral("list")});
     QCOMPARE(timeout.exitCode, 1);
-    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for cached KWin script window state.")));
+    QVERIFY(timeout.standardError.contains(QStringLiteral("Timed out waiting for KWin script window state.")));
 
     const ProcessResult failure = runProcess(fakeWindowProbeCliBin,
                                              {QStringLiteral("--scenario"), QStringLiteral("failure"), QStringLiteral("active")});

@@ -27,12 +27,12 @@ The runtime has six main parts:
 1. An audio adapter reads sink data from the Plasma audio stack.
    It also reads user-facing input sources and filters monitor sources from the public state.
 2. A media adapter watches MPRIS players on the session DBus bus, selects one current session, refreshes playback position while that session is playing, and forwards transport and seek actions.
-3. A window adapter installs/enables the KWin script helper backend and reads normalized helper snapshots.
+3. A window adapter registers an app-owned DBus helper, installs/enables the KWin script while the app runs, and reads normalized helper snapshots.
 4. Shared in-memory state stores keep canonical audio, media, and window snapshots.
 5. An HTTP server serves snapshots from those stores and forwards local sink/source default, sink/source mute, sink volume-control, media transport, media seek, and window activation requests.
 6. A WebSocket server streams the same state to connected clients from the unified `/ws` endpoint as it changes.
 
-For local CLI inspection, `window_probe` uses the same shared KWin script backend that writes normalized snapshots through a helper service instead of binding directly to the Plasma window-management Wayland interface.
+For local CLI inspection, `window_probe` reads from the `plasma_bridge`-owned KWin script backend instead of owning a persistent helper service or binding directly to the Plasma window-management Wayland interface.
 
 Both transports use the same underlying stores so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP default, mute, volume, media transport, media seek, and window activation changes flow back through the observer and state store.
 The WebSocket `fullState` payload contains the ready audio, media, and window snapshots, and later `patch` payloads replace either the `audio`, `media`, or `windowState` subtree.

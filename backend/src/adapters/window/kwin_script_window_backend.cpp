@@ -2,7 +2,6 @@
 
 #include "plasma_bridge_build_config.h"
 
-#include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
 #include <QDBusInterface>
@@ -13,9 +12,14 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
+#include <QObject>
 #include <QSaveFile>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QStringList>
+#include <QUrl>
+#include <QVariantMap>
 
 namespace plasma_bridge::window
 {
@@ -86,45 +90,6 @@ QString kwinScriptMetadataFilePath()
 QString kwinConfigFilePath()
 {
     return QDir(configRoot()).filePath(QStringLiteral("kwinrc"));
-}
-
-bool isExecutableFile(const QString &path)
-{
-    const QFileInfo info(path);
-    return info.exists() && info.isFile() && info.isExecutable();
-}
-
-QString resolvedHelperExecutablePath()
-{
-    const QString override = qEnvironmentVariable("PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH");
-    if (!override.isEmpty() && isExecutableFile(override)) {
-        return override;
-    }
-
-    const QString appDir = QCoreApplication::applicationDirPath();
-    const QString sameDirectory = QDir(appDir).filePath(QStringLiteral("window_probe_helper"));
-    if (isExecutableFile(sameDirectory)) {
-        return sameDirectory;
-    }
-
-    const QString buildTreeFallback =
-        QDir::cleanPath(QDir(appDir).filePath(QStringLiteral("../../tools/probes/window_probe/window_probe_helper")));
-    if (isExecutableFile(buildTreeFallback)) {
-        return buildTreeFallback;
-    }
-
-    const QString pathExecutable = QStandardPaths::findExecutable(QStringLiteral("window_probe_helper"));
-    if (!pathExecutable.isEmpty()) {
-        return pathExecutable;
-    }
-
-    return override.isEmpty() ? sameDirectory : override;
-}
-
-QString serviceFileContents(const QString &execPath)
-{
-    return QStringLiteral("[D-BUS Service]\nName=%1\nExec=%2\n")
-        .arg(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE), execPath);
 }
 
 QString scriptMetadataContents()
@@ -466,6 +431,222 @@ bool removePath(const QString &path, QString *errorMessage)
     return false;
 }
 
+bool writeSnapshotFile(const QByteArray &jsonBytes)
+{
+    QString errorMessage;
+    if (!ensureDirectory(cacheRootPath(), &errorMessage)) {
+        return false;
+    }
+
+    QSaveFile file(snapshotFilePath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+        return false;
+    }
+
+    if (file.write(jsonBytes) < 0) {
+        return false;
+    }
+
+    return file.commit();
+}
+
+QString readString(const QVariantMap &map, const QStringList &keys)
+{
+    for (const QString &key : keys) {
+        const QVariant value = map.value(key);
+        if (value.isValid() && !value.toString().isEmpty()) {
+            return value.toString();
+        }
+    }
+
+    return QString();
+}
+
+QString normalizedIconName(const QString &value)
+{
+    QString iconName = value.trimmed();
+    if (iconName.isEmpty()) {
+        return {};
+    }
+
+    if (iconName.endsWith(QStringLiteral(".desktop"))) {
+        iconName.chop(QStringLiteral(".desktop").size());
+    }
+
+    if (iconName.contains(QLatin1Char('/'))) {
+        const QFileInfo fileInfo(iconName);
+        iconName = fileInfo.completeBaseName();
+    }
+
+    return iconName;
+}
+
+QString desktopFilePathForAppId(const QString &appId)
+{
+    const QString trimmed = appId.trimmed();
+    if (trimmed.isEmpty()) {
+        return {};
+    }
+
+    if (trimmed.contains(QLatin1Char('/'))) {
+        const QFileInfo fileInfo(trimmed);
+        return fileInfo.exists() && fileInfo.isFile() ? fileInfo.absoluteFilePath() : QString();
+    }
+
+    const QString desktopFileName = trimmed.endsWith(QStringLiteral(".desktop")) ? trimmed : trimmed + QStringLiteral(".desktop");
+    return QStandardPaths::locate(QStandardPaths::GenericDataLocation,
+                                  QStringLiteral("applications/%1").arg(desktopFileName));
+}
+
+QString desktopIconNameForAppId(const QString &appId)
+{
+    const QString desktopFilePath = desktopFilePathForAppId(appId);
+    if (desktopFilePath.isEmpty()) {
+        return {};
+    }
+
+    QSettings settings(desktopFilePath, QSettings::IniFormat);
+    settings.beginGroup(QStringLiteral("Desktop Entry"));
+    const QString iconName = settings.value(QStringLiteral("Icon")).toString();
+    settings.endGroup();
+    return iconName;
+}
+
+QString iconUrlForWindow(const WindowState &window, const QVariantMap &windowInfo)
+{
+    const QStringList candidates{
+        desktopIconNameForAppId(window.appId),
+        readString(windowInfo, {QStringLiteral("icon"), QStringLiteral("iconName")}),
+        window.appId,
+        window.resourceName,
+        readString(windowInfo, {QStringLiteral("resourceClass"), QStringLiteral("desktopFileName")}),
+    };
+
+    for (const QString &candidate : candidates) {
+        const QString iconName = normalizedIconName(candidate);
+        if (!iconName.isEmpty()) {
+            return QStringLiteral("/icons/apps/%1").arg(QString::fromUtf8(QUrl::toPercentEncoding(iconName)));
+        }
+    }
+
+    return {};
+}
+
+std::optional<bool> readBool(const QVariantMap &map, const QStringList &keys)
+{
+    for (const QString &key : keys) {
+        const QVariant value = map.value(key);
+        if (value.isValid()) {
+            return value.toBool();
+        }
+    }
+
+    return std::nullopt;
+}
+
+std::optional<quint32> readUInt(const QVariantMap &map, const QStringList &keys)
+{
+    for (const QString &key : keys) {
+        const QVariant value = map.value(key);
+        if (value.isValid()) {
+            bool ok = false;
+            const quint32 converted = value.toUInt(&ok);
+            if (ok) {
+                return converted;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
+QVariantMap windowInfoForId(const QString &windowId)
+{
+    QDBusInterface kwin(kKWinServiceName, kKWinObjectPath, kKWinInterfaceName, QDBusConnection::sessionBus());
+    if (!kwin.isValid()) {
+        return {};
+    }
+
+    const QDBusReply<QVariantMap> reply = kwin.call(QStringLiteral("getWindowInfo"), windowId);
+    if (!reply.isValid()) {
+        return {};
+    }
+
+    return reply.value();
+}
+
+void applyBackfill(WindowState &window, const QVariantMap &windowInfo)
+{
+    if (windowInfo.isEmpty()) {
+        return;
+    }
+
+    if (window.title.isEmpty()) {
+        window.title = readString(windowInfo, {QStringLiteral("caption"), QStringLiteral("title")});
+    }
+
+    if (window.appId.isEmpty()) {
+        window.appId = readString(windowInfo,
+                                  {QStringLiteral("desktopFileName"),
+                                   QStringLiteral("resourceClass"),
+                                   QStringLiteral("appId")});
+    }
+
+    if (window.resourceName.isEmpty()) {
+        window.resourceName = readString(windowInfo, {QStringLiteral("resourceName")});
+    }
+    if (window.iconUrl.isEmpty()) {
+        window.iconUrl = iconUrlForWindow(window, windowInfo);
+    }
+
+    if (window.pid == 0) {
+        if (const std::optional<quint32> pid = readUInt(windowInfo, {QStringLiteral("pid")}); pid.has_value()) {
+            window.pid = *pid;
+        }
+    }
+
+    if (const std::optional<bool> active = readBool(windowInfo, {QStringLiteral("active")}); active.has_value()) {
+        window.isActive = *active;
+    }
+    if (const std::optional<bool> minimized = readBool(windowInfo, {QStringLiteral("minimized")}); minimized.has_value()) {
+        window.isMinimized = *minimized;
+    }
+    if (const std::optional<bool> fullscreen =
+            readBool(windowInfo, {QStringLiteral("fullscreen"), QStringLiteral("fullScreen")});
+        fullscreen.has_value()) {
+        window.isFullscreen = *fullscreen;
+    }
+    if (const std::optional<bool> onAllDesktops = readBool(windowInfo, {QStringLiteral("onAllDesktops")});
+        onAllDesktops.has_value()) {
+        window.isOnAllDesktops = *onAllDesktops;
+    }
+    if (const std::optional<bool> skipTaskbar = readBool(windowInfo, {QStringLiteral("skipTaskbar")});
+        skipTaskbar.has_value()) {
+        window.skipTaskbar = *skipTaskbar;
+    }
+    if (const std::optional<bool> skipSwitcher = readBool(windowInfo, {QStringLiteral("skipSwitcher")});
+        skipSwitcher.has_value()) {
+        window.skipSwitcher = *skipSwitcher;
+    }
+
+    if (const std::optional<bool> maximized = readBool(windowInfo, {QStringLiteral("maximized")}); maximized.has_value()) {
+        window.isMaximized = *maximized;
+        return;
+    }
+
+    const std::optional<bool> horizontal = readBool(windowInfo,
+                                                    {QStringLiteral("maximizeHorizontal"),
+                                                     QStringLiteral("maximizedHorizontal"),
+                                                     QStringLiteral("maximizedHorizontally")});
+    const std::optional<bool> vertical = readBool(windowInfo,
+                                                  {QStringLiteral("maximizeVertical"),
+                                                   QStringLiteral("maximizedVertical"),
+                                                   QStringLiteral("maximizedVertically")});
+    if (horizontal.has_value() && vertical.has_value()) {
+        window.isMaximized = *horizontal && *vertical;
+    }
+}
+
 bool isScriptEnabled()
 {
     QSettings settings(kwinConfigFilePath(), QSettings::IniFormat);
@@ -507,16 +688,28 @@ bool reconfigureKWin(QString *errorMessage)
     return true;
 }
 
-bool stopHelperServiceBestEffort()
+bool isHelperServiceRegistered()
 {
+    QDBusConnectionInterface *interface = QDBusConnection::sessionBus().interface();
+    if (interface == nullptr) {
+        return false;
+    }
+
+    const QDBusReply<bool> registered =
+        interface->isServiceRegistered(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE));
+    return registered.isValid() && registered.value();
+}
+
+bool stopLegacyHelperServiceBestEffort()
+{
+    if (!isHelperServiceRegistered()) {
+        return true;
+    }
+
     QDBusInterface helper(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE),
                           QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
                           QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE),
                           QDBusConnection::sessionBus());
-    if (!helper.isValid()) {
-        return true;
-    }
-
     helper.call(QStringLiteral("Shutdown"));
     return true;
 }
@@ -567,6 +760,117 @@ std::optional<WindowSnapshot> snapshotFromJsonText(const QString &snapshotJson, 
     return snapshot;
 }
 
+class WindowProbeDbusService final : public QObject
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE)
+
+public:
+    explicit WindowProbeDbusService(QObject *parent = nullptr)
+        : QObject(parent)
+    {
+        loadCachedSnapshot();
+    }
+
+public slots:
+    bool PushSnapshot(const QString &backendName,
+                      const QString &snapshotJson,
+                      const QString &reason,
+                      const QString &windowId)
+    {
+        const std::optional<WindowSnapshot> parsed = snapshotFromJsonText(snapshotJson);
+        if (!parsed.has_value()) {
+            return false;
+        }
+
+        WindowSnapshot enriched = *parsed;
+        for (WindowState &window : enriched.windows) {
+            applyBackfill(window, windowInfoForId(window.id));
+        }
+        enriched = normalizeWindowSnapshot(enriched);
+
+        m_backendName = backendName;
+        m_snapshot = enriched;
+        m_ready = true;
+        m_snapshotJson = QString::fromUtf8(QJsonDocument(toJsonObject(m_snapshot)).toJson(QJsonDocument::Compact));
+
+        if (!writeSnapshotFile(m_snapshotJson.toUtf8())) {
+            return false;
+        }
+
+        emit SnapshotChanged(m_backendName, m_snapshotJson, reason, windowId);
+        return true;
+    }
+
+    QString GetSnapshot() const
+    {
+        return m_snapshotJson;
+    }
+
+    bool IsReady() const
+    {
+        return m_ready;
+    }
+
+    QString GetBackendName() const
+    {
+        return m_backendName;
+    }
+
+    bool RequestActivateWindow(const QString &windowId)
+    {
+        if (!m_ready || windowId.isEmpty()) {
+            return false;
+        }
+
+        m_activationRequests.append(windowId);
+        return true;
+    }
+
+    QString TakeActivationRequest()
+    {
+        if (m_activationRequests.isEmpty()) {
+            return {};
+        }
+
+        return m_activationRequests.takeFirst();
+    }
+
+signals:
+    void SnapshotChanged(const QString &backendName,
+                         const QString &snapshotJson,
+                         const QString &reason,
+                         const QString &windowId);
+
+private:
+    void loadCachedSnapshot()
+    {
+        QFile file(snapshotFilePath());
+        if (!file.exists() || !file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return;
+        }
+
+        const QString snapshotJson = QString::fromUtf8(file.readAll());
+        const std::optional<WindowSnapshot> snapshot = snapshotFromJsonText(snapshotJson);
+        if (!snapshot.has_value()) {
+            return;
+        }
+
+        m_backendName = kKWinScriptBackendName;
+        m_snapshot = *snapshot;
+        m_snapshotJson = snapshotJson;
+        m_ready = true;
+    }
+
+    QString m_backendName = kKWinScriptBackendName;
+    WindowSnapshot m_snapshot;
+    QString m_snapshotJson;
+    QStringList m_activationRequests;
+    bool m_ready = false;
+};
+
+WindowProbeDbusService *s_localHelperService = nullptr;
+
 KWinScriptBackendStatus computeBackendStatus()
 {
     KWinScriptBackendStatus status;
@@ -575,11 +879,7 @@ KWinScriptBackendStatus computeBackendStatus()
     status.scriptEnabled = isScriptEnabled();
     status.helperServiceInstalled = QFileInfo::exists(helperServiceFilePath());
 
-    if (QDBusConnectionInterface *interface = QDBusConnection::sessionBus().interface(); interface != nullptr) {
-        const QDBusReply<bool> registered =
-            interface->isServiceRegistered(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE));
-        status.helperServiceRegistered = registered.isValid() && registered.value();
-    }
+    status.helperServiceRegistered = isHelperServiceRegistered();
 
     status.snapshotCached = QFileInfo::exists(snapshotFilePath());
     status.snapshotReady = readKWinScriptCachedSnapshot().has_value();
@@ -595,8 +895,12 @@ QString kwinScriptBackendName()
 
 QString kwinScriptBackendReadinessError(const KWinScriptBackendStatus &status)
 {
-    if (!status.scriptInstalled || !status.helperServiceInstalled || !status.scriptEnabled) {
-        return QStringLiteral("window_probe backend is not configured. Run `window_probe setup` from a KDE Plasma session.");
+    if (!status.scriptInstalled || !status.scriptEnabled) {
+        return QStringLiteral("window_probe backend is not configured. Start `plasma_bridge` from a KDE Plasma session.");
+    }
+
+    if (!status.helperServiceRegistered) {
+        return QStringLiteral("window_probe backend is not running. Start `plasma_bridge` first.");
     }
 
     return QString();
@@ -627,34 +931,44 @@ std::optional<WindowSnapshot> readKWinScriptCachedSnapshot(QString *errorMessage
 class KWinScriptWindowBackendController::Impl final
 {
 public:
+    ~Impl()
+    {
+        unregisterHelperService();
+    }
+
     KWinScriptBackendCommandResult setup()
     {
         KWinScriptBackendCommandResult result;
         result.status.backendName = kKWinScriptBackendName;
 
-        const QString helperPath = resolvedHelperExecutablePath();
-        if (!isExecutableFile(helperPath)) {
-            result.message =
-                QStringLiteral("window_probe helper executable is missing at %1. Rebuild the probe tools first.").arg(helperPath);
-            result.status = computeBackendStatus();
-            return result;
-        }
-
         QString errorMessage;
-        if (!ensureDirectory(QDir(kwinScriptDirectoryPath()).filePath(kScriptCodeDirectoryName), &errorMessage)
-            || !writeFileAtomically(kwinScriptMetadataFilePath(), scriptMetadataContents(), &errorMessage)
-            || !writeFileAtomically(kwinScriptMainFilePath(), scriptMainContents(), &errorMessage)
-            || !writeFileAtomically(helperServiceFilePath(), serviceFileContents(helperPath), &errorMessage)) {
+        stopLegacyHelperServiceBestEffort();
+        if (!removePath(helperServiceFilePath(), &errorMessage)) {
             result.message = errorMessage;
             result.status = computeBackendStatus();
             return result;
         }
 
-        stopHelperServiceBestEffort();
+        if (!registerHelperService(&errorMessage)) {
+            result.message = errorMessage;
+            result.status = computeBackendStatus();
+            return result;
+        }
+
+        if (!ensureDirectory(QDir(kwinScriptDirectoryPath()).filePath(kScriptCodeDirectoryName), &errorMessage)
+            || !writeFileAtomically(kwinScriptMetadataFilePath(), scriptMetadataContents(), &errorMessage)
+            || !writeFileAtomically(kwinScriptMainFilePath(), scriptMainContents(), &errorMessage)) {
+            result.message = errorMessage;
+            unregisterHelperService();
+            result.status = computeBackendStatus();
+            return result;
+        }
+
         unloadKWinScriptBestEffort();
         setScriptEnabled(true);
         if (!reconfigureKWin(&errorMessage)) {
             result.message = errorMessage;
+            unregisterHelperService();
             result.status = computeBackendStatus();
             return result;
         }
@@ -682,28 +996,86 @@ public:
 
         QString errorMessage;
         setScriptEnabled(false);
-        stopHelperServiceBestEffort();
         unloadKWinScriptBestEffort();
 
         if (!removePath(kwinScriptDirectoryPath(), &errorMessage)
             || !removePath(helperServiceFilePath(), &errorMessage)
             || !removePath(snapshotFilePath(), &errorMessage)) {
             result.message = errorMessage;
+            unregisterHelperService();
             result.status = computeBackendStatus();
             return result;
         }
 
         if (!reconfigureKWin(&errorMessage)) {
             result.message = errorMessage;
+            unregisterHelperService();
             result.status = computeBackendStatus();
             return result;
         }
 
+        unregisterHelperService();
         result.ok = true;
         result.message = QStringLiteral("Removed the KWin script backend for window state.");
         result.status = computeBackendStatus();
         return result;
     }
+
+private:
+    bool registerHelperService(QString *errorMessage)
+    {
+        if (m_serviceRegistered && m_objectRegistered) {
+            return true;
+        }
+
+        m_helperService = std::make_unique<WindowProbeDbusService>();
+        QDBusConnection connection = QDBusConnection::sessionBus();
+        if (!connection.registerService(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE))) {
+            m_helperService.reset();
+            if (errorMessage != nullptr) {
+                *errorMessage = QStringLiteral("Failed to register the Plasma Bridge window DBus service. "
+                                               "Another plasma_bridge instance may already be running.");
+            }
+            return false;
+        }
+        m_serviceRegistered = true;
+
+        if (!connection.registerObject(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
+                                       m_helperService.get(),
+                                       QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals)) {
+            connection.unregisterService(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE));
+            m_serviceRegistered = false;
+            m_helperService.reset();
+            if (errorMessage != nullptr) {
+                *errorMessage = QStringLiteral("Failed to register the Plasma Bridge window DBus object.");
+            }
+            return false;
+        }
+        m_objectRegistered = true;
+        s_localHelperService = m_helperService.get();
+        return true;
+    }
+
+    void unregisterHelperService()
+    {
+        QDBusConnection connection = QDBusConnection::sessionBus();
+        if (m_objectRegistered) {
+            connection.unregisterObject(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH));
+            m_objectRegistered = false;
+        }
+        if (m_serviceRegistered) {
+            connection.unregisterService(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE));
+            m_serviceRegistered = false;
+        }
+        if (s_localHelperService == m_helperService.get()) {
+            s_localHelperService = nullptr;
+        }
+        m_helperService.reset();
+    }
+
+    std::unique_ptr<WindowProbeDbusService> m_helperService;
+    bool m_serviceRegistered = false;
+    bool m_objectRegistered = false;
 };
 
 KWinScriptWindowBackendController::KWinScriptWindowBackendController(QObject *parent)
@@ -739,6 +1111,18 @@ public:
 
         if (windowId.isEmpty()) {
             result.status = control::WindowActivationStatus::WindowNotFound;
+            return result;
+        }
+
+        if (s_localHelperService != nullptr) {
+            if (!s_localHelperService->IsReady()) {
+                result.status = control::WindowActivationStatus::NotReady;
+                return result;
+            }
+
+            result.status = s_localHelperService->RequestActivateWindow(windowId)
+                              ? control::WindowActivationStatus::Accepted
+                              : control::WindowActivationStatus::WindowNotActivatable;
             return result;
         }
 
@@ -793,6 +1177,13 @@ public:
     {
     }
 
+    ~Impl() override
+    {
+        if (m_started) {
+            m_controller.teardown();
+        }
+    }
+
     void start()
     {
         if (m_started) {
@@ -806,12 +1197,22 @@ public:
             return;
         }
 
-        if (!QDBusConnection::sessionBus().connect(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE),
-                                                   QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
-                                                   QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE),
-                                                   QStringLiteral("SnapshotChanged"),
-                                                   this,
-                                                   SLOT(handleSnapshotChanged(QString, QString, QString, QString)))) {
+        bool connected = false;
+        if (s_localHelperService != nullptr) {
+            connected = QObject::connect(s_localHelperService,
+                                         SIGNAL(SnapshotChanged(QString, QString, QString, QString)),
+                                         this,
+                                         SLOT(handleSnapshotChanged(QString, QString, QString, QString)));
+        } else {
+            connected =
+                QDBusConnection::sessionBus().connect(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE),
+                                                      QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
+                                                      QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE),
+                                                      QStringLiteral("SnapshotChanged"),
+                                                      this,
+                                                      SLOT(handleSnapshotChanged(QString, QString, QString, QString)));
+        }
+        if (!connected) {
             emit m_owner->connectionFailed(QStringLiteral("Failed to subscribe to KWin script window snapshot updates."));
             return;
         }
@@ -834,6 +1235,22 @@ public:
     void publishHelperSnapshotIfAvailable()
     {
         if (m_ready) {
+            return;
+        }
+
+        if (s_localHelperService != nullptr) {
+            const QString snapshotJson = s_localHelperService->GetSnapshot();
+            if (snapshotJson.isEmpty()) {
+                return;
+            }
+
+            QString errorMessage;
+            const std::optional<WindowSnapshot> snapshot = snapshotFromJsonText(snapshotJson, &errorMessage);
+            if (snapshot.has_value()) {
+                publishSnapshot(*snapshot, QStringLiteral("initial"), QString());
+            } else if (!errorMessage.isEmpty()) {
+                emit m_owner->connectionFailed(errorMessage);
+            }
             return;
         }
 

@@ -12,6 +12,7 @@
 
 - Configured non-loopback browser origins now receive CORS headers for backend responses and HTTP preflight requests.
 - Media resume from the web dashboard now uses the toggle-style play/pause action for better MPRIS compatibility across players.
+- Plasma sessions no longer auto-start a separate `window_probe_helper` process at login after the window backend has been used.
 
 ### Changed
 
@@ -20,10 +21,12 @@
 - The WebSocket state protocol version is now `3` to include top-level media state and `playerId` patch metadata.
 - Media state now includes playback position and seek capability, and the backend refreshes the selected player's position while it is playing.
 - The dashboard media controls now use centered icon-only transport buttons with a larger visual emphasis.
+- `plasma_bridge` now owns the KWin window-helper DBus service in-process and tears it down on normal exit instead of installing a persistent DBus-activated helper.
+- `window_probe` window commands now act as diagnostics for the running `plasma_bridge` backend instead of setting up a standalone persistent helper service.
 
 ### Removed
 
-- Nothing
+- The standalone `window_probe_helper` executable target and its DBus activation install path.
 
 ## [0.4.0] - 2026-04-27
 ### Added

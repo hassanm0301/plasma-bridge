@@ -113,15 +113,14 @@ Optional window probe backend inspection:
 ./backend/build/tools/probes/media_probe/media_probe --json current
 ./backend/build/tools/probes/media_probe/media_probe --json play-pause
 ./backend/build/tools/probes/media_probe/media_probe --watch
-./backend/build/tools/probes/window_probe/window_probe setup
 ./backend/build/tools/probes/window_probe/window_probe status
 ./backend/build/tools/probes/window_probe/window_probe --json list
 ./backend/build/tools/probes/window_probe/window_probe --json active
 ./backend/build/tools/probes/window_probe/window_probe --json activate window-editor
 ```
 
-`plasma_bridge` auto-installs and enables the same KWin script helper backend on startup.
-The standalone `window_probe` tool uses that shared backend too; run `setup` from a KDE Plasma session before using `window_probe list` or `active` directly.
+`plasma_bridge` owns the KWin script helper service while it is running and tears it down on normal exit.
+The standalone `window_probe` tool is a diagnostic client for that app-owned backend, so start `plasma_bridge` before using `window_probe list`, `active`, or `activate`.
 
 ## Verify
 

@@ -365,7 +365,7 @@ void WindowProbeRunnerTest::runnerTimesOutBeforeInitialSnapshot()
 
     QTRY_COMPARE(finishedSpy.count(), 1);
     QCOMPARE(finishedSpy.takeFirst().at(0).toInt(), 1);
-    QVERIFY(errorText.contains(QStringLiteral("Timed out waiting for cached KWin script window state.")));
+    QVERIFY(errorText.contains(QStringLiteral("Timed out waiting for KWin script window state.")));
 }
 
 void WindowProbeRunnerTest::runnerFailsWhenConnectionBreaksBeforeReady()

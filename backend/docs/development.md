@@ -74,4 +74,4 @@ cmake --build backend/build --target plasma_bridge
 ./backend/build/src/app/plasma_bridge
 ```
 
-Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `media_probe --json current` and `media_probe --json play-pause` when diagnosing MPRIS media behavior, and `window_probe setup`, `window_probe status`, and `window_probe activate <window-id>` when diagnosing the shared KWin script helper backend directly.
+Use the hosted docs at `http://127.0.0.1:8080/docs/` for manual API inspection. Use `media_probe --json current` and `media_probe --json play-pause` when diagnosing MPRIS media behavior. Start `plasma_bridge`, then use `window_probe status`, `window_probe list`, and `window_probe activate <window-id>` when diagnosing the app-owned KWin script helper backend directly.

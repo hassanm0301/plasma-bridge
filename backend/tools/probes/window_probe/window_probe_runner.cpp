@@ -4,8 +4,12 @@
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDBusConnection>
+#include <QDBusInterface>
+#include <QDBusReply>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonParseError>
 #include <QTextStream>
 #include <QTimer>
 
@@ -85,6 +89,7 @@ QJsonObject statusJson(const WindowProbeBackendStatus &status)
     json[QStringLiteral("scriptInstalled")] = status.scriptInstalled;
     json[QStringLiteral("scriptEnabled")] = status.scriptEnabled;
     json[QStringLiteral("helperServiceInstalled")] = status.helperServiceInstalled;
+    json[QStringLiteral("legacyHelperServiceInstalled")] = status.helperServiceInstalled;
     json[QStringLiteral("helperServiceRegistered")] = status.helperServiceRegistered;
     json[QStringLiteral("snapshotCached")] = status.snapshotCached;
     json[QStringLiteral("snapshotReady")] = status.snapshotReady;
@@ -108,6 +113,24 @@ bool snapshotContainsWindow(const plasma_bridge::WindowSnapshot &snapshot, const
     });
 }
 
+std::optional<plasma_bridge::WindowSnapshot> snapshotFromJsonText(const QString &snapshotJson, QString *errorMessage = nullptr)
+{
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(snapshotJson.toUtf8(), &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Window snapshot JSON is invalid.");
+        }
+        return std::nullopt;
+    }
+
+    const std::optional<plasma_bridge::WindowSnapshot> snapshot = plasma_bridge::windowSnapshotFromJson(document.object());
+    if (!snapshot.has_value() && errorMessage != nullptr) {
+        *errorMessage = QStringLiteral("Window snapshot has an invalid shape.");
+    }
+    return snapshot;
+}
+
 } // namespace
 
 class KWinScriptWindowProbeBackendController::Impl final
@@ -115,7 +138,10 @@ class KWinScriptWindowProbeBackendController::Impl final
 public:
     WindowProbeCommandResult setup()
     {
-        return toProbeResult(m_backend.setup());
+        WindowProbeCommandResult result = status();
+        result.ok = true;
+        result.message = QStringLiteral("The KWin script backend is managed by plasma_bridge. Start plasma_bridge to enable it.");
+        return result;
     }
 
     WindowProbeCommandResult status() const
@@ -125,6 +151,14 @@ public:
 
     WindowProbeCommandResult teardown()
     {
+        const WindowProbeCommandResult current = status();
+        if (current.status.helperServiceRegistered) {
+            WindowProbeCommandResult result = current;
+            result.ok = false;
+            result.message = QStringLiteral("plasma_bridge is running. Stop it before running window_probe teardown.");
+            return result;
+        }
+
         return toProbeResult(m_backend.teardown());
     }
 
@@ -174,7 +208,7 @@ public:
         , m_owner(owner)
     {
         m_pollTimer.setInterval(kSnapshotPollIntervalMs);
-        connect(&m_pollTimer, &QTimer::timeout, this, &Impl::pollCache);
+        connect(&m_pollTimer, &QTimer::timeout, this, &Impl::pollService);
     }
 
     void start()
@@ -184,17 +218,37 @@ public:
         }
 
         m_started = true;
-        pollCache();
+        pollService();
         if (!m_ready) {
             m_pollTimer.start();
         }
     }
 
-    void pollCache()
+    void pollService()
     {
+        QDBusInterface helper(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE),
+                              QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
+                              QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE),
+                              QDBusConnection::sessionBus());
+        if (!helper.isValid()) {
+            m_pollTimer.stop();
+            emit m_owner->connectionFailed(QStringLiteral("window_probe backend is not running. Start `plasma_bridge` first."));
+            return;
+        }
+
+        const QDBusReply<QString> reply = helper.call(QStringLiteral("GetSnapshot"));
+        if (!reply.isValid()) {
+            m_pollTimer.stop();
+            emit m_owner->connectionFailed(QStringLiteral("Failed to read window state from plasma_bridge."));
+            return;
+        }
+
+        if (reply.value().isEmpty()) {
+            return;
+        }
+
         QString errorMessage;
-        const std::optional<plasma_bridge::WindowSnapshot> snapshot =
-            window::readKWinScriptCachedSnapshot(&errorMessage);
+        const std::optional<plasma_bridge::WindowSnapshot> snapshot = snapshotFromJsonText(reply.value(), &errorMessage);
         if (snapshot.has_value()) {
             m_snapshot = *snapshot;
             m_ready = true;
@@ -263,7 +317,7 @@ WindowProbeRunner::WindowProbeRunner(WindowProbeSource *source,
     connect(m_startupTimer, &QTimer::timeout, this, [this]() {
         if (m_source != nullptr && !m_source->hasInitialSnapshot()) {
             if (m_error != nullptr) {
-                *m_error << "Timed out waiting for cached KWin script window state." << Qt::endl;
+                *m_error << "Timed out waiting for KWin script window state." << Qt::endl;
             }
             finish(1);
         }
@@ -619,7 +673,7 @@ QString formatHumanResultText(const WindowProbeOptions &options, const WindowPro
     stream << "Message: " << result.message << '\n';
     stream << "Script Installed: " << boolText(result.status.scriptInstalled) << '\n';
     stream << "Script Enabled: " << boolText(result.status.scriptEnabled) << '\n';
-    stream << "Helper Service Installed: " << boolText(result.status.helperServiceInstalled) << '\n';
+    stream << "Legacy Helper Service File: " << boolText(result.status.helperServiceInstalled) << '\n';
     stream << "Helper Service Registered: " << boolText(result.status.helperServiceRegistered) << '\n';
     stream << "Snapshot Cached: " << boolText(result.status.snapshotCached) << '\n';
     stream << "Snapshot Ready: " << boolText(result.status.snapshotReady) << '\n';
