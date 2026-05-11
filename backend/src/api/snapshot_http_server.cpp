@@ -28,6 +28,7 @@
 #include <QStandardPaths>
 #include <QTcpSocket>
 #include <QUrl>
+#include <QUrlQuery>
 
 #include <algorithm>
 #include <cmath>
@@ -72,6 +73,12 @@ enum class SnapshotRoute {
     MediaCurrent,
     Windows,
     ActiveWindow,
+};
+
+struct WindowSnapshotSortOptions {
+    plasma_bridge::WindowSortField field = plasma_bridge::WindowSortField::Usage;
+    plasma_bridge::WindowSortDirection direction =
+        plasma_bridge::defaultWindowSortDirection(plasma_bridge::WindowSortField::Usage);
 };
 
 SnapshotRoute snapshotRouteForPath(const QString &path)
@@ -305,6 +312,98 @@ QString requestPathFromTarget(const QByteArray &target)
     }
 
     return path;
+}
+
+bool parseWindowSnapshotSortOptions(const QByteArray &target,
+                                    WindowSnapshotSortOptions *outOptions,
+                                    QString *errorMessage)
+{
+    if (outOptions == nullptr) {
+        return false;
+    }
+
+    *outOptions = WindowSnapshotSortOptions{};
+
+    const QString requestTarget = QString::fromUtf8(target);
+    const qsizetype queryIndex = requestTarget.indexOf(QLatin1Char('?'));
+    if (queryIndex < 0) {
+        return true;
+    }
+
+    QUrlQuery query;
+    query.setQuery(requestTarget.mid(queryIndex + 1));
+
+    const bool hasSortBy = query.hasQueryItem(QStringLiteral("sortBy"));
+    const bool hasSortDirection = query.hasQueryItem(QStringLiteral("sortDirection"));
+    const bool hasLegacySortOrder = query.hasQueryItem(QStringLiteral("sortOrder"));
+    if (hasLegacySortOrder) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("sortOrder is no longer supported. Use sortDirection.");
+        }
+        return false;
+    }
+
+    if (!hasSortBy && !hasSortDirection) {
+        return true;
+    }
+
+    std::optional<plasma_bridge::WindowSortField> inferredField;
+    if (hasSortBy) {
+        const QString sortBy = query.queryItemValue(QStringLiteral("sortBy")).trimmed();
+        if (sortBy == QStringLiteral("usage")) {
+            outOptions->field = plasma_bridge::WindowSortField::Usage;
+        } else if (sortBy == QStringLiteral("name")) {
+            outOptions->field = plasma_bridge::WindowSortField::Name;
+        } else {
+            if (errorMessage != nullptr) {
+                *errorMessage = QStringLiteral("sortBy must be one of: usage, name.");
+            }
+            return false;
+        }
+    }
+
+    if (hasSortDirection) {
+        const QString sortDirection = query.queryItemValue(QStringLiteral("sortDirection")).trimmed();
+        if (sortDirection == QStringLiteral("newest_first")) {
+            outOptions->direction = plasma_bridge::WindowSortDirection::NewestFirst;
+            inferredField = plasma_bridge::WindowSortField::Usage;
+        } else if (sortDirection == QStringLiteral("oldest_first")) {
+            outOptions->direction = plasma_bridge::WindowSortDirection::OldestFirst;
+            inferredField = plasma_bridge::WindowSortField::Usage;
+        } else if (sortDirection == QStringLiteral("asc")) {
+            outOptions->direction = plasma_bridge::WindowSortDirection::Ascending;
+            inferredField = plasma_bridge::WindowSortField::Name;
+        } else if (sortDirection == QStringLiteral("desc")) {
+            outOptions->direction = plasma_bridge::WindowSortDirection::Descending;
+            inferredField = plasma_bridge::WindowSortField::Name;
+        } else {
+            if (errorMessage != nullptr) {
+                *errorMessage =
+                    QStringLiteral("sortDirection must be one of: newest_first, oldest_first, asc, desc.");
+            }
+            return false;
+        }
+    }
+
+    if (!hasSortBy && inferredField.has_value()) {
+        outOptions->field = *inferredField;
+    }
+
+    if (hasSortDirection && !plasma_bridge::isValidWindowSortDirection(outOptions->field, outOptions->direction)) {
+        if (errorMessage != nullptr) {
+            *errorMessage =
+                outOptions->field == plasma_bridge::WindowSortField::Usage
+                    ? QStringLiteral("sortDirection must be newest_first or oldest_first when sortBy=usage.")
+                    : QStringLiteral("sortDirection must be asc or desc when sortBy=name.");
+        }
+        return false;
+    }
+
+    if (!hasSortDirection) {
+        outOptions->direction = plasma_bridge::defaultWindowSortDirection(outOptions->field);
+    }
+
+    return true;
 }
 
 bool parseHeaders(const QList<QByteArray> &lines, QHash<QByteArray, QByteArray> *outHeaders, QString *errorMessage)
@@ -963,7 +1062,8 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
     }
 
     const QByteArray method = requestLineParts.at(0);
-    const QString path = requestPathFromTarget(requestLineParts.at(1));
+    const QByteArray target = requestLineParts.at(1);
+    const QString path = requestPathFromTarget(target);
     QHash<QByteArray, QByteArray> headers;
     QString headerErrorMessage;
     if (!parseHeaders(lines, &headers, &headerErrorMessage)) {
@@ -1506,11 +1606,27 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
 
-        writeJsonResponse(socket,
-                          200,
-                          QByteArrayLiteral("OK"),
-                          buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(m_windowStateStore->windowState())));
-        return;
+        {
+            WindowSnapshotSortOptions sortOptions;
+            QString sortErrorMessage;
+            if (!parseWindowSnapshotSortOptions(target, &sortOptions, &sortErrorMessage)) {
+                writeJsonErrorResponse(socket,
+                                       400,
+                                       QByteArrayLiteral("Bad Request"),
+                                       QStringLiteral("bad_request"),
+                                       sortErrorMessage);
+                return;
+            }
+
+            plasma_bridge::WindowSnapshot snapshot = m_windowStateStore->windowState();
+            snapshot = plasma_bridge::sortWindowSnapshot(snapshot, sortOptions.field, sortOptions.direction);
+
+            writeJsonResponse(socket,
+                              200,
+                              QByteArrayLiteral("OK"),
+                              buildHttpSuccessEnvelope(plasma_bridge::toJsonObject(snapshot)));
+            return;
+        }
     case SnapshotRoute::ActiveWindow: {
         if (m_windowStateStore == nullptr || !m_windowStateStore->isReady()) {
             writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),

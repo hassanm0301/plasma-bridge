@@ -315,7 +315,28 @@ paths:
         - Snapshots / Windows
       operationId: getWindowSnapshot
       summary: List windows
-      description: Returns the current Plasma window snapshot, including the resolved active window.
+      description: >
+        Returns the current Plasma window snapshot, including the resolved active window.
+        By default, windows are sorted by `usage` with the newest window first.
+        Use the optional query parameters to request explicit usage or name sorting.
+      parameters:
+        - name: sortBy
+          in: query
+          required: false
+          description: Window sort field. When omitted, the endpoint defaults to `usage`.
+          schema:
+            type: string
+            enum: [usage, name]
+        - name: sortDirection
+          in: query
+          required: false
+          description: >
+            Sort direction. Use `newest_first` or `oldest_first` with `sortBy=usage`,
+            and `asc` or `desc` with `sortBy=name`. When omitted, the endpoint uses the
+            default direction for the selected sort field.
+          schema:
+            type: string
+            enum: [newest_first, oldest_first, asc, desc]
       responses:
         '200':
           description: Current window snapshot.
@@ -349,6 +370,19 @@ paths:
                         iconUrl: /icons/apps/org.kde.kate
                       windows: []
                     error: null
+        '400':
+          description: Invalid window sort query parameter.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                invalidSort:
+                  value:
+                    payload: null
+                    error:
+                      code: bad_request
+                      message: sortBy must be one of: usage, name.
         '405':
           description: Method not allowed.
           headers:

@@ -28,6 +28,7 @@ private slots:
     void servesSnapshotAndDefaultSinkEndpoints();
     void servesMediaSnapshotAndControlEndpoints();
     void servesWindowSnapshotEndpoints();
+    void rejectsInvalidWindowSortQuery();
     void reportsNotReadyAndMissingDefaultSink();
     void reportsMediaNotReady();
     void reportsWindowNotReadyAndNoActiveWindow();
@@ -310,7 +311,56 @@ void SnapshotHttpServerFeatureTest::servesWindowSnapshotEndpoints()
     QCOMPARE(windowsJson.value(QStringLiteral("activeWindow")).toObject().value(QStringLiteral("iconUrl")).toString(),
              QStringLiteral("/icons/apps/org.kde.kate"));
     QCOMPARE(windowsJson.value(QStringLiteral("windows")).toArray().size(), snapshot.windows.size());
+    QCOMPARE(windowsJson.value(QStringLiteral("windows")).toArray().at(0).toObject().value(QStringLiteral("id")).toString(),
+             QStringLiteral("window-editor"));
+    QCOMPARE(windowsJson.value(QStringLiteral("windows")).toArray().at(1).toObject().value(QStringLiteral("id")).toString(),
+             QStringLiteral("window-terminal"));
     windowsReply->deleteLater();
+
+    QNetworkReply *sortedByUsageOldestReply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(
+            server.serverPort(), QStringLiteral("/snapshot/windows?sortBy=usage&sortDirection=oldest_first"))));
+    QSignalSpy sortedByUsageOldestSpy(sortedByUsageOldestReply, &QNetworkReply::finished);
+    QVERIFY(sortedByUsageOldestSpy.wait());
+    QCOMPARE(sortedByUsageOldestReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject sortedEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sortedByUsageOldestReply));
+        QVERIFY(sortedEnvelope.value(QStringLiteral("error")).isNull());
+        const QJsonArray windows = payloadObject(sortedEnvelope).value(QStringLiteral("windows")).toArray();
+        QCOMPARE(windows.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("window-terminal"));
+        QCOMPARE(windows.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("window-editor"));
+    }
+    sortedByUsageOldestReply->deleteLater();
+
+    QNetworkReply *sortedByNameAscReply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(
+            server.serverPort(), QStringLiteral("/snapshot/windows?sortBy=name&sortDirection=asc"))));
+    QSignalSpy sortedByNameAscSpy(sortedByNameAscReply, &QNetworkReply::finished);
+    QVERIFY(sortedByNameAscSpy.wait());
+    QCOMPARE(sortedByNameAscReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject sortedEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sortedByNameAscReply));
+        QVERIFY(sortedEnvelope.value(QStringLiteral("error")).isNull());
+        const QJsonArray windows = payloadObject(sortedEnvelope).value(QStringLiteral("windows")).toArray();
+        QCOMPARE(windows.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("window-editor"));
+        QCOMPARE(windows.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("window-terminal"));
+    }
+    sortedByNameAscReply->deleteLater();
+
+    QNetworkReply *sortedByNameDescReply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(
+            server.serverPort(), QStringLiteral("/snapshot/windows?sortBy=name&sortDirection=desc"))));
+    QSignalSpy sortedByNameDescSpy(sortedByNameDescReply, &QNetworkReply::finished);
+    QVERIFY(sortedByNameDescSpy.wait());
+    QCOMPARE(sortedByNameDescReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject sortedEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(sortedByNameDescReply));
+        QVERIFY(sortedEnvelope.value(QStringLiteral("error")).isNull());
+        const QJsonArray windows = payloadObject(sortedEnvelope).value(QStringLiteral("windows")).toArray();
+        QCOMPARE(windows.at(0).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("window-terminal"));
+        QCOMPARE(windows.at(1).toObject().value(QStringLiteral("id")).toString(), QStringLiteral("window-editor"));
+    }
+    sortedByNameDescReply->deleteLater();
 
     QNetworkReply *activeReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
                                                                                            QStringLiteral("/snapshot/windows/active"))));
@@ -325,6 +375,59 @@ void SnapshotHttpServerFeatureTest::servesWindowSnapshotEndpoints()
     QCOMPARE(activeJson.value(QStringLiteral("window")).toObject().value(QStringLiteral("iconUrl")).toString(),
              QStringLiteral("/icons/apps/org.kde.kate"));
     activeReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::rejectsInvalidWindowSortQuery()
+{
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkReply *reply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(
+        server.serverPort(), QStringLiteral("/snapshot/windows?sortBy=priority&sortDirection=sideways"))));
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+
+    const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(reply));
+    QVERIFY(envelope.value(QStringLiteral("payload")).isNull());
+    QCOMPARE(errorObject(envelope).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    QCOMPARE(errorObject(envelope).value(QStringLiteral("message")).toString(),
+             QStringLiteral("sortBy must be one of: usage, name."));
+    reply->deleteLater();
+
+    QNetworkReply *mismatchedReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(
+        server.serverPort(), QStringLiteral("/snapshot/windows?sortBy=usage&sortDirection=asc"))));
+    QSignalSpy mismatchedSpy(mismatchedReply, &QNetworkReply::finished);
+    QVERIFY(mismatchedSpy.wait());
+    QCOMPARE(mismatchedReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+
+    const QJsonObject mismatchedEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(mismatchedReply));
+    QCOMPARE(errorObject(mismatchedEnvelope).value(QStringLiteral("message")).toString(),
+             QStringLiteral("sortDirection must be newest_first or oldest_first when sortBy=usage."));
+    mismatchedReply->deleteLater();
+
+    QNetworkReply *nameMismatchReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(
+        server.serverPort(), QStringLiteral("/snapshot/windows?sortBy=name&sortDirection=newest_first"))));
+    QSignalSpy nameMismatchSpy(nameMismatchReply, &QNetworkReply::finished);
+    QVERIFY(nameMismatchSpy.wait());
+    QCOMPARE(nameMismatchReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+
+    const QJsonObject nameMismatchEnvelope = plasma_bridge::tests::parseJsonObject(readReplyBody(nameMismatchReply));
+    QCOMPARE(errorObject(nameMismatchEnvelope).value(QStringLiteral("message")).toString(),
+             QStringLiteral("sortDirection must be asc or desc when sortBy=name."));
+    nameMismatchReply->deleteLater();
 }
 
 void SnapshotHttpServerFeatureTest::reportsNotReadyAndMissingDefaultSink()

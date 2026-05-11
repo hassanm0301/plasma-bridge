@@ -44,6 +44,21 @@ struct WindowSnapshot {
     QString activeWindowId;
 };
 
+enum class WindowSortField {
+    Usage,
+    Name,
+};
+
+enum class WindowSortDirection {
+    NewestFirst,
+    OldestFirst,
+    Ascending,
+    Descending,
+};
+
+WindowSortDirection defaultWindowSortDirection(WindowSortField sortField);
+bool isValidWindowSortDirection(WindowSortField sortField, WindowSortDirection sortDirection);
+
 WindowGeometryState toWindowGeometryState(const QRect &rect);
 QRect toQRect(const WindowGeometryState &state);
 
@@ -55,6 +70,9 @@ std::optional<WindowState> windowStateFromJson(const QJsonObject &json);
 std::optional<WindowSnapshot> windowSnapshotFromJson(const QJsonObject &json);
 
 WindowSnapshot normalizeWindowSnapshot(const WindowSnapshot &snapshot);
+WindowSnapshot sortWindowSnapshot(const WindowSnapshot &snapshot,
+                                  WindowSortField sortField,
+                                  WindowSortDirection sortDirection);
 std::optional<WindowState> activeWindow(const WindowSnapshot &snapshot);
 
 QString formatHumanReadableWindowList(const WindowSnapshot &snapshot);

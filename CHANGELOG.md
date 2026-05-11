@@ -8,6 +8,7 @@
 - `media_probe` for local current-session inspection and transport control.
 - A current-media section in the React dashboard between windows and sinks/sources, including artwork or app-icon rendering plus previous, play/pause, and next controls.
 - Media playback progress reporting and seek support, including draggable web timeline controls with elapsed and total track time.
+- `/snapshot/windows` now accepts optional `sortBy` and `sortDirection` query parameters for `usage` or `name` window ordering.
 
 ### Fixed
 

@@ -137,6 +137,8 @@ curl http://127.0.0.1:8080/snapshot/audio/sources
 curl http://127.0.0.1:8080/snapshot/audio/default-source
 curl http://127.0.0.1:8080/snapshot/media/current
 curl http://127.0.0.1:8080/snapshot/windows
+curl 'http://127.0.0.1:8080/snapshot/windows?sortBy=usage&sortDirection=oldest_first'
+curl 'http://127.0.0.1:8080/snapshot/windows?sortBy=name&sortDirection=asc'
 curl http://127.0.0.1:8080/snapshot/windows/active
 curl -X POST http://127.0.0.1:8080/control/audio/sinks/${SINK_ID}/default
 curl -X POST http://127.0.0.1:8080/control/audio/sources/${SOURCE_ID}/default

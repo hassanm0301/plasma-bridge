@@ -30,6 +30,43 @@ QString joinValuesOrFallback(const QStringList &values, const QString &fallback)
     return values.isEmpty() ? fallback : values.join(QStringLiteral(", "));
 }
 
+QString windowSortName(const WindowState &window)
+{
+    if (!window.title.isEmpty()) {
+        return window.title;
+    }
+    if (!window.appId.isEmpty()) {
+        return window.appId;
+    }
+    if (!window.resourceName.isEmpty()) {
+        return window.resourceName;
+    }
+    return window.id;
+}
+
+int compareTextKeys(const QString &left, const QString &right)
+{
+    return QString::compare(left, right, Qt::CaseInsensitive);
+}
+
+void moveWindowToIndex(QList<WindowState> *windows, const QString &windowId, const qsizetype index)
+{
+    if (windows == nullptr || windowId.isEmpty() || windows->isEmpty() || index < 0 || index >= windows->size()) {
+        return;
+    }
+
+    const auto it = std::find_if(windows->begin(), windows->end(), [&windowId](const WindowState &window) {
+        return window.id == windowId;
+    });
+    if (it == windows->end()) {
+        return;
+    }
+
+    const WindowState window = *it;
+    windows->erase(it);
+    windows->insert(index, window);
+}
+
 QStringList stringListFromJson(const QJsonValue &value)
 {
     QStringList values;
@@ -274,6 +311,63 @@ WindowSnapshot normalizeWindowSnapshot(const WindowSnapshot &snapshot)
     }
 
     return normalized;
+}
+
+WindowSortDirection defaultWindowSortDirection(const WindowSortField sortField)
+{
+    return sortField == WindowSortField::Usage ? WindowSortDirection::NewestFirst
+                                               : WindowSortDirection::Ascending;
+}
+
+bool isValidWindowSortDirection(const WindowSortField sortField, const WindowSortDirection sortDirection)
+{
+    switch (sortField) {
+    case WindowSortField::Usage:
+        return sortDirection == WindowSortDirection::NewestFirst || sortDirection == WindowSortDirection::OldestFirst;
+    case WindowSortField::Name:
+        return sortDirection == WindowSortDirection::Ascending || sortDirection == WindowSortDirection::Descending;
+    }
+
+    return false;
+}
+
+WindowSnapshot sortWindowSnapshot(const WindowSnapshot &snapshot,
+                                  const WindowSortField sortField,
+                                  const WindowSortDirection sortDirection)
+{
+    WindowSnapshot sorted = normalizeWindowSnapshot(snapshot);
+
+    if (!isValidWindowSortDirection(sortField, sortDirection)) {
+        sorted.windows = sortWindowSnapshot(sorted, sortField, defaultWindowSortDirection(sortField)).windows;
+        return sorted;
+    }
+
+    if (sortField == WindowSortField::Name) {
+        std::stable_sort(sorted.windows.begin(), sorted.windows.end(), [sortDirection](const WindowState &left,
+                                                                                       const WindowState &right) {
+            const int nameComparison = compareTextKeys(windowSortName(left), windowSortName(right));
+            if (nameComparison != 0) {
+                return sortDirection == WindowSortDirection::Ascending ? nameComparison < 0 : nameComparison > 0;
+            }
+
+            const int idComparison = compareTextKeys(left.id, right.id);
+            if (idComparison != 0) {
+                return sortDirection == WindowSortDirection::Ascending ? idComparison < 0 : idComparison > 0;
+            }
+
+            return false;
+        });
+        return sorted;
+    }
+
+    if (sortDirection == WindowSortDirection::NewestFirst) {
+        std::reverse(sorted.windows.begin(), sorted.windows.end());
+        moveWindowToIndex(&sorted.windows, sorted.activeWindowId, 0);
+        return sorted;
+    }
+
+    moveWindowToIndex(&sorted.windows, sorted.activeWindowId, sorted.windows.size() - 1);
+    return sorted;
 }
 
 std::optional<WindowState> activeWindow(const WindowSnapshot &snapshot)

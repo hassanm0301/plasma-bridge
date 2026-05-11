@@ -15,6 +15,10 @@ private slots:
     void snapshotRoundTripsThroughJsonHelpers();
     void activeWindowFallsBackToActiveFlag();
     void normalizeSnapshotMakesActiveStateConsistent();
+    void sortsSnapshotByNameAscending();
+    void sortsSnapshotByNameDescending();
+    void sortsSnapshotByUsageNewestFirst();
+    void sortsSnapshotByUsageOldestFirst();
     void humanReadableFormattingIncludesImportantFields();
 };
 
@@ -107,6 +111,58 @@ void WindowStateTest::normalizeSnapshotMakesActiveStateConsistent()
              QStringLiteral("window-terminal"));
     QCOMPARE(json.value(QStringLiteral("windows")).toArray().at(0).toObject().value(QStringLiteral("isActive")).toBool(),
              true);
+}
+
+void WindowStateTest::sortsSnapshotByNameAscending()
+{
+    const plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+
+    const plasma_bridge::WindowSnapshot sorted = plasma_bridge::sortWindowSnapshot(
+        snapshot, plasma_bridge::WindowSortField::Name, plasma_bridge::WindowSortDirection::Ascending);
+
+    QCOMPARE(sorted.activeWindowId, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(0).id, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(1).id, QStringLiteral("window-terminal"));
+    QCOMPARE(sorted.windows.at(0).isActive, true);
+}
+
+void WindowStateTest::sortsSnapshotByNameDescending()
+{
+    const plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+
+    const plasma_bridge::WindowSnapshot sorted = plasma_bridge::sortWindowSnapshot(
+        snapshot, plasma_bridge::WindowSortField::Name, plasma_bridge::WindowSortDirection::Descending);
+
+    QCOMPARE(sorted.activeWindowId, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(0).id, QStringLiteral("window-terminal"));
+    QCOMPARE(sorted.windows.at(1).id, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(1).isActive, true);
+}
+
+void WindowStateTest::sortsSnapshotByUsageNewestFirst()
+{
+    const plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+
+    const plasma_bridge::WindowSnapshot sorted = plasma_bridge::sortWindowSnapshot(
+        snapshot, plasma_bridge::WindowSortField::Usage, plasma_bridge::WindowSortDirection::NewestFirst);
+
+    QCOMPARE(sorted.activeWindowId, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(0).id, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(1).id, QStringLiteral("window-terminal"));
+    QCOMPARE(sorted.windows.at(0).isActive, true);
+}
+
+void WindowStateTest::sortsSnapshotByUsageOldestFirst()
+{
+    const plasma_bridge::WindowSnapshot snapshot = plasma_bridge::tests::sampleWindowSnapshot();
+
+    const plasma_bridge::WindowSnapshot sorted = plasma_bridge::sortWindowSnapshot(
+        snapshot, plasma_bridge::WindowSortField::Usage, plasma_bridge::WindowSortDirection::OldestFirst);
+
+    QCOMPARE(sorted.activeWindowId, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(0).id, QStringLiteral("window-terminal"));
+    QCOMPARE(sorted.windows.at(1).id, QStringLiteral("window-editor"));
+    QCOMPARE(sorted.windows.at(1).isActive, true);
 }
 
 void WindowStateTest::humanReadableFormattingIncludesImportantFields()
