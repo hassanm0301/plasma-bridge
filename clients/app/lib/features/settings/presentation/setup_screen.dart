@@ -18,6 +18,8 @@ class SetupScreen extends ConsumerStatefulWidget {
 class _SetupScreenState extends ConsumerState<SetupScreen> {
   late final TextEditingController _httpController;
   late final TextEditingController _wsController;
+  WindowSortBy _windowSortBy = WindowSortBy.usage;
+  WindowSortDirection _windowSortDirection = WindowSortDirection.newestFirst;
   String? _error;
 
   @override
@@ -42,6 +44,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
             EndpointSettings(
               httpBaseUrl: _httpController.text,
               wsUrl: _wsController.text,
+              windowSortBy: _windowSortBy,
+              windowSortDirection: _windowSortDirection,
             ),
           );
     } on FormatException catch (error) {
@@ -185,6 +189,45 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 16),
+          Text('Window Sort', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 10),
+          SegmentedButton<WindowSortBy>(
+            selected: {_windowSortBy},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _windowSortBy = selection.first;
+                _windowSortDirection = normalizeWindowSortDirection(
+                  _windowSortBy,
+                  _windowSortDirection,
+                );
+              });
+            },
+            segments: const [
+              ButtonSegment(
+                value: WindowSortBy.usage,
+                label: Text('Usage'),
+                icon: Icon(Icons.history_rounded),
+              ),
+              ButtonSegment(
+                value: WindowSortBy.name,
+                label: Text('Name'),
+                icon: Icon(Icons.sort_by_alpha_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text('Direction', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 10),
+          SegmentedButton<WindowSortDirection>(
+            selected: {_windowSortDirection},
+            onSelectionChanged: (selection) {
+              setState(() {
+                _windowSortDirection = selection.first;
+              });
+            },
+            segments: _directionSegments(_windowSortBy),
+          ),
           if (_error != null) ...[
             const SizedBox(height: 12),
             Text(
@@ -203,5 +246,38 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         ],
       ),
     );
+  }
+
+  List<ButtonSegment<WindowSortDirection>> _directionSegments(
+    WindowSortBy sortBy,
+  ) {
+    switch (sortBy) {
+      case WindowSortBy.usage:
+        return const [
+          ButtonSegment(
+            value: WindowSortDirection.newestFirst,
+            label: Text('Newest first'),
+            icon: Icon(Icons.keyboard_double_arrow_left_rounded),
+          ),
+          ButtonSegment(
+            value: WindowSortDirection.oldestFirst,
+            label: Text('Oldest first'),
+            icon: Icon(Icons.keyboard_double_arrow_right_rounded),
+          ),
+        ];
+      case WindowSortBy.name:
+        return const [
+          ButtonSegment(
+            value: WindowSortDirection.ascending,
+            label: Text('A-Z'),
+            icon: Icon(Icons.arrow_upward_rounded),
+          ),
+          ButtonSegment(
+            value: WindowSortDirection.descending,
+            label: Text('Z-A'),
+            icon: Icon(Icons.arrow_downward_rounded),
+          ),
+        ];
+    }
   }
 }

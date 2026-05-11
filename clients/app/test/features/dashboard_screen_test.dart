@@ -18,6 +18,8 @@ class _FakeSettingsController extends SettingsController {
       endpointSettings: EndpointSettings(
         httpBaseUrl: 'http://192.168.1.20:8080',
         wsUrl: 'ws://192.168.1.20:8081/ws',
+        windowSortBy: WindowSortBy.usage,
+        windowSortDirection: WindowSortDirection.newestFirst,
       ),
       themeMode: AppThemeMode.light,
     );

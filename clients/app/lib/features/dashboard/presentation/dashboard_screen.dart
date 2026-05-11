@@ -6,6 +6,7 @@ import '../../../core/widgets/desktop_panel.dart';
 import '../../../core/utils/backend_state_helpers.dart';
 import '../../audio/presentation/audio_section.dart';
 import '../../media/presentation/media_section.dart';
+import '../../settings/domain/endpoint_settings.dart';
 import '../../settings/presentation/settings_sheet.dart';
 import '../../windows/presentation/windows_section.dart';
 import '../application/app_providers.dart';
@@ -105,6 +106,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             wideLayout: wideLayout,
             state: state,
             httpBaseUrl: endpointSettings.httpBaseUrl,
+            windowSortBy: endpointSettings.windowSortBy,
+            windowSortDirection: endpointSettings.windowSortDirection,
             sinks: sinks,
             sources: sources,
             controller: controller,
@@ -136,6 +139,8 @@ class _DashboardBody extends StatelessWidget {
     required this.wideLayout,
     required this.state,
     required this.httpBaseUrl,
+    required this.windowSortBy,
+    required this.windowSortDirection,
     required this.sinks,
     required this.sources,
     required this.controller,
@@ -144,6 +149,8 @@ class _DashboardBody extends StatelessWidget {
   final bool wideLayout;
   final DashboardState state;
   final String httpBaseUrl;
+  final WindowSortBy windowSortBy;
+  final WindowSortDirection windowSortDirection;
   final List<AudioDeviceState> sinks;
   final List<AudioDeviceState> sources;
   final DashboardController controller;
@@ -153,6 +160,8 @@ class _DashboardBody extends StatelessWidget {
     final windowsSection = WindowsSection(
       snapshot: state.backendState.windowState,
       httpBaseUrl: httpBaseUrl,
+      sortBy: windowSortBy,
+      sortDirection: windowSortDirection,
       pendingActions: state.pendingActions,
       errors: state.rowErrors,
       onActivateWindow: controller.activateWindow,

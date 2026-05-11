@@ -26,6 +26,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   late final TextEditingController _httpController;
   late final TextEditingController _wsController;
   late AppThemeMode _themeMode;
+  late WindowSortBy _windowSortBy;
+  late WindowSortDirection _windowSortDirection;
   String? _error;
 
   @override
@@ -34,6 +36,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
     _httpController = TextEditingController(text: widget.settings.httpBaseUrl);
     _wsController = TextEditingController(text: widget.settings.wsUrl);
     _themeMode = ref.read(settingsControllerProvider).themeMode;
+    _windowSortBy = widget.settings.windowSortBy;
+    _windowSortDirection = widget.settings.windowSortDirection;
   }
 
   @override
@@ -65,6 +69,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
             EndpointSettings(
               httpBaseUrl: _httpController.text,
               wsUrl: _wsController.text,
+              windowSortBy: _windowSortBy,
+              windowSortDirection: _windowSortDirection,
             ),
           );
       Navigator.of(context).pop();
@@ -167,6 +173,46 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 16),
+                        Text('Window Sort', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 10),
+                        SegmentedButton<WindowSortBy>(
+                          selected: {_windowSortBy},
+                          onSelectionChanged: (selection) {
+                            setState(() {
+                              _windowSortBy = selection.first;
+                              _windowSortDirection =
+                                  normalizeWindowSortDirection(
+                                    _windowSortBy,
+                                    _windowSortDirection,
+                                  );
+                            });
+                          },
+                          segments: const [
+                            ButtonSegment(
+                              value: WindowSortBy.usage,
+                              label: Text('Usage'),
+                              icon: Icon(Icons.history_rounded),
+                            ),
+                            ButtonSegment(
+                              value: WindowSortBy.name,
+                              label: Text('Name'),
+                              icon: Icon(Icons.sort_by_alpha_rounded),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text('Direction', style: theme.textTheme.titleSmall),
+                        const SizedBox(height: 10),
+                        SegmentedButton<WindowSortDirection>(
+                          selected: {_windowSortDirection},
+                          onSelectionChanged: (selection) {
+                            setState(() {
+                              _windowSortDirection = selection.first;
+                            });
+                          },
+                          segments: _directionSegments(_windowSortBy),
+                        ),
                       ],
                     ),
                   ),
@@ -228,6 +274,39 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
         ),
       ),
     );
+  }
+
+  List<ButtonSegment<WindowSortDirection>> _directionSegments(
+    WindowSortBy sortBy,
+  ) {
+    switch (sortBy) {
+      case WindowSortBy.usage:
+        return const [
+          ButtonSegment(
+            value: WindowSortDirection.newestFirst,
+            label: Text('Newest first'),
+            icon: Icon(Icons.keyboard_double_arrow_left_rounded),
+          ),
+          ButtonSegment(
+            value: WindowSortDirection.oldestFirst,
+            label: Text('Oldest first'),
+            icon: Icon(Icons.keyboard_double_arrow_right_rounded),
+          ),
+        ];
+      case WindowSortBy.name:
+        return const [
+          ButtonSegment(
+            value: WindowSortDirection.ascending,
+            label: Text('A-Z'),
+            icon: Icon(Icons.arrow_upward_rounded),
+          ),
+          ButtonSegment(
+            value: WindowSortDirection.descending,
+            label: Text('Z-A'),
+            icon: Icon(Icons.arrow_downward_rounded),
+          ),
+        ];
+    }
   }
 }
 

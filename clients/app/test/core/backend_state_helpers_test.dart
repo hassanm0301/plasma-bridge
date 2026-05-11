@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:plasma_remote_toolbar_app/core/models/backend_models.dart';
 import 'package:plasma_remote_toolbar_app/core/utils/backend_state_helpers.dart';
 import 'package:plasma_remote_toolbar_app/core/utils/media_helpers.dart';
+import 'package:plasma_remote_toolbar_app/features/settings/domain/endpoint_settings.dart';
 
 AudioDeviceState device(String id, String label, {bool isDefault = false}) {
   return AudioDeviceState(
@@ -126,7 +127,7 @@ void main() {
     expect(nextState.windowState?.activeWindowId, 'active');
   });
 
-  test('sorts active taskbar windows first and hides skipped windows', () {
+  test('sorts usage newest first with the active window on the left', () {
     final snapshot = WindowSnapshot(
       activeWindowId: 'active',
       activeWindow: windowState('active', 'Active', isActive: true),
@@ -143,6 +144,72 @@ void main() {
       'a',
       'z',
     ]);
+  });
+
+  test('sorts usage oldest first with the active window on the right', () {
+    final snapshot = WindowSnapshot(
+      activeWindowId: 'active',
+      activeWindow: windowState('active', 'Active', isActive: true),
+      windows: [
+        windowState('z', 'Zed'),
+        windowState('hidden', 'Hidden', skipTaskbar: true),
+        windowState('active', 'Active', isActive: true),
+        windowState('a', 'Alpha'),
+      ],
+    );
+
+    expect(
+      windowsForTaskbar(
+        snapshot,
+        sortBy: WindowSortBy.usage,
+        sortDirection: WindowSortDirection.oldestFirst,
+      ).map((window) => window.id),
+      ['z', 'a', 'active'],
+    );
+  });
+
+  test('sorts taskbar windows by name ascending when requested', () {
+    final snapshot = WindowSnapshot(
+      activeWindowId: 'active',
+      activeWindow: windowState('active', 'Active', isActive: true),
+      windows: [
+        windowState('z', 'Zed'),
+        windowState('hidden', 'Hidden', skipTaskbar: true),
+        windowState('active', 'Active', isActive: true),
+        windowState('a', 'Alpha'),
+      ],
+    );
+
+    expect(
+      windowsForTaskbar(
+        snapshot,
+        sortBy: WindowSortBy.name,
+        sortDirection: WindowSortDirection.ascending,
+      ).map((window) => window.id),
+      ['active', 'a', 'z'],
+    );
+  });
+
+  test('sorts taskbar windows by name descending when requested', () {
+    final snapshot = WindowSnapshot(
+      activeWindowId: 'active',
+      activeWindow: windowState('active', 'Active', isActive: true),
+      windows: [
+        windowState('z', 'Zed'),
+        windowState('hidden', 'Hidden', skipTaskbar: true),
+        windowState('active', 'Active', isActive: true),
+        windowState('a', 'Alpha'),
+      ],
+    );
+
+    expect(
+      windowsForTaskbar(
+        snapshot,
+        sortBy: WindowSortBy.name,
+        sortDirection: WindowSortDirection.descending,
+      ).map((window) => window.id),
+      ['z', 'a', 'active'],
+    );
   });
 
   test('sorts selected audio devices first', () {

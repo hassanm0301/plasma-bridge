@@ -5,6 +5,7 @@ import '../../../core/utils/backend_state_helpers.dart';
 import '../../../core/utils/url_utils.dart';
 import '../../../core/widgets/desktop_panel.dart';
 import '../../../core/widgets/remote_image.dart';
+import '../../settings/domain/endpoint_settings.dart';
 
 const _windowTileWidth = 146.0;
 const _windowTileHeight = 88.0;
@@ -14,6 +15,8 @@ class WindowsSection extends StatelessWidget {
     super.key,
     required this.snapshot,
     required this.httpBaseUrl,
+    required this.sortBy,
+    required this.sortDirection,
     required this.pendingActions,
     required this.errors,
     required this.onActivateWindow,
@@ -21,13 +24,19 @@ class WindowsSection extends StatelessWidget {
 
   final WindowSnapshot? snapshot;
   final String httpBaseUrl;
+  final WindowSortBy sortBy;
+  final WindowSortDirection sortDirection;
   final Map<String, bool> pendingActions;
   final Map<String, String> errors;
   final Future<void> Function(String windowId) onActivateWindow;
 
   @override
   Widget build(BuildContext context) {
-    final windows = windowsForTaskbar(snapshot);
+    final windows = windowsForTaskbar(
+      snapshot,
+      sortBy: sortBy,
+      sortDirection: sortDirection,
+    );
 
     return DesktopPanel(
       child: Column(
@@ -53,7 +62,8 @@ class WindowsSection extends StatelessWidget {
                   final iconUrl = resolveAssetUrl(httpBaseUrl, window.iconUrl);
                   final content = _WindowTileContent(
                     title: displayWindowTitle(window),
-                    subtitle: isPending ? 'Focusing...' : appLabel,
+                    appLabel: appLabel,
+                    statusText: isPending ? 'Focusing...' : null,
                     error: errors[window.id],
                     iconUrl: iconUrl,
                     fallbackLabel: appLabel,
@@ -89,7 +99,8 @@ class WindowsSection extends StatelessWidget {
 class _WindowTileContent extends StatelessWidget {
   const _WindowTileContent({
     required this.title,
-    required this.subtitle,
+    required this.appLabel,
+    required this.statusText,
     required this.error,
     required this.iconUrl,
     required this.fallbackLabel,
@@ -97,7 +108,8 @@ class _WindowTileContent extends StatelessWidget {
   });
 
   final String title;
-  final String subtitle;
+  final String appLabel;
+  final String? statusText;
   final String? error;
   final String? iconUrl;
   final String fallbackLabel;
@@ -110,6 +122,7 @@ class _WindowTileContent extends StatelessWidget {
         ? theme.colorScheme.primaryContainer.withValues(alpha: 0.82)
         : theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.72);
     final hasError = error != null && error!.isNotEmpty;
+    final detailText = hasError ? error! : statusText;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
@@ -126,32 +139,45 @@ class _WindowTileContent extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 26,
-            height: 26,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: iconUrl == null
-                ? Center(
-                    child: Text(
-                      fallbackLabel.characters.first.toUpperCase(),
-                      style: theme.textTheme.titleSmall,
-                    ),
-                  )
-                : RemoteImage(
-                    url: iconUrl!,
-                    fit: BoxFit.cover,
-                    borderRadius: 8,
-                    placeholder: Center(
-                      child: Text(
-                        fallbackLabel.characters.first.toUpperCase(),
-                        style: theme.textTheme.titleSmall,
+          Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: iconUrl == null
+                    ? Center(
+                        child: Text(
+                          fallbackLabel.characters.first.toUpperCase(),
+                          style: theme.textTheme.titleSmall,
+                        ),
+                      )
+                    : RemoteImage(
+                        url: iconUrl!,
+                        fit: BoxFit.cover,
+                        borderRadius: 8,
+                        placeholder: Center(
+                          child: Text(
+                            fallbackLabel.characters.first.toUpperCase(),
+                            style: theme.textTheme.titleSmall,
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  appLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(
@@ -160,17 +186,19 @@ class _WindowTileContent extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.titleSmall,
           ),
-          const SizedBox(height: 2),
-          Text(
-            hasError ? error! : subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: hasError
-                ? theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.error,
-                  )
-                : theme.textTheme.bodySmall,
-          ),
+          if (detailText != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              detailText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: hasError
+                  ? theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    )
+                  : theme.textTheme.bodySmall,
+            ),
+          ],
         ],
       ),
     );

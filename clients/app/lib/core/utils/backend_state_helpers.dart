@@ -1,4 +1,5 @@
 import '../models/backend_models.dart';
+import '../../features/settings/domain/endpoint_settings.dart';
 
 BackendState applyBackendMessage(BackendState state, BackendMessage message) {
   if (message is FullStateMessage) {
@@ -39,32 +40,80 @@ BackendState applyBackendMessage(BackendState state, BackendMessage message) {
   return nextState;
 }
 
-List<WindowState> windowsForTaskbar(WindowSnapshot? snapshot) {
+List<WindowState> windowsForTaskbar(
+  WindowSnapshot? snapshot, {
+  WindowSortBy sortBy = WindowSortBy.usage,
+  WindowSortDirection sortDirection = WindowSortDirection.newestFirst,
+}) {
   if (snapshot == null) {
     return const [];
   }
 
-  final byId = <String, WindowState>{};
+  final windows = <WindowState>[];
+  final seenIds = <String>{};
   for (final window in snapshot.windows) {
-    if (!window.skipTaskbar) {
-      byId[window.id] = window;
+    if (!window.skipTaskbar && seenIds.add(window.id)) {
+      windows.add(window);
     }
   }
   final activeWindow = snapshot.activeWindow;
-  if (activeWindow != null && !activeWindow.skipTaskbar) {
-    byId[activeWindow.id] = activeWindow;
+  if (activeWindow != null &&
+      !activeWindow.skipTaskbar &&
+      seenIds.add(activeWindow.id)) {
+    windows.add(activeWindow);
   }
 
-  final windows = byId.values.toList(growable: false);
-  windows.sort((left, right) {
-    final leftActive = left.id == snapshot.activeWindowId || left.isActive;
-    final rightActive = right.id == snapshot.activeWindowId || right.isActive;
-    if (leftActive != rightActive) {
-      return leftActive ? -1 : 1;
-    }
-    return displayWindowTitle(left).compareTo(displayWindowTitle(right));
-  });
-  return windows;
+  final activeWindowId = snapshot.activeWindowId ?? activeWindow?.id;
+  if (sortBy == WindowSortBy.name) {
+    final ordered = [...windows];
+    final normalizedDirection = normalizeWindowSortDirection(
+      sortBy,
+      sortDirection,
+    );
+    ordered.sort((left, right) {
+      final titleComparison = displayWindowTitle(
+        left,
+      ).toLowerCase().compareTo(displayWindowTitle(right).toLowerCase());
+      if (titleComparison != 0) {
+        return normalizedDirection == WindowSortDirection.ascending
+            ? titleComparison
+            : -titleComparison;
+      }
+      final idComparison = left.id.toLowerCase().compareTo(
+        right.id.toLowerCase(),
+      );
+      return normalizedDirection == WindowSortDirection.ascending
+          ? idComparison
+          : -idComparison;
+    });
+    return ordered;
+  }
+
+  final normalizedDirection = normalizeWindowSortDirection(
+    sortBy,
+    sortDirection,
+  );
+  final ordered = normalizedDirection == WindowSortDirection.newestFirst
+      ? windows.reversed.toList()
+      : List<WindowState>.from(windows);
+  if (activeWindowId == null || ordered.isEmpty) {
+    return ordered;
+  }
+
+  final activeIndex = ordered.indexWhere(
+    (window) => window.id == activeWindowId,
+  );
+  if (activeIndex < 0) {
+    return ordered;
+  }
+
+  final active = ordered.removeAt(activeIndex);
+  if (normalizedDirection == WindowSortDirection.newestFirst) {
+    ordered.insert(0, active);
+  } else {
+    ordered.add(active);
+  }
+  return ordered;
 }
 
 List<AudioDeviceState> audioDevicesWithSelectedFirst(

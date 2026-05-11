@@ -26,6 +26,8 @@ class SettingsRepository {
       return EndpointSettings(
         httpBaseUrl: normalizeHttpBaseUrl(settings.httpBaseUrl),
         wsUrl: normalizeWebSocketUrl(settings.wsUrl),
+        windowSortBy: settings.windowSortBy,
+        windowSortDirection: settings.windowSortDirection,
       );
     } catch (_) {
       return null;
@@ -36,6 +38,8 @@ class SettingsRepository {
     final normalized = EndpointSettings(
       httpBaseUrl: normalizeHttpBaseUrl(settings.httpBaseUrl),
       wsUrl: normalizeWebSocketUrl(settings.wsUrl),
+      windowSortBy: settings.windowSortBy,
+      windowSortDirection: settings.windowSortDirection,
     );
     _sharedPreferences.setString(
       endpointStorageKey,

@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plasma_remote_toolbar_app/core/models/backend_models.dart';
+import 'package:plasma_remote_toolbar_app/features/settings/domain/endpoint_settings.dart';
 import 'package:plasma_remote_toolbar_app/features/windows/presentation/windows_section.dart';
 
-WindowState _windowState(
-  String id,
-  String title, {
-  bool isActive = false,
-}) {
+WindowState _windowState(String id, String title, {bool isActive = false}) {
   return WindowState(
     id: id,
     title: title,
@@ -31,51 +28,55 @@ WindowState _windowState(
 }
 
 void main() {
-  testWidgets('renders window tiles without vertical overflow on small screens', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(360, 640);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'renders window tiles without vertical overflow on small screens',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Padding(
-            padding: const EdgeInsets.all(16),
-            child: WindowsSection(
-              snapshot: WindowSnapshot(
-                activeWindowId: 'window-1',
-                activeWindow: _windowState(
-                  'window-1',
-                  'Very long application title that used to overflow',
-                  isActive: true,
-                ),
-                windows: [
-                  _windowState(
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: WindowsSection(
+                snapshot: WindowSnapshot(
+                  activeWindowId: 'window-1',
+                  activeWindow: _windowState(
                     'window-1',
                     'Very long application title that used to overflow',
                     isActive: true,
                   ),
-                  _windowState(
-                    'window-2',
-                    'Second long title for another desktop window',
-                  ),
-                ],
+                  windows: [
+                    _windowState(
+                      'window-1',
+                      'Very long application title that used to overflow',
+                      isActive: true,
+                    ),
+                    _windowState(
+                      'window-2',
+                      'Second long title for another desktop window',
+                    ),
+                  ],
+                ),
+                httpBaseUrl: 'http://127.0.0.1:8080',
+                sortBy: WindowSortBy.usage,
+                sortDirection: WindowSortDirection.newestFirst,
+                pendingActions: const {},
+                errors: const {'window-2': 'Activation failed'},
+                onActivateWindow: (_) async {},
               ),
-              httpBaseUrl: 'http://127.0.0.1:8080',
-              pendingActions: const {},
-              errors: const {'window-2': 'Activation failed'},
-              onActivateWindow: (_) async {},
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-    expect(find.text('Windows'), findsOneWidget);
-  });
+      expect(tester.takeException(), isNull);
+      expect(find.text('Windows'), findsOneWidget);
+      expect(find.text('org.example.App'), findsWidgets);
+    },
+  );
 }
