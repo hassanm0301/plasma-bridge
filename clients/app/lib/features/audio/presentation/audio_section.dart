@@ -6,6 +6,7 @@ import '../../../core/widgets/desktop_panel.dart';
 class AudioSection extends StatelessWidget {
   const AudioSection({
     super.key,
+    required this.expanded,
     required this.title,
     required this.devices,
     required this.selectedId,
@@ -14,10 +15,12 @@ class AudioSection extends StatelessWidget {
     required this.errors,
     required this.onVolumeDraftChange,
     required this.onMuteToggle,
+    required this.onToggleExpanded,
     this.onVolumeCommit,
     this.volumeReadOnly = false,
   });
 
+  final bool expanded;
   final String title;
   final List<AudioDeviceState> devices;
   final String? selectedId;
@@ -27,11 +30,18 @@ class AudioSection extends StatelessWidget {
   final void Function(String deviceId, double value) onVolumeDraftChange;
   final Future<void> Function(String deviceId, double value)? onVolumeCommit;
   final Future<void> Function(AudioDeviceState device) onMuteToggle;
+  final VoidCallback onToggleExpanded;
   final bool volumeReadOnly;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final activeDevice = devices.where(
+      (device) => device.id == selectedId || device.isDefault,
+    );
+    final visibleDevices = expanded || devices.isEmpty
+        ? devices
+        : [activeDevice.isNotEmpty ? activeDevice.first : devices.first];
 
     return DesktopPanel(
       child: Column(
@@ -43,12 +53,24 @@ class AudioSection extends StatelessWidget {
                 ? 'Monitor levels and mute capture devices'
                 : 'Adjust output levels and mute devices',
             count: devices.length,
+            trailing: PanelExpandToggle(
+              key: ValueKey(
+                title == 'Playback'
+                    ? 'playback-section-toggle'
+                    : 'capture-section-toggle',
+              ),
+              expanded: expanded,
+              onPressed: onToggleExpanded,
+              semanticLabel: expanded
+                  ? 'Compact $title devices'
+                  : 'Expand $title devices',
+            ),
           ),
           const SizedBox(height: DesktopMetrics.sectionGap),
           if (devices.isEmpty)
             const PanelMessage(message: 'No devices reported yet.')
           else
-            ...devices.map((device) {
+            ...visibleDevices.map((device) {
               final volume = volumeDrafts[device.id] ?? device.volume;
               final volumePercent = (volume.clamp(0, 1) * 100).round();
               final isSelected = device.id == selectedId || device.isDefault;

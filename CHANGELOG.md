@@ -21,6 +21,7 @@
 - Project, client, and getting-started docs now describe the implemented Flutter mobile client alongside the existing web dashboard.
 - The Flutter Android client now uses a more Breeze-like compact visual language with a landscape-first tablet dashboard layout.
 - The Flutter dashboard now keeps connection status in the top-right app bar, promotes windows and current media to full-width sections, and renders denser window/media tiles for better tablet landscape use.
+- The Flutter dashboard `Windows`, `Playback`, and `Capture` tiles now support local expand/compact toggles, with compact audio showing only the active device and expanded windows using a full grid.
 - The web client's Vite dev and preview servers now bind on all interfaces to simplify LAN testing.
 - Backend and web docs now explain localhost-only defaults, LAN exposure, and remote browser setup requirements.
 - The WebSocket state protocol version is now `3` to include top-level media state and `playerId` patch metadata.

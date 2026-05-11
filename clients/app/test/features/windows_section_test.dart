@@ -41,6 +41,7 @@ void main() {
             body: Padding(
               padding: const EdgeInsets.all(16),
               child: WindowsSection(
+                expanded: false,
                 snapshot: WindowSnapshot(
                   activeWindowId: 'window-1',
                   activeWindow: _windowState(
@@ -66,6 +67,7 @@ void main() {
                 pendingActions: const {},
                 errors: const {'window-2': 'Activation failed'},
                 onActivateWindow: (_) async {},
+                onToggleExpanded: () {},
               ),
             ),
           ),
@@ -77,6 +79,67 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('Windows'), findsOneWidget);
       expect(find.text('org.example.App'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'renders all windows in an expanded grid without horizontal scrolling',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: WindowsSection(
+                expanded: true,
+                snapshot: WindowSnapshot(
+                  activeWindowId: 'window-1',
+                  activeWindow: _windowState(
+                    'window-1',
+                    'Very long application title that used to overflow',
+                    isActive: true,
+                  ),
+                  windows: [
+                    _windowState(
+                      'window-1',
+                      'Very long application title that used to overflow',
+                      isActive: true,
+                    ),
+                    _windowState('window-2', 'Second long title'),
+                    _windowState('window-3', 'Third title'),
+                    _windowState('window-4', 'Fourth title'),
+                  ],
+                ),
+                httpBaseUrl: 'http://127.0.0.1:8080',
+                sortBy: WindowSortBy.usage,
+                sortDirection: WindowSortDirection.newestFirst,
+                pendingActions: const {},
+                errors: const {},
+                onActivateWindow: (_) async {},
+                onToggleExpanded: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.byKey(const ValueKey('windows-section-expanded-grid')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('windows-section-compact-list')),
+        findsNothing,
+      );
+      expect(find.text('Third title'), findsOneWidget);
+      expect(find.text('Fourth title'), findsOneWidget);
     },
   );
 }

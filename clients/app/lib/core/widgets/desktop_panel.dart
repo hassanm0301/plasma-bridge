@@ -69,8 +69,33 @@ class PanelSectionHeader extends StatelessWidget {
           ),
         if (count != null && trailing != null)
           const SizedBox(width: DesktopMetrics.sectionGap / 2),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
+    );
+  }
+}
+
+class PanelExpandToggle extends StatelessWidget {
+  const PanelExpandToggle({
+    super.key,
+    required this.expanded,
+    required this.onPressed,
+    required this.semanticLabel,
+  });
+
+  final bool expanded;
+  final VoidCallback onPressed;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: semanticLabel,
+      visualDensity: VisualDensity.compact,
+      icon: Icon(
+        expanded ? Icons.unfold_less_rounded : Icons.unfold_more_rounded,
+      ),
     );
   }
 }

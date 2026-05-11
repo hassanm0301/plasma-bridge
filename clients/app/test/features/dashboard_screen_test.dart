@@ -53,6 +53,16 @@ class _FakeDashboardController extends DashboardController {
               isVirtual: false,
               backendApi: 'pulse',
             ),
+            AudioDeviceState(
+              id: 'sink-2',
+              label: 'USB DAC',
+              volume: 0.41,
+              muted: false,
+              available: true,
+              isDefault: false,
+              isVirtual: false,
+              backendApi: 'pulse',
+            ),
           ],
           selectedSinkId: 'sink-1',
           sources: const [
@@ -63,6 +73,16 @@ class _FakeDashboardController extends DashboardController {
               muted: false,
               available: true,
               isDefault: true,
+              isVirtual: false,
+              backendApi: 'pulse',
+            ),
+            AudioDeviceState(
+              id: 'source-2',
+              label: 'USB Microphone',
+              volume: 0.57,
+              muted: false,
+              available: true,
+              isDefault: false,
               isVirtual: false,
               backendApi: 'pulse',
             ),
@@ -96,6 +116,7 @@ class _FakeDashboardController extends DashboardController {
           windows: [
             _windowState('window-1', 'Konsole', isActive: true),
             _windowState('window-2', 'System Settings'),
+            _windowState('window-3', 'Dolphin'),
           ],
         ),
       ),
@@ -191,6 +212,20 @@ void main() {
     expect(find.text('Windows'), findsOneWidget);
     expect(find.text('Current Media'), findsOneWidget);
     expect(find.text('Playback'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('windows-section-toggle')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('playback-section-toggle')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('capture-section-toggle')),
+      findsOneWidget,
+    );
+    expect(find.text('USB DAC'), findsNothing);
+    expect(find.text('USB Microphone'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -204,6 +239,60 @@ void main() {
     expect(find.text('Connection'), findsNothing);
     expect(find.text('Konsole'), findsWidgets);
     expect(find.text('Connected'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('windows-section-compact-list')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('windows-section-expanded-grid')),
+      findsNothing,
+    );
+    expect(find.text('USB DAC'), findsNothing);
+    expect(find.text('USB Microphone'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('expands playback and capture tiles to reveal all devices', (
+    tester,
+  ) async {
+    await pumpDashboard(tester, const Size(1280, 800));
+
+    expect(find.text('USB DAC'), findsNothing);
+    expect(find.text('USB Microphone'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('playback-section-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('USB DAC'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('capture-section-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('USB Microphone'), findsOneWidget);
+  });
+
+  testWidgets('expands windows tile into a grid', (tester) async {
+    await pumpDashboard(tester, const Size(1280, 800));
+
+    expect(
+      find.byKey(const ValueKey('windows-section-compact-list')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('windows-section-expanded-grid')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('windows-section-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('windows-section-compact-list')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('windows-section-expanded-grid')),
+      findsOneWidget,
+    );
+    expect(find.text('Dolphin'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 }

@@ -22,6 +22,10 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with WidgetsBindingObserver {
+  bool _windowsExpanded = false;
+  bool _playbackExpanded = false;
+  bool _captureExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +108,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               wideLayout ? 'dashboard-wide-layout' : 'dashboard-narrow-layout',
             ),
             wideLayout: wideLayout,
+            windowsExpanded: _windowsExpanded,
+            playbackExpanded: _playbackExpanded,
+            captureExpanded: _captureExpanded,
             state: state,
             httpBaseUrl: endpointSettings.httpBaseUrl,
             windowSortBy: endpointSettings.windowSortBy,
@@ -111,6 +118,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             sinks: sinks,
             sources: sources,
             controller: controller,
+            onWindowsExpandedChanged: () {
+              setState(() {
+                _windowsExpanded = !_windowsExpanded;
+              });
+            },
+            onPlaybackExpandedChanged: () {
+              setState(() {
+                _playbackExpanded = !_playbackExpanded;
+              });
+            },
+            onCaptureExpandedChanged: () {
+              setState(() {
+                _captureExpanded = !_captureExpanded;
+              });
+            },
           );
 
           return RefreshIndicator(
@@ -137,6 +159,9 @@ class _DashboardBody extends StatelessWidget {
   const _DashboardBody({
     super.key,
     required this.wideLayout,
+    required this.windowsExpanded,
+    required this.playbackExpanded,
+    required this.captureExpanded,
     required this.state,
     required this.httpBaseUrl,
     required this.windowSortBy,
@@ -144,9 +169,15 @@ class _DashboardBody extends StatelessWidget {
     required this.sinks,
     required this.sources,
     required this.controller,
+    required this.onWindowsExpandedChanged,
+    required this.onPlaybackExpandedChanged,
+    required this.onCaptureExpandedChanged,
   });
 
   final bool wideLayout;
+  final bool windowsExpanded;
+  final bool playbackExpanded;
+  final bool captureExpanded;
   final DashboardState state;
   final String httpBaseUrl;
   final WindowSortBy windowSortBy;
@@ -154,10 +185,14 @@ class _DashboardBody extends StatelessWidget {
   final List<AudioDeviceState> sinks;
   final List<AudioDeviceState> sources;
   final DashboardController controller;
+  final VoidCallback onWindowsExpandedChanged;
+  final VoidCallback onPlaybackExpandedChanged;
+  final VoidCallback onCaptureExpandedChanged;
 
   @override
   Widget build(BuildContext context) {
     final windowsSection = WindowsSection(
+      expanded: windowsExpanded,
       snapshot: state.backendState.windowState,
       httpBaseUrl: httpBaseUrl,
       sortBy: windowSortBy,
@@ -165,6 +200,7 @@ class _DashboardBody extends StatelessWidget {
       pendingActions: state.pendingActions,
       errors: state.rowErrors,
       onActivateWindow: controller.activateWindow,
+      onToggleExpanded: onWindowsExpandedChanged,
     );
     final mediaSection = MediaSection(
       player: state.backendState.media?.player,
@@ -177,6 +213,7 @@ class _DashboardBody extends StatelessWidget {
       onSeek: controller.seekCurrentMedia,
     );
     final sinksSection = AudioSection(
+      expanded: playbackExpanded,
       title: 'Playback',
       devices: sinks,
       selectedId: state.backendState.audio?.selectedSinkId,
@@ -186,8 +223,10 @@ class _DashboardBody extends StatelessWidget {
       onVolumeDraftChange: controller.updateVolumeDraft,
       onVolumeCommit: controller.commitSinkVolume,
       onMuteToggle: controller.toggleSinkMuted,
+      onToggleExpanded: onPlaybackExpandedChanged,
     );
     final sourcesSection = AudioSection(
+      expanded: captureExpanded,
       title: 'Capture',
       devices: sources,
       selectedId: state.backendState.audio?.selectedSourceId,
@@ -197,6 +236,7 @@ class _DashboardBody extends StatelessWidget {
       volumeReadOnly: true,
       onVolumeDraftChange: controller.updateVolumeDraft,
       onMuteToggle: controller.toggleSourceMuted,
+      onToggleExpanded: onCaptureExpandedChanged,
     );
 
     if (!wideLayout) {

@@ -9,10 +9,12 @@ import '../../settings/domain/endpoint_settings.dart';
 
 const _windowTileWidth = 146.0;
 const _windowTileHeight = 88.0;
+const _windowTileGap = DesktopMetrics.sectionGap - 2;
 
 class WindowsSection extends StatelessWidget {
   const WindowsSection({
     super.key,
+    required this.expanded,
     required this.snapshot,
     required this.httpBaseUrl,
     required this.sortBy,
@@ -20,8 +22,10 @@ class WindowsSection extends StatelessWidget {
     required this.pendingActions,
     required this.errors,
     required this.onActivateWindow,
+    required this.onToggleExpanded,
   });
 
+  final bool expanded;
   final WindowSnapshot? snapshot;
   final String httpBaseUrl;
   final WindowSortBy sortBy;
@@ -29,6 +33,7 @@ class WindowsSection extends StatelessWidget {
   final Map<String, bool> pendingActions;
   final Map<String, String> errors;
   final Future<void> Function(String windowId) onActivateWindow;
+  final VoidCallback onToggleExpanded;
 
   @override
   Widget build(BuildContext context) {
@@ -42,56 +47,121 @@ class WindowsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PanelSectionHeader(title: 'Windows', count: windows.length),
+          PanelSectionHeader(
+            title: 'Windows',
+            count: windows.length,
+            trailing: PanelExpandToggle(
+              key: const ValueKey('windows-section-toggle'),
+              expanded: expanded,
+              onPressed: onToggleExpanded,
+              semanticLabel: expanded ? 'Compact Windows' : 'Expand Windows',
+            ),
+          ),
           const SizedBox(height: 8),
           if (windows.isEmpty)
             const PanelMessage(message: 'No windows reported yet.')
           else
-            SizedBox(
-              height: _windowTileHeight,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (context, index) {
-                  final window = windows[index];
-                  final isActive =
-                      window.id == snapshot?.activeWindowId || window.isActive;
-                  final isPending =
-                      pendingActions['window-active:${window.id}'] ?? false;
-                  final appLabel =
-                      window.appId ?? window.resourceName ?? 'Application';
-                  final iconUrl = resolveAssetUrl(httpBaseUrl, window.iconUrl);
-                  final content = _WindowTileContent(
-                    title: displayWindowTitle(window),
-                    appLabel: appLabel,
-                    statusText: isPending ? 'Focusing...' : null,
-                    error: errors[window.id],
-                    iconUrl: iconUrl,
-                    fallbackLabel: appLabel,
-                    isActive: isActive,
-                  );
-
-                  return SizedBox(
-                    width: _windowTileWidth,
-                    child: isActive
-                        ? content
-                        : InkWell(
-                            borderRadius: BorderRadius.circular(
-                              DesktopMetrics.itemRadius,
-                            ),
-                            onTap: isPending
-                                ? null
-                                : () => onActivateWindow(window.id),
-                            child: content,
-                          ),
-                  );
-                },
-                separatorBuilder: (_, _) =>
-                    const SizedBox(width: DesktopMetrics.sectionGap - 2),
-                itemCount: windows.length,
-              ),
-            ),
+            expanded
+                ? LayoutBuilder(
+                    builder: (context, constraints) {
+                      final columns =
+                          ((constraints.maxWidth /
+                                      (_windowTileWidth + _windowTileGap))
+                                  .floor())
+                              .clamp(1, windows.length);
+                      return GridView.builder(
+                        key: const ValueKey('windows-section-expanded-grid'),
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: columns,
+                          mainAxisSpacing: _windowTileGap,
+                          crossAxisSpacing: _windowTileGap,
+                          childAspectRatio:
+                              _windowTileWidth / _windowTileHeight,
+                        ),
+                        itemCount: windows.length,
+                        itemBuilder: (context, index) {
+                          return _WindowTile(
+                            window: windows[index],
+                            activeWindowId: snapshot?.activeWindowId,
+                            httpBaseUrl: httpBaseUrl,
+                            pendingActions: pendingActions,
+                            errors: errors,
+                            onActivateWindow: onActivateWindow,
+                          );
+                        },
+                      );
+                    },
+                  )
+                : SizedBox(
+                    key: const ValueKey('windows-section-compact-list'),
+                    height: _windowTileHeight,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemBuilder: (context, index) {
+                        return _WindowTile(
+                          window: windows[index],
+                          activeWindowId: snapshot?.activeWindowId,
+                          httpBaseUrl: httpBaseUrl,
+                          pendingActions: pendingActions,
+                          errors: errors,
+                          onActivateWindow: onActivateWindow,
+                        );
+                      },
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(width: _windowTileGap),
+                      itemCount: windows.length,
+                    ),
+                  ),
         ],
       ),
+    );
+  }
+}
+
+class _WindowTile extends StatelessWidget {
+  const _WindowTile({
+    required this.window,
+    required this.activeWindowId,
+    required this.httpBaseUrl,
+    required this.pendingActions,
+    required this.errors,
+    required this.onActivateWindow,
+  });
+
+  final WindowState window;
+  final String? activeWindowId;
+  final String httpBaseUrl;
+  final Map<String, bool> pendingActions;
+  final Map<String, String> errors;
+  final Future<void> Function(String windowId) onActivateWindow;
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = window.id == activeWindowId || window.isActive;
+    final isPending = pendingActions['window-active:${window.id}'] ?? false;
+    final appLabel = window.appId ?? window.resourceName ?? 'Application';
+    final iconUrl = resolveAssetUrl(httpBaseUrl, window.iconUrl);
+    final content = _WindowTileContent(
+      title: displayWindowTitle(window),
+      appLabel: appLabel,
+      statusText: isPending ? 'Focusing...' : null,
+      error: errors[window.id],
+      iconUrl: iconUrl,
+      fallbackLabel: appLabel,
+      isActive: isActive,
+    );
+
+    return SizedBox(
+      width: _windowTileWidth,
+      child: isActive
+          ? content
+          : InkWell(
+              borderRadius: BorderRadius.circular(DesktopMetrics.itemRadius),
+              onTap: isPending ? null : () => onActivateWindow(window.id),
+              child: content,
+            ),
     );
   }
 }
