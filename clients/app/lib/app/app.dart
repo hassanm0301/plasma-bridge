@@ -14,7 +14,7 @@ class PlasmaRemoteToolbarApp extends ConsumerWidget {
     final settingsState = ref.watch(settingsControllerProvider);
 
     return MaterialApp(
-      title: 'Plasma Remote Toolbar',
+      title: 'Plasma Bridge',
       debugShowCheckedModeBanner: false,
       themeMode: settingsState.themeMode.toThemeMode(),
       theme: AppTheme.lightTheme(),

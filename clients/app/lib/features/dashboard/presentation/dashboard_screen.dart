@@ -65,7 +65,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Plasma Remote Toolbar'),
+            Text('Plasma Bridge'),
             Text(
               'Breeze tablet controls',
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),

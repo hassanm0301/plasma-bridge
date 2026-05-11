@@ -1,6 +1,6 @@
 # Mobile App
 
-Flutter client for Plasma Remote Toolbar, with Android as the first supported target and a compact Breeze-inspired tablet layout.
+Flutter client for Plasma Bridge, with Android as the first supported target and a compact Breeze-inspired tablet layout.
 
 ## Features
 

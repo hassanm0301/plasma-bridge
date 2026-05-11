@@ -1,5 +1,5 @@
 {
-  "name": "@plasma-remote-toolbar/web",
+  "name": "@plasma-bridge/web",
   "private": true,
   "type": "module",
   "scripts": {

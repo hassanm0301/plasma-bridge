@@ -9,8 +9,8 @@ import '../domain/theme_mode.dart';
 class SettingsRepository {
   const SettingsRepository(this._sharedPreferences);
 
-  static const endpointStorageKey = 'plasma_remote_toolbar.endpoints';
-  static const themeStorageKey = 'plasma_remote_toolbar.theme_mode';
+  static const endpointStorageKey = 'plasma_bridge.endpoints';
+  static const themeStorageKey = 'plasma_bridge.theme_mode';
 
   final SharedPreferences _sharedPreferences;
 

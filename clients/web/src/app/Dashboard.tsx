@@ -188,7 +188,7 @@ export function Dashboard({ themeMode, onThemeModeChange }: DashboardProps) {
     <main className="app-shell">
       <header className="top-bar">
         <div>
-          <p>Plasma Remote Toolbar</p>
+          <p>Plasma Bridge</p>
           <h1>Desktop controls</h1>
         </div>
         <div className="top-actions">

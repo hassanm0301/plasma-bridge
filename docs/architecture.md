@@ -1,6 +1,6 @@
 # Architecture
 
-Plasma Remote Toolbar is organized as a monorepo with one implemented backend plus web and mobile clients.
+Plasma Bridge is organized as a monorepo with one implemented backend plus web and mobile clients.
 
 ## Monorepo Shape
 

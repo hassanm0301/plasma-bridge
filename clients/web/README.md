@@ -1,6 +1,6 @@
 # Web Client
 
-React web client for Plasma Remote Toolbar.
+React web client for Plasma Bridge.
 
 ## Version
 

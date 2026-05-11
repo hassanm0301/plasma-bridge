@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/data/connection_repository.dart';
+import 'package:plasma_bridge_app/features/dashboard/data/connection_repository.dart';
 
 void main() {
   test('reports a reachable OpenAPI endpoint', () async {

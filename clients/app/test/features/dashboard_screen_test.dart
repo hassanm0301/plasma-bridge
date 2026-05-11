@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plasma_remote_toolbar_app/app/app.dart';
-import 'package:plasma_remote_toolbar_app/core/models/backend_models.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/application/app_providers.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/application/dashboard_controller.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/application/settings_controller.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/data/connection_repository.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/domain/connection_status.dart';
-import 'package:plasma_remote_toolbar_app/features/settings/domain/endpoint_settings.dart';
-import 'package:plasma_remote_toolbar_app/features/settings/domain/theme_mode.dart';
+import 'package:plasma_bridge_app/app/app.dart';
+import 'package:plasma_bridge_app/core/models/backend_models.dart';
+import 'package:plasma_bridge_app/features/dashboard/application/app_providers.dart';
+import 'package:plasma_bridge_app/features/dashboard/application/dashboard_controller.dart';
+import 'package:plasma_bridge_app/features/dashboard/application/settings_controller.dart';
+import 'package:plasma_bridge_app/features/dashboard/data/connection_repository.dart';
+import 'package:plasma_bridge_app/features/dashboard/domain/connection_status.dart';
+import 'package:plasma_bridge_app/features/settings/domain/endpoint_settings.dart';
+import 'package:plasma_bridge_app/features/settings/domain/theme_mode.dart';
 
 class _FakeSettingsController extends SettingsController {
   @override

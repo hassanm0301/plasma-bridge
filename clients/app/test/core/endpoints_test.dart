@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plasma_remote_toolbar_app/core/network/endpoints.dart';
+import 'package:plasma_bridge_app/core/network/endpoints.dart';
 
 void main() {
   group('endpoint helpers', () {

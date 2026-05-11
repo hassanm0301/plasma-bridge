@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plasma_remote_toolbar_app/core/models/backend_models.dart';
-import 'package:plasma_remote_toolbar_app/core/utils/backend_state_helpers.dart';
-import 'package:plasma_remote_toolbar_app/core/utils/media_helpers.dart';
-import 'package:plasma_remote_toolbar_app/features/settings/domain/endpoint_settings.dart';
+import 'package:plasma_bridge_app/core/models/backend_models.dart';
+import 'package:plasma_bridge_app/core/utils/backend_state_helpers.dart';
+import 'package:plasma_bridge_app/core/utils/media_helpers.dart';
+import 'package:plasma_bridge_app/features/settings/domain/endpoint_settings.dart';
 
 AudioDeviceState device(String id, String label, {bool isDefault = false}) {
   return AudioDeviceState(

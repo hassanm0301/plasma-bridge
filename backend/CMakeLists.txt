@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" PLASMA_REMOTE_TOOLBAR_VERSION)
-string(STRIP "${PLASMA_REMOTE_TOOLBAR_VERSION}" PLASMA_REMOTE_TOOLBAR_VERSION)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../VERSION" PLASMA_BRIDGE_VERSION)
+string(STRIP "${PLASMA_BRIDGE_VERSION}" PLASMA_BRIDGE_VERSION)
 
-project(plasma_bridge VERSION "${PLASMA_REMOTE_TOOLBAR_VERSION}" LANGUAGES CXX)
+project(plasma_bridge VERSION "${PLASMA_BRIDGE_VERSION}" LANGUAGES CXX)
 
 include(CTest)
 
-get_filename_component(PLASMA_REMOTE_TOOLBAR_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+get_filename_component(PLASMA_BRIDGE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 set(PLASMA_BRIDGE_SPECS_DIR
-    "${PLASMA_REMOTE_TOOLBAR_ROOT}/specs"
+    "${PLASMA_BRIDGE_ROOT}/specs"
     CACHE PATH
     "Directory containing the checked-in OpenAPI and AsyncAPI specs.")
 
@@ -22,30 +22,30 @@ if(PLASMA_BRIDGE_WS_PROTOCOL_VERSION LESS 3)
     set(PLASMA_BRIDGE_WS_PROTOCOL_VERSION 3 CACHE STRING "Supported WebSocket protocol version." FORCE)
 endif()
 set(PLASMA_BRIDGE_DEFAULT_PROBE_STARTUP_TIMEOUT_MS 5000 CACHE STRING "Default startup timeout used by probe tools.")
-set(PLASMA_BRIDGE_APP_ID "org.plasma-remote-toolbar.plasma_bridge" CACHE STRING "PulseAudioQt application id for plasma_bridge.")
-set(PLASMA_BRIDGE_AUDIO_PROBE_APP_ID "org.plasma-remote-toolbar.audio_probe" CACHE STRING "PulseAudioQt application id for audio_probe.")
+set(PLASMA_BRIDGE_APP_ID "org.plasma-bridge.plasma_bridge" CACHE STRING "PulseAudioQt application id for plasma_bridge.")
+set(PLASMA_BRIDGE_AUDIO_PROBE_APP_ID "org.plasma-bridge.audio_probe" CACHE STRING "PulseAudioQt application id for audio_probe.")
 set(PLASMA_BRIDGE_AUDIO_CONTROL_PROBE_APP_ID
-    "org.plasma-remote-toolbar.audio_control_probe"
+    "org.plasma-bridge.audio_control_probe"
     CACHE STRING
     "PulseAudioQt application id for audio_control_probe.")
 set(PLASMA_BRIDGE_MEDIA_PROBE_APP_ID
-    "org.plasma-remote-toolbar.media_probe"
+    "org.plasma-bridge.media_probe"
     CACHE STRING
     "Application id for media_probe.")
 set(PLASMA_BRIDGE_WINDOW_PROBE_SCRIPT_ID
-    "org.plasma_remote_toolbar.window_probe"
+    "org.plasma_bridge.window_probe"
     CACHE STRING
     "KWin script package id used by window_probe.")
 set(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE
-    "org.plasma_remote_toolbar.WindowProbe"
+    "org.plasma_bridge.WindowProbe"
     CACHE STRING
     "DBus session service used by the window probe helper.")
 set(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH
-    "/org/plasma_remote_toolbar/WindowProbe"
+    "/org/plasma_bridge/WindowProbe"
     CACHE STRING
     "DBus object path used by the window probe helper.")
 set(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE
-    "org.plasma_remote_toolbar.WindowProbe"
+    "org.plasma_bridge.WindowProbe"
     CACHE STRING
     "DBus interface used by the window probe helper.")
 

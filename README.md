@@ -1,6 +1,6 @@
-# Plasma Remote Toolbar
+# Plasma Bridge
 
-Plasma Remote Toolbar is a monorepo for a KDE Plasma backend service and client applications.
+Plasma Bridge is a monorepo for a KDE Plasma backend service and client applications.
 
 The current implementation includes the backend service, `plasma_bridge`, a React web dashboard, and an Android-first Flutter mobile app with a compact Breeze-inspired tablet dashboard.
 

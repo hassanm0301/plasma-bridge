@@ -1,5 +1,5 @@
-name: plasma_remote_toolbar_app
-description: "Android-first Flutter client for Plasma Remote Toolbar."
+name: plasma_bridge_app
+description: "Android-first Flutter client for Plasma Bridge."
 publish_to: 'none'
 version: 0.3.2+1
 

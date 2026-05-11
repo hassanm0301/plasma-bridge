@@ -5,7 +5,7 @@ export interface EndpointSettings {
   wsUrl: string;
 }
 
-const STORAGE_KEY = "plasma-remote-toolbar.endpoints";
+const STORAGE_KEY = "plasma-bridge.endpoints";
 
 export function initialEndpointSettings(): EndpointSettings {
   const fallback = {

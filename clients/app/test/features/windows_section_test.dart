@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:plasma_remote_toolbar_app/core/models/backend_models.dart';
-import 'package:plasma_remote_toolbar_app/features/settings/domain/endpoint_settings.dart';
-import 'package:plasma_remote_toolbar_app/features/windows/presentation/windows_section.dart';
+import 'package:plasma_bridge_app/core/models/backend_models.dart';
+import 'package:plasma_bridge_app/features/settings/domain/endpoint_settings.dart';
+import 'package:plasma_bridge_app/features/windows/presentation/windows_section.dart';
 
 WindowState _windowState(String id, String title, {bool isActive = false}) {
   return WindowState(

@@ -1,4 +1,4 @@
-package dev.hassan.plasma_remote_toolbar_app
+package dev.hassan.plasma_bridge_app
 
 import io.flutter.embedding.android.FlutterActivity
 

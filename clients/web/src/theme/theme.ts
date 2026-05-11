@@ -1,6 +1,6 @@
 export type ThemeMode = "light" | "dark";
 
-const STORAGE_KEY = "plasma-remote-toolbar.theme";
+const STORAGE_KEY = "plasma-bridge.theme";
 
 export function initialThemeMode(): ThemeMode {
   const stored = window.localStorage.getItem(STORAGE_KEY);

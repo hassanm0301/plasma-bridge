@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:plasma_remote_toolbar_app/app/app.dart';
-import 'package:plasma_remote_toolbar_app/features/dashboard/application/app_providers.dart';
+import 'package:plasma_bridge_app/app/app.dart';
+import 'package:plasma_bridge_app/features/dashboard/application/app_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
