@@ -1,6 +1,6 @@
 # Getting Started
 
-Build and run commands currently target the backend service and React web client. The Flutter mobile app is still a placeholder.
+Build and run commands target the backend service, the React web client, and the Flutter mobile client.
 
 ## Backend
 
@@ -48,7 +48,20 @@ See [clients/web](../clients/web/) for web-specific docs.
 
 ## Mobile App
 
-The Flutter mobile app is pending. Its setup and development commands should live in [clients/app](../clients/app/) when the project is generated.
+From the monorepo root:
+
+```bash
+cd clients/app
+flutter pub get
+flutter test
+flutter run -d android
+```
+
+The mobile client uses the same backend endpoints as the web client, but first launch requires manual endpoint setup instead of assuming localhost. On a physical Android device, point the app at the KDE machine's LAN address.
+
+The Android UI is tuned for landscape tablet usage. It keeps connection state in the top-right app bar, gives windows and current media full-width sections, and packs the rest of the controls more tightly than the web dashboard.
+
+See [clients/app](../clients/app/) for app-specific docs.
 
 ## Specs
 

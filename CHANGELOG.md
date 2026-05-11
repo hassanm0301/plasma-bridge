@@ -1,6 +1,7 @@
 ## [Unreleased]
 ### Added
 
+- Android-first Flutter mobile client under `clients/app`, with first-run endpoint setup, persisted theme/settings, live window/media/audio state, and parity control coverage for window activation, media transport/seek, sink volume, and sink/source mute.
 - `plasma_bridge` now accepts repeatable `--allow-origin` flags to grant CORS access to additional browser origins when the backend is exposed beyond localhost.
 - Current MPRIS media-session snapshots on HTTP and WebSocket, including player metadata, app icon URLs, and best-effort artwork URLs.
 - HTTP media transport control endpoints for play, pause, play-pause, next, previous, and absolute seek.
@@ -16,6 +17,9 @@
 
 ### Changed
 
+- Project, client, and getting-started docs now describe the implemented Flutter mobile client alongside the existing web dashboard.
+- The Flutter Android client now uses a more Breeze-like compact visual language with a landscape-first tablet dashboard layout.
+- The Flutter dashboard now keeps connection status in the top-right app bar, promotes windows and current media to full-width sections, and renders denser window/media tiles for better tablet landscape use.
 - The web client's Vite dev and preview servers now bind on all interfaces to simplify LAN testing.
 - Backend and web docs now explain localhost-only defaults, LAN exposure, and remote browser setup requirements.
 - The WebSocket state protocol version is now `3` to include top-level media state and `playerId` patch metadata.
