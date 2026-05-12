@@ -16,8 +16,9 @@ namespace plasma_bridge::control
 {
 class AudioDeviceController;
 class AudioVolumeController;
+class AppController;
 class MediaController;
-class WindowActivationController;
+class WindowControlController;
 }
 
 namespace plasma_bridge::state
@@ -65,7 +66,7 @@ public:
                                 state::WindowStateStore *windowStateStore,
                                 control::AudioVolumeController *audioVolumeController,
                                 control::AudioDeviceController *audioDeviceController,
-                                control::WindowActivationController *windowActivationController,
+                                control::WindowControlController *windowControlController,
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
                                 quint16 documentationWsPort,
@@ -77,7 +78,7 @@ public:
                                 control::AudioVolumeController *audioVolumeController,
                                 control::AudioDeviceController *audioDeviceController,
                                 control::MediaController *mediaController,
-                                control::WindowActivationController *windowActivationController,
+                                control::WindowControlController *windowControlController,
                                 const QString &documentationHost,
                                 quint16 documentationHttpPort,
                                 quint16 documentationWsPort,
@@ -97,6 +98,7 @@ public:
     QString errorString() const;
     QHostAddress serverAddress() const;
     quint16 serverPort() const;
+    void setAppController(control::AppController *appController);
 
 private:
     void handleNewConnection();
@@ -126,8 +128,9 @@ private:
     state::WindowStateStore *m_windowStateStore = nullptr;
     control::AudioVolumeController *m_audioVolumeController = nullptr;
     control::AudioDeviceController *m_audioDeviceController = nullptr;
+    control::AppController *m_appController = nullptr;
     control::MediaController *m_mediaController = nullptr;
-    control::WindowActivationController *m_windowActivationController = nullptr;
+    control::WindowControlController *m_windowControlController = nullptr;
     QString m_documentationHost;
     quint16 m_documentationHttpPort = 0;
     quint16 m_documentationWsPort = 0;

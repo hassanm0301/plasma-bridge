@@ -1,7 +1,7 @@
 #pragma once
 
 #include "adapters/window/window_observer.h"
-#include "control/window_activation_controller.h"
+#include "control/window_control_controller.h"
 
 #include <QObject>
 #include <QString>
@@ -49,13 +49,14 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-class KWinScriptWindowActivationController final : public control::WindowActivationController
+class KWinScriptWindowControlController final : public control::WindowControlController
 {
 public:
-    KWinScriptWindowActivationController();
-    ~KWinScriptWindowActivationController() override;
+    KWinScriptWindowControlController();
+    ~KWinScriptWindowControlController() override;
 
     control::WindowActivationResult activateWindow(const QString &windowId) override;
+    control::WindowCloseResult closeWindow(const QString &windowId) override;
 
 private:
     class Impl;

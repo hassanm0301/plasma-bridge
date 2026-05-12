@@ -2,7 +2,7 @@
 
 #include "plasma_bridge_build_config.h"
 #include "common/window_state.h"
-#include "control/window_activation_controller.h"
+#include "control/window_control_controller.h"
 
 #include <QObject>
 #include <QString>

@@ -29,6 +29,7 @@ void main() {
         wsUrl: 'ws://localhost:8081/ws',
         windowSortBy: WindowSortBy.name,
         windowSortDirection: WindowSortDirection.descending,
+        appLaunchBehavior: AppLaunchBehavior.switchToExisting,
       ),
     );
     repository.saveThemeMode(AppThemeMode.dark);
@@ -39,6 +40,10 @@ void main() {
     expect(
       repository.loadEndpointSettings()?.windowSortDirection,
       WindowSortDirection.descending,
+    );
+    expect(
+      repository.loadEndpointSettings()?.appLaunchBehavior,
+      AppLaunchBehavior.switchToExisting,
     );
     expect(repository.loadThemeMode(), AppThemeMode.dark);
   });
@@ -61,6 +66,10 @@ void main() {
         repository.loadEndpointSettings()?.windowSortDirection,
         WindowSortDirection.newestFirst,
       );
+      expect(
+        repository.loadEndpointSettings()?.appLaunchBehavior,
+        AppLaunchBehavior.openNewInstance,
+      );
     },
   );
 
@@ -81,6 +90,10 @@ void main() {
       expect(
         repository.loadEndpointSettings()?.windowSortDirection,
         WindowSortDirection.ascending,
+      );
+      expect(
+        repository.loadEndpointSettings()?.appLaunchBehavior,
+        AppLaunchBehavior.openNewInstance,
       );
     },
   );

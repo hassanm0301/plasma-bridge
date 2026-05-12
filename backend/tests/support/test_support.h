@@ -1,10 +1,13 @@
 #pragma once
 
+#include "common/app_state.h"
 #include "common/audio_state.h"
 #include "common/media_state.h"
 #include "common/window_state.h"
+#include "control/app_controller.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
+#include "control/favorite_apps_store.h"
 #include "control/media_controller.h"
 #include "tools/probes/audio_control_probe/audio_control_probe_runner.h"
 #include "tools/probes/audio_probe/audio_probe_runner.h"
@@ -17,6 +20,7 @@
 namespace plasma_bridge::tests
 {
 
+QList<AppInfo> sampleApps();
 AudioState sampleAudioState();
 AudioState alternateAudioState();
 MediaPlayerState sampleMediaPlayerState();
@@ -217,20 +221,27 @@ private:
     int m_callCount = 0;
 };
 
-class FakeWindowActivationController final : public control::WindowActivationController
+class FakeWindowControlController final : public control::WindowControlController
 {
 public:
-    void setResult(const control::WindowActivationResult &result);
+    void setActivationResult(const control::WindowActivationResult &result);
+    void setCloseResult(const control::WindowCloseResult &result);
 
     control::WindowActivationResult activateWindow(const QString &windowId) override;
+    control::WindowCloseResult closeWindow(const QString &windowId) override;
 
-    QString lastWindowId() const;
-    int callCount() const;
+    QString lastActivationWindowId() const;
+    QString lastCloseWindowId() const;
+    int activationCallCount() const;
+    int closeCallCount() const;
 
 private:
-    control::WindowActivationResult m_result;
-    QString m_lastWindowId;
-    int m_callCount = 0;
+    control::WindowActivationResult m_activationResult;
+    control::WindowCloseResult m_closeResult;
+    QString m_lastActivationWindowId;
+    QString m_lastCloseWindowId;
+    int m_activationCallCount = 0;
+    int m_closeCallCount = 0;
 };
 
 class FakeMediaController final : public control::MediaController
@@ -265,6 +276,37 @@ private:
     QString m_lastPlayerId;
     std::optional<qint64> m_lastPositionMs;
     int m_callCount = 0;
+};
+
+class FakeAppController final : public control::AppController
+{
+public:
+    explicit FakeAppController(QString favoritesFilePath = {});
+
+    QList<plasma_bridge::AppInfo> availableApps(const QString &query = {}) override;
+    std::optional<plasma_bridge::AppInfo> findApp(const QString &appId) override;
+    control::FavoriteAppsResult favoriteApps() override;
+    control::AppFavoriteChangeResult addFavorite(const QString &appId) override;
+    control::AppFavoriteChangeResult removeFavorite(const QString &appId) override;
+    control::AppOpenResult openApp(const QString &appId, const control::AppOpenOptions &options = {}) override;
+
+    void setAvailableApps(const QList<plasma_bridge::AppInfo> &apps);
+    void setOpenFailure(const QString &message);
+    void clearOpenFailure();
+    QString lastOpenedAppId() const;
+    bool lastOpenSwitchToExisting() const;
+    int openCallCount() const;
+    QString favoritesFilePath() const;
+
+private:
+    bool hasApp(const QString &appId) const;
+
+    QList<plasma_bridge::AppInfo> m_availableApps;
+    control::FavoriteAppsStore m_favoriteAppsStore;
+    QString m_lastOpenedAppId;
+    bool m_lastOpenSwitchToExisting = false;
+    int m_openCallCount = 0;
+    QString m_openFailureMessage;
 };
 
 } // namespace plasma_bridge::tests

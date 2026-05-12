@@ -20,6 +20,7 @@ class _FakeSettingsController extends SettingsController {
         wsUrl: 'ws://192.168.1.20:8081/ws',
         windowSortBy: WindowSortBy.usage,
         windowSortDirection: WindowSortDirection.newestFirst,
+        appLaunchBehavior: AppLaunchBehavior.openNewInstance,
       ),
       themeMode: AppThemeMode.light,
     );
@@ -37,6 +38,15 @@ class _FakeSettingsController extends SettingsController {
 }
 
 class _FakeDashboardController extends DashboardController {
+  static const _searchApp = AppInfo(
+    appId: 'org.kde.konsole.desktop',
+    name: 'Konsole',
+    genericName: 'Terminal Emulator',
+    desktopEntryName: 'org.kde.konsole',
+    menuId: 'org.kde.konsole.desktop',
+    iconUrl: null,
+  );
+
   @override
   DashboardState build() {
     return DashboardState(
@@ -120,6 +130,21 @@ class _FakeDashboardController extends DashboardController {
           ],
         ),
       ),
+      favoriteApps: const [
+        AppInfo(
+          appId: 'org.kde.kate.desktop',
+          name: 'Kate',
+          genericName: 'Text Editor',
+          desktopEntryName: 'org.kde.kate',
+          menuId: 'org.kde.kate.desktop',
+          iconUrl: null,
+        ),
+      ],
+      appSearchResults: const [],
+      favoriteAppsAddMode: false,
+      favoriteAppsEditMode: false,
+      appSearchQuery: '',
+      appSearchLoading: false,
       connectionStatus: ConnectionStatus.connected,
       connectionDetail: 'Live state stream connected.',
       httpStatus: HttpCheckState.reachable,
@@ -140,10 +165,73 @@ class _FakeDashboardController extends DashboardController {
   Future<void> activateWindow(String windowId) async {}
 
   @override
+  Future<void> closeWindow(String windowId) async {}
+
+  @override
   Future<void> performMediaAction(String action) async {}
 
   @override
   Future<void> seekCurrentMedia(int positionMs) async {}
+
+  @override
+  void showFavoriteAppsAddMode() {
+    state = state.copyWith(
+      favoriteAppsAddMode: true,
+      favoriteAppsEditMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+    );
+  }
+
+  @override
+  void hideFavoriteAppsAddMode() {
+    state = state.copyWith(
+      favoriteAppsAddMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+    );
+  }
+
+  @override
+  void toggleFavoriteAppsEditMode() {
+    state = state.copyWith(
+      favoriteAppsEditMode: !state.favoriteAppsEditMode,
+      favoriteAppsAddMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+    );
+  }
+
+  @override
+  void updateAppSearchQuery(String query) {
+    state = state.copyWith(
+      appSearchQuery: query,
+      appSearchResults: query.isEmpty ? const [] : const [_searchApp],
+      appSearchLoading: false,
+    );
+  }
+
+  @override
+  Future<void> addFavoriteApp(AppInfo app) async {
+    state = state.copyWith(
+      favoriteApps: [...state.favoriteApps, app],
+      favoriteAppsAddMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+    );
+  }
+
+  @override
+  Future<void> removeFavoriteApp(AppInfo app) async {
+    state = state.copyWith(
+      favoriteApps: state.favoriteApps
+          .where((candidate) => candidate.appId != app.appId)
+          .toList(growable: false),
+    );
+  }
+
+  @override
+  Future<void> openFavoriteApp(AppInfo app) async {}
 
   @override
   void updateVolumeDraft(String deviceId, double value) {}
@@ -210,6 +298,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Windows'), findsOneWidget);
+    expect(find.text('Favorite Apps'), findsOneWidget);
     expect(find.text('Current Media'), findsOneWidget);
     expect(find.text('Playback'), findsOneWidget);
     expect(
@@ -235,6 +324,7 @@ void main() {
     await pumpDashboard(tester, const Size(1280, 800));
 
     expect(find.byKey(const ValueKey('dashboard-wide-layout')), findsOneWidget);
+    expect(find.text('Favorite Apps'), findsOneWidget);
     expect(find.text('Capture'), findsOneWidget);
     expect(find.text('Connection'), findsNothing);
     expect(find.text('Konsole'), findsWidgets);
@@ -294,5 +384,47 @@ void main() {
     );
     expect(find.text('Dolphin'), findsWidgets);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('favorite apps tile supports add mode and edit confirmation', (
+    tester,
+  ) async {
+    await pumpDashboard(tester, const Size(1280, 800));
+
+    expect(
+      find.byKey(const ValueKey('favorite-apps-search-field')),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('favorite-apps-add-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('favorite-apps-search-field')),
+      findsOneWidget,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('favorite-apps-search-field')),
+      'kon',
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(
+        const ValueKey('favorite-app-search-result:org.kde.konsole.desktop'),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('favorite-apps-edit-button')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('favorite-app-remove:org.kde.kate.desktop')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Remove favorite?'), findsOneWidget);
+    expect(find.text('Remove Kate from your favorite apps?'), findsOneWidget);
   });
 }

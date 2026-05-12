@@ -1,16 +1,19 @@
 #include "api/snapshot_http_server.h"
 
+#include "api/app_control_http_helpers.h"
 #include "api/audio_control_http_helpers.h"
 #include "api/json_envelope.h"
 #include "api/media_control_http_helpers.h"
 #include "api/window_control_http_helpers.h"
+#include "common/app_state.h"
 #include "common/audio_state.h"
 #include "common/media_state.h"
 #include "common/window_state.h"
+#include "control/app_controller.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "control/media_controller.h"
-#include "control/window_activation_controller.h"
+#include "control/window_control_controller.h"
 #include "plasma_bridge_build_config.h"
 #include "state/audio_state_store.h"
 #include "state/media_state_store.h"
@@ -21,6 +24,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHostAddress>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -49,6 +53,8 @@ const QString kDefaultSourcePath = QStringLiteral("/snapshot/audio/default-sourc
 const QString kMediaCurrentPath = QStringLiteral("/snapshot/media/current");
 const QString kWindowsPath = QStringLiteral("/snapshot/windows");
 const QString kActiveWindowPath = QStringLiteral("/snapshot/windows/active");
+const QString kAppsPath = QStringLiteral("/snapshot/apps");
+const QString kFavoriteAppsPath = QStringLiteral("/snapshot/apps/favorites");
 const QString kAppIconPathPrefix = QStringLiteral("/icons/apps/");
 const QString kDocsRootPath = QStringLiteral("/docs/");
 const QString kDocsRootNoSlashPath = QStringLiteral("/docs");
@@ -73,6 +79,8 @@ enum class SnapshotRoute {
     MediaCurrent,
     Windows,
     ActiveWindow,
+    Apps,
+    FavoriteApps,
 };
 
 struct WindowSnapshotSortOptions {
@@ -103,6 +111,12 @@ SnapshotRoute snapshotRouteForPath(const QString &path)
     }
     if (path == kActiveWindowPath) {
         return SnapshotRoute::ActiveWindow;
+    }
+    if (path == kAppsPath) {
+        return SnapshotRoute::Apps;
+    }
+    if (path == kFavoriteAppsPath) {
+        return SnapshotRoute::FavoriteApps;
     }
 
     return SnapshotRoute::None;
@@ -312,6 +326,19 @@ QString requestPathFromTarget(const QByteArray &target)
     }
 
     return path;
+}
+
+QString appSearchQueryFromTarget(const QByteArray &target)
+{
+    const QString requestTarget = QString::fromUtf8(target);
+    const qsizetype queryIndex = requestTarget.indexOf(QLatin1Char('?'));
+    if (queryIndex < 0) {
+        return {};
+    }
+
+    QUrlQuery query;
+    query.setQuery(requestTarget.mid(queryIndex + 1));
+    return query.queryItemValue(QStringLiteral("q")).trimmed();
 }
 
 bool parseWindowSnapshotSortOptions(const QByteArray &target,
@@ -619,6 +646,18 @@ QByteArray buildHttpResponse(int statusCode,
     return response;
 }
 
+QJsonObject buildAppsPayload(const QList<plasma_bridge::AppInfo> &apps)
+{
+    QJsonArray appArray;
+    for (const plasma_bridge::AppInfo &app : apps) {
+        appArray.append(plasma_bridge::toJsonObject(app));
+    }
+
+    QJsonObject payload;
+    payload[QStringLiteral("apps")] = appArray;
+    return payload;
+}
+
 QString errorCodeForVolumeChangeStatus(const control::VolumeChangeStatus status)
 {
     switch (status) {
@@ -757,6 +796,38 @@ QString errorMessageForWindowActivationStatus(const control::WindowActivationSta
     return QStringLiteral("Window activation control is not ready yet.");
 }
 
+QString errorCodeForWindowCloseStatus(const control::WindowCloseStatus status)
+{
+    switch (status) {
+    case control::WindowCloseStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::WindowCloseStatus::NotReady:
+        return QStringLiteral("not_ready");
+    case control::WindowCloseStatus::WindowNotFound:
+        return QStringLiteral("window_not_found");
+    case control::WindowCloseStatus::WindowNotCloseable:
+        return QStringLiteral("window_not_closeable");
+    }
+
+    return QStringLiteral("not_ready");
+}
+
+QString errorMessageForWindowCloseStatus(const control::WindowCloseStatus status)
+{
+    switch (status) {
+    case control::WindowCloseStatus::Accepted:
+        return QStringLiteral("Window close request accepted.");
+    case control::WindowCloseStatus::NotReady:
+        return QStringLiteral("Window close control is not ready yet.");
+    case control::WindowCloseStatus::WindowNotFound:
+        return QStringLiteral("Requested window was not found.");
+    case control::WindowCloseStatus::WindowNotCloseable:
+        return QStringLiteral("Window exists but cannot be closed.");
+    }
+
+    return QStringLiteral("Window close control is not ready yet.");
+}
+
 QString errorCodeForMediaControlStatus(const control::MediaControlStatus status)
 {
     switch (status) {
@@ -791,6 +862,120 @@ QString errorMessageForMediaControlStatus(const control::MediaControlStatus stat
     }
 
     return QStringLiteral("Media control is not ready yet.");
+}
+
+QString errorCodeForFavoriteAppsStatus(const control::FavoriteAppsStatus status)
+{
+    switch (status) {
+    case control::FavoriteAppsStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::FavoriteAppsStatus::StorageError:
+        return QStringLiteral("storage_error");
+    }
+
+    return QStringLiteral("storage_error");
+}
+
+QString errorMessageForFavoriteAppsStatus(const control::FavoriteAppsStatus status)
+{
+    switch (status) {
+    case control::FavoriteAppsStatus::Accepted:
+        return QStringLiteral("Favorite apps request accepted.");
+    case control::FavoriteAppsStatus::StorageError:
+        return QStringLiteral("Favorite apps storage is unavailable.");
+    }
+
+    return QStringLiteral("Favorite apps storage is unavailable.");
+}
+
+QString errorCodeForAppFavoriteChangeStatus(const control::AppFavoriteChangeStatus status)
+{
+    switch (status) {
+    case control::AppFavoriteChangeStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::AppFavoriteChangeStatus::AppNotFound:
+        return QStringLiteral("not_found");
+    case control::AppFavoriteChangeStatus::StorageError:
+        return QStringLiteral("storage_error");
+    }
+
+    return QStringLiteral("storage_error");
+}
+
+QString errorMessageForAppFavoriteChangeStatus(const control::AppFavoriteChangeStatus status)
+{
+    switch (status) {
+    case control::AppFavoriteChangeStatus::Accepted:
+        return QStringLiteral("Favorite app change request accepted.");
+    case control::AppFavoriteChangeStatus::AppNotFound:
+        return QStringLiteral("Requested app was not found.");
+    case control::AppFavoriteChangeStatus::StorageError:
+        return QStringLiteral("Favorite apps storage is unavailable.");
+    }
+
+    return QStringLiteral("Favorite apps storage is unavailable.");
+}
+
+QString errorCodeForAppOpenStatus(const control::AppOpenStatus status)
+{
+    switch (status) {
+    case control::AppOpenStatus::Accepted:
+        return QStringLiteral("accepted");
+    case control::AppOpenStatus::AppNotFound:
+        return QStringLiteral("not_found");
+    case control::AppOpenStatus::LaunchFailed:
+        return QStringLiteral("launch_failed");
+    }
+
+    return QStringLiteral("launch_failed");
+}
+
+QString errorMessageForAppOpenStatus(const control::AppOpenStatus status)
+{
+    switch (status) {
+    case control::AppOpenStatus::Accepted:
+        return QStringLiteral("App launch request accepted.");
+    case control::AppOpenStatus::AppNotFound:
+        return QStringLiteral("Requested app was not found.");
+    case control::AppOpenStatus::LaunchFailed:
+        return QStringLiteral("Failed to launch the requested app.");
+    }
+
+    return QStringLiteral("Failed to launch the requested app.");
+}
+
+QString normalizedAppIdentity(QString value)
+{
+    value = value.trimmed().toLower();
+    if (value.endsWith(QStringLiteral(".desktop"))) {
+        value.chop(QStringLiteral(".desktop").size());
+    }
+    return value;
+}
+
+bool matchesWindowToApp(const plasma_bridge::AppInfo &app, const plasma_bridge::WindowState &window)
+{
+    if (window.appId == app.desktopEntryName) {
+        return true;
+    }
+
+    const QString normalizedWindowAppId = normalizedAppIdentity(window.appId);
+    if (normalizedWindowAppId.isEmpty()) {
+        return false;
+    }
+
+    return normalizedWindowAppId == normalizedAppIdentity(app.desktopEntryName)
+        || normalizedWindowAppId == normalizedAppIdentity(app.appId)
+        || normalizedWindowAppId == normalizedAppIdentity(app.menuId);
+}
+
+const plasma_bridge::WindowState *findExistingAppWindow(const plasma_bridge::WindowSnapshot &snapshot,
+                                                        const plasma_bridge::AppInfo &app)
+{
+    const auto it = std::find_if(snapshot.windows.cbegin(), snapshot.windows.cend(), [&app](const plasma_bridge::WindowState &window) {
+        return matchesWindowToApp(app, window);
+    });
+    return it == snapshot.windows.cend() ? nullptr : &(*it);
 }
 
 bool snapshotContainsWindow(const plasma_bridge::WindowSnapshot &snapshot, const QString &windowId)
@@ -880,7 +1065,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        control::AudioVolumeController *audioVolumeController,
                                        control::AudioDeviceController *audioDeviceController,
                                        control::MediaController *mediaController,
-                                       control::WindowActivationController *windowActivationController,
+                                       control::WindowControlController *windowControlController,
                                        const QString &documentationHost,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
@@ -893,7 +1078,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
     , m_audioVolumeController(audioVolumeController)
     , m_audioDeviceController(audioDeviceController)
     , m_mediaController(mediaController)
-    , m_windowActivationController(windowActivationController)
+    , m_windowControlController(windowControlController)
     , m_documentationHost(documentationHost)
     , m_documentationHttpPort(documentationHttpPort)
     , m_documentationWsPort(documentationWsPort)
@@ -906,7 +1091,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                                        state::WindowStateStore *windowStateStore,
                                        control::AudioVolumeController *audioVolumeController,
                                        control::AudioDeviceController *audioDeviceController,
-                                       control::WindowActivationController *windowActivationController,
+                                       control::WindowControlController *windowControlController,
                                        const QString &documentationHost,
                                        quint16 documentationHttpPort,
                                        quint16 documentationWsPort,
@@ -918,7 +1103,7 @@ SnapshotHttpServer::SnapshotHttpServer(state::AudioStateStore *audioStateStore,
                          audioVolumeController,
                          audioDeviceController,
                          nullptr,
-                         windowActivationController,
+                         windowControlController,
                          documentationHost,
                          documentationHttpPort,
                          documentationWsPort,
@@ -950,6 +1135,11 @@ QHostAddress SnapshotHttpServer::serverAddress() const
 quint16 SnapshotHttpServer::serverPort() const
 {
     return m_server.serverPort();
+}
+
+void SnapshotHttpServer::setAppController(control::AppController *appController)
+{
+    m_appController = appController;
 }
 
 void SnapshotHttpServer::handleNewConnection()
@@ -1443,20 +1633,63 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
 
-        if (m_windowActivationController == nullptr) {
+        if (m_windowControlController == nullptr) {
+            const QString message = windowControlRoute.route.action == WindowControlAction::Activate
+                ? QStringLiteral("Window activation control is not available.")
+                : QStringLiteral("Window close control is not available.");
             writeJsonErrorResponse(socket,
                                    503,
                                    QByteArrayLiteral("Service Unavailable"),
                                    QStringLiteral("not_ready"),
-                                   QStringLiteral("Window activation control is not available."));
+                                   message);
             return;
         }
 
         if (!snapshotContainsWindow(m_windowStateStore->windowState(), windowControlRoute.route.windowId)) {
-            control::WindowActivationResult result;
-            result.status = control::WindowActivationStatus::WindowNotFound;
-            result.windowId = windowControlRoute.route.windowId;
+            if (windowControlRoute.route.action == WindowControlAction::Activate) {
+                control::WindowActivationResult result;
+                result.status = control::WindowActivationStatus::WindowNotFound;
+                result.windowId = windowControlRoute.route.windowId;
+                const int statusCode = httpStatusCodeForWindowActivationStatus(result.status);
+                writeJsonErrorResponse(socket,
+                                       statusCode,
+                                       reasonPhraseForStatusCode(statusCode),
+                                       errorCodeForWindowActivationStatus(result.status),
+                                       errorMessageForWindowActivationStatus(result.status),
+                                       {},
+                                       buildWindowActivationErrorDetails(result));
+            } else {
+                control::WindowCloseResult result;
+                result.status = control::WindowCloseStatus::WindowNotFound;
+                result.windowId = windowControlRoute.route.windowId;
+                const int statusCode = httpStatusCodeForWindowCloseStatus(result.status);
+                writeJsonErrorResponse(socket,
+                                       statusCode,
+                                       reasonPhraseForStatusCode(statusCode),
+                                       errorCodeForWindowCloseStatus(result.status),
+                                       errorMessageForWindowCloseStatus(result.status),
+                                       {},
+                                       buildWindowCloseErrorDetails(result));
+            }
+            return;
+        }
+
+        if (windowControlRoute.route.action == WindowControlAction::Activate) {
+            control::WindowActivationResult result =
+                m_windowControlController->activateWindow(windowControlRoute.route.windowId);
+            if (result.windowId.isEmpty()) {
+                result.windowId = windowControlRoute.route.windowId;
+            }
+
             const int statusCode = httpStatusCodeForWindowActivationStatus(result.status);
+            if (result.status == control::WindowActivationStatus::Accepted) {
+                writeJsonResponse(socket,
+                                  statusCode,
+                                  reasonPhraseForStatusCode(statusCode),
+                                  buildHttpSuccessEnvelope(buildWindowActivationPayload(result)));
+                return;
+            }
+
             writeJsonErrorResponse(socket,
                                    statusCode,
                                    reasonPhraseForStatusCode(statusCode),
@@ -1467,28 +1700,173 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
             return;
         }
 
-        control::WindowActivationResult result =
-            m_windowActivationController->activateWindow(windowControlRoute.route.windowId);
+        control::WindowCloseResult result =
+            m_windowControlController->closeWindow(windowControlRoute.route.windowId);
         if (result.windowId.isEmpty()) {
             result.windowId = windowControlRoute.route.windowId;
         }
 
-        const int statusCode = httpStatusCodeForWindowActivationStatus(result.status);
-        if (result.status == control::WindowActivationStatus::Accepted) {
+        const int statusCode = httpStatusCodeForWindowCloseStatus(result.status);
+        if (result.status == control::WindowCloseStatus::Accepted) {
             writeJsonResponse(socket,
                               statusCode,
                               reasonPhraseForStatusCode(statusCode),
-                              buildHttpSuccessEnvelope(buildWindowActivationPayload(result)));
+                              buildHttpSuccessEnvelope(buildWindowClosePayload(result)));
             return;
         }
 
         writeJsonErrorResponse(socket,
                                statusCode,
                                reasonPhraseForStatusCode(statusCode),
-                               errorCodeForWindowActivationStatus(result.status),
-                               errorMessageForWindowActivationStatus(result.status),
+                               errorCodeForWindowCloseStatus(result.status),
+                               errorMessageForWindowCloseStatus(result.status),
                                {},
-                               buildWindowActivationErrorDetails(result));
+                               buildWindowCloseErrorDetails(result));
+        return;
+    }
+
+    const AppControlRouteParseResult appControlRoute = parseAppControlRoute(path);
+    if (appControlRoute.match == AppControlRouteMatch::InvalidAppId) {
+        writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                               QStringLiteral("App id must be a single path segment."));
+        return;
+    }
+
+    if (appControlRoute.match == AppControlRouteMatch::Match) {
+        if (method != QByteArrayLiteral("POST")) {
+            writeJsonErrorResponse(socket,
+                                   405,
+                                   QByteArrayLiteral("Method Not Allowed"),
+                                   QStringLiteral("method_not_allowed"),
+                                   QStringLiteral("Only POST is supported for this endpoint."),
+                                   {{QByteArrayLiteral("Allow"), QByteArrayLiteral("POST")}});
+            return;
+        }
+
+        if (contentLength > 0) {
+            writeJsonErrorResponse(socket, 400, QByteArrayLiteral("Bad Request"), QStringLiteral("bad_request"),
+                                   QStringLiteral("Request body is not supported for this endpoint."));
+            return;
+        }
+
+        if (m_appController == nullptr) {
+            writeJsonErrorResponse(socket,
+                                   503,
+                                   QByteArrayLiteral("Service Unavailable"),
+                                   QStringLiteral("not_ready"),
+                                   QStringLiteral("App control is not available."));
+            return;
+        }
+
+        if (appControlRoute.route.action == AppControlAction::Open) {
+            control::AppOpenOptions options;
+            QString appOpenOptionsError;
+            if (!parseAppOpenOptions(target, &options, &appOpenOptionsError)) {
+                writeJsonErrorResponse(socket,
+                                       400,
+                                       QByteArrayLiteral("Bad Request"),
+                                       QStringLiteral("bad_request"),
+                                       appOpenOptionsError);
+                return;
+            }
+
+            if (options.switchToExisting) {
+                const std::optional<plasma_bridge::AppInfo> app = m_appController->findApp(appControlRoute.route.appId);
+                if (!app.has_value()) {
+                    control::AppOpenResult result;
+                    result.status = control::AppOpenStatus::AppNotFound;
+                    result.appId = appControlRoute.route.appId;
+                    writeJsonErrorResponse(socket,
+                                           httpStatusCodeForAppOpenStatus(result.status),
+                                           reasonPhraseForStatusCode(httpStatusCodeForAppOpenStatus(result.status)),
+                                           errorCodeForAppOpenStatus(result.status),
+                                           errorMessageForAppOpenStatus(result.status),
+                                           {},
+                                           buildAppOpenErrorDetails(result));
+                    return;
+                }
+
+                if (m_windowStateStore != nullptr && m_windowStateStore->isReady()) {
+                    const plasma_bridge::WindowSnapshot snapshot = m_windowStateStore->windowState();
+                    if (const plasma_bridge::WindowState *existingWindow = findExistingAppWindow(snapshot, *app)) {
+                        if (existingWindow->isActive || snapshot.activeWindowId == existingWindow->id) {
+                            control::AppOpenResult result;
+                            result.status = control::AppOpenStatus::Accepted;
+                            result.appId = appControlRoute.route.appId;
+                            writeJsonResponse(socket,
+                                              200,
+                                              QByteArrayLiteral("OK"),
+                                              buildHttpSuccessEnvelope(buildAppOpenPayload(result)));
+                            return;
+                        }
+
+                        if (m_windowControlController != nullptr) {
+                            const control::WindowActivationResult activationResult =
+                                m_windowControlController->activateWindow(existingWindow->id);
+                            if (activationResult.status == control::WindowActivationStatus::Accepted) {
+                                control::AppOpenResult result;
+                                result.status = control::AppOpenStatus::Accepted;
+                                result.appId = appControlRoute.route.appId;
+                                writeJsonResponse(socket,
+                                                  200,
+                                                  QByteArrayLiteral("OK"),
+                                                  buildHttpSuccessEnvelope(buildAppOpenPayload(result)));
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+
+            control::AppOpenResult result = m_appController->openApp(appControlRoute.route.appId, options);
+            if (result.appId.isEmpty()) {
+                result.appId = appControlRoute.route.appId;
+            }
+
+            const int statusCode = httpStatusCodeForAppOpenStatus(result.status);
+            if (result.status == control::AppOpenStatus::Accepted) {
+                writeJsonResponse(socket,
+                                  statusCode,
+                                  reasonPhraseForStatusCode(statusCode),
+                                  buildHttpSuccessEnvelope(buildAppOpenPayload(result)));
+                return;
+            }
+
+            writeJsonErrorResponse(socket,
+                                   statusCode,
+                                   reasonPhraseForStatusCode(statusCode),
+                                   errorCodeForAppOpenStatus(result.status),
+                                   errorMessageForAppOpenStatus(result.status),
+                                   {},
+                                   buildAppOpenErrorDetails(result));
+            return;
+        }
+
+        control::AppFavoriteChangeResult result =
+            appControlRoute.route.action == AppControlAction::Favorite
+            ? m_appController->addFavorite(appControlRoute.route.appId)
+            : m_appController->removeFavorite(appControlRoute.route.appId);
+        if (result.appId.isEmpty()) {
+            result.appId = appControlRoute.route.appId;
+        }
+        result.favorite = appControlRoute.route.action == AppControlAction::Favorite;
+
+        const int statusCode = httpStatusCodeForAppFavoriteChangeStatus(result.status);
+        if (result.status == control::AppFavoriteChangeStatus::Accepted) {
+            writeJsonResponse(socket,
+                              statusCode,
+                              reasonPhraseForStatusCode(statusCode),
+                              buildHttpSuccessEnvelope(buildAppFavoriteChangePayload(result)));
+            return;
+        }
+
+        writeJsonErrorResponse(socket,
+                               statusCode,
+                               reasonPhraseForStatusCode(statusCode),
+                               errorCodeForAppFavoriteChangeStatus(result.status),
+                               errorMessageForAppFavoriteChangeStatus(result.status),
+                               {},
+                               buildAppFavoriteChangeErrorDetails(result));
         return;
     }
 
@@ -1599,6 +1977,52 @@ void SnapshotHttpServer::processRequest(QTcpSocket *socket, const QByteArray &re
     }
 
     switch (snapshotRoute) {
+    case SnapshotRoute::Apps:
+        if (m_appController == nullptr) {
+            writeJsonErrorResponse(socket,
+                                   503,
+                                   QByteArrayLiteral("Service Unavailable"),
+                                   QStringLiteral("not_ready"),
+                                   QStringLiteral("App control is not available."));
+            return;
+        }
+
+        writeJsonResponse(socket,
+                          200,
+                          QByteArrayLiteral("OK"),
+                          buildHttpSuccessEnvelope(buildAppsPayload(m_appController->availableApps(appSearchQueryFromTarget(target)))));
+        return;
+    case SnapshotRoute::FavoriteApps:
+        if (m_appController == nullptr) {
+            writeJsonErrorResponse(socket,
+                                   503,
+                                   QByteArrayLiteral("Service Unavailable"),
+                                   QStringLiteral("not_ready"),
+                                   QStringLiteral("App control is not available."));
+            return;
+        }
+
+        {
+            const control::FavoriteAppsResult result = m_appController->favoriteApps();
+            if (result.status == control::FavoriteAppsStatus::Accepted) {
+                writeJsonResponse(socket,
+                                  200,
+                                  QByteArrayLiteral("OK"),
+                                  buildHttpSuccessEnvelope(buildAppsPayload(result.apps)));
+                return;
+            }
+
+            writeJsonErrorResponse(socket,
+                                   500,
+                                   QByteArrayLiteral("Internal Server Error"),
+                                   errorCodeForFavoriteAppsStatus(result.status),
+                                   errorMessageForFavoriteAppsStatus(result.status),
+                                   {},
+                                   !result.errorMessage.isEmpty()
+                                       ? QJsonObject{{QStringLiteral("reason"), result.errorMessage}}
+                                       : QJsonObject{});
+            return;
+        }
     case SnapshotRoute::Windows:
         if (m_windowStateStore == nullptr || !m_windowStateStore->isReady()) {
             writeJsonErrorResponse(socket, 503, QByteArrayLiteral("Service Unavailable"), QStringLiteral("not_ready"),

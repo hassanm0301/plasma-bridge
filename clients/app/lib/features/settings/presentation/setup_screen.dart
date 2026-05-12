@@ -46,6 +46,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
               wsUrl: _wsController.text,
               windowSortBy: _windowSortBy,
               windowSortDirection: _windowSortDirection,
+              appLaunchBehavior: AppLaunchBehavior.openNewInstance,
             ),
           );
     } on FormatException catch (error) {

@@ -1,4 +1,5 @@
 add_library(plasma_bridge_common STATIC
+    app_state.cpp
     audio_state.cpp
     media_state.cpp
     window_state.cpp

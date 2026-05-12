@@ -8,6 +8,23 @@ List<Object?> _asObjectList(Object? value) {
   return value is List ? List<Object?>.from(value) : const [];
 }
 
+class AppInfoDto {
+  const AppInfoDto(this.json);
+
+  final Map<String, Object?> json;
+
+  AppInfo toDomain() {
+    return AppInfo(
+      appId: json['appId'] as String,
+      name: json['name'] as String? ?? '',
+      genericName: json['genericName'] as String? ?? '',
+      desktopEntryName: json['desktopEntryName'] as String? ?? '',
+      menuId: json['menuId'] as String? ?? '',
+      iconUrl: json['iconUrl'] as String?,
+    );
+  }
+}
+
 class AudioDeviceStateDto {
   const AudioDeviceStateDto(this.json);
 

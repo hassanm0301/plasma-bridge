@@ -6,6 +6,8 @@
 #include <QJsonParseError>
 #include <QResource>
 
+#include <algorithm>
+
 static void initDocsResources()
 {
     Q_INIT_RESOURCE(docs_resources);
@@ -13,6 +15,31 @@ static void initDocsResources()
 
 namespace plasma_bridge::tests
 {
+
+QList<AppInfo> sampleApps()
+{
+    QList<AppInfo> apps;
+
+    AppInfo kate;
+    kate.appId = QStringLiteral("org.kde.kate.desktop");
+    kate.name = QStringLiteral("Kate");
+    kate.genericName = QStringLiteral("Text Editor");
+    kate.desktopEntryName = QStringLiteral("org.kde.kate");
+    kate.menuId = QStringLiteral("org.kde.kate.desktop");
+    kate.iconUrl = QStringLiteral("/icons/apps/org.kde.kate");
+    apps.append(kate);
+
+    AppInfo konsole;
+    konsole.appId = QStringLiteral("org.kde.konsole.desktop");
+    konsole.name = QStringLiteral("Konsole");
+    konsole.genericName = QStringLiteral("Terminal Emulator");
+    konsole.desktopEntryName = QStringLiteral("org.kde.konsole");
+    konsole.menuId = QStringLiteral("org.kde.konsole.desktop");
+    konsole.iconUrl = QStringLiteral("/icons/apps/org.kde.konsole");
+    apps.append(konsole);
+
+    return apps;
+}
 
 AudioState sampleAudioState()
 {
@@ -645,31 +672,58 @@ control::MuteChangeResult FakeAudioDeviceController::invokeMute(const Operation 
     return {};
 }
 
-void FakeWindowActivationController::setResult(const control::WindowActivationResult &result)
+void FakeWindowControlController::setActivationResult(const control::WindowActivationResult &result)
 {
-    m_result = result;
+    m_activationResult = result;
 }
 
-control::WindowActivationResult FakeWindowActivationController::activateWindow(const QString &windowId)
+void FakeWindowControlController::setCloseResult(const control::WindowCloseResult &result)
 {
-    m_lastWindowId = windowId;
-    ++m_callCount;
+    m_closeResult = result;
+}
 
-    control::WindowActivationResult result = m_result;
+control::WindowActivationResult FakeWindowControlController::activateWindow(const QString &windowId)
+{
+    m_lastActivationWindowId = windowId;
+    ++m_activationCallCount;
+
+    control::WindowActivationResult result = m_activationResult;
     if (result.windowId.isEmpty()) {
         result.windowId = windowId;
     }
     return result;
 }
 
-QString FakeWindowActivationController::lastWindowId() const
+control::WindowCloseResult FakeWindowControlController::closeWindow(const QString &windowId)
 {
-    return m_lastWindowId;
+    m_lastCloseWindowId = windowId;
+    ++m_closeCallCount;
+
+    control::WindowCloseResult result = m_closeResult;
+    if (result.windowId.isEmpty()) {
+        result.windowId = windowId;
+    }
+    return result;
 }
 
-int FakeWindowActivationController::callCount() const
+QString FakeWindowControlController::lastActivationWindowId() const
 {
-    return m_callCount;
+    return m_lastActivationWindowId;
+}
+
+QString FakeWindowControlController::lastCloseWindowId() const
+{
+    return m_lastCloseWindowId;
+}
+
+int FakeWindowControlController::activationCallCount() const
+{
+    return m_activationCallCount;
+}
+
+int FakeWindowControlController::closeCallCount() const
+{
+    return m_closeCallCount;
 }
 
 void FakeMediaController::setResult(const Operation operation, const control::MediaControlResult &result)
@@ -783,6 +837,189 @@ control::MediaControlResult FakeMediaController::invoke(const Operation operatio
         result.positionMs = positionMs;
     }
     return result;
+}
+
+FakeAppController::FakeAppController(QString favoritesFilePath)
+    : m_availableApps(sampleApps())
+    , m_favoriteAppsStore(std::move(favoritesFilePath))
+{
+}
+
+QList<plasma_bridge::AppInfo> FakeAppController::availableApps(const QString &query)
+{
+    if (query.trimmed().isEmpty()) {
+        return m_availableApps;
+    }
+
+    QList<plasma_bridge::AppInfo> filteredApps;
+    for (const plasma_bridge::AppInfo &app : m_availableApps) {
+        if (app.name.contains(query, Qt::CaseInsensitive) || app.genericName.contains(query, Qt::CaseInsensitive)
+            || app.desktopEntryName.contains(query, Qt::CaseInsensitive) || app.appId.contains(query, Qt::CaseInsensitive)) {
+            filteredApps.append(app);
+        }
+    }
+
+    return filteredApps;
+}
+
+std::optional<plasma_bridge::AppInfo> FakeAppController::findApp(const QString &appId)
+{
+    for (const plasma_bridge::AppInfo &app : m_availableApps) {
+        if (app.appId == appId) {
+            return app;
+        }
+    }
+
+    return std::nullopt;
+}
+
+control::FavoriteAppsResult FakeAppController::favoriteApps()
+{
+    const control::FavoriteAppsStoreLoadResult loadResult = m_favoriteAppsStore.load();
+    if (loadResult.status != control::FavoriteAppsStoreStatus::Accepted) {
+        control::FavoriteAppsResult result;
+        result.status = control::FavoriteAppsStatus::StorageError;
+        result.errorMessage = loadResult.errorMessage;
+        return result;
+    }
+
+    control::FavoriteAppsResult result;
+    for (const QString &appId : loadResult.appIds) {
+        for (const plasma_bridge::AppInfo &app : m_availableApps) {
+            if (app.appId == appId) {
+                result.apps.append(app);
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+control::AppFavoriteChangeResult FakeAppController::addFavorite(const QString &appId)
+{
+    control::AppFavoriteChangeResult result;
+    result.appId = appId;
+    result.favorite = true;
+
+    if (!hasApp(appId)) {
+        result.status = control::AppFavoriteChangeStatus::AppNotFound;
+        return result;
+    }
+
+    const control::FavoriteAppsStoreLoadResult loadResult = m_favoriteAppsStore.load();
+    if (loadResult.status != control::FavoriteAppsStoreStatus::Accepted) {
+        result.status = control::AppFavoriteChangeStatus::StorageError;
+        result.errorMessage = loadResult.errorMessage;
+        return result;
+    }
+
+    QStringList appIds = loadResult.appIds;
+    if (!appIds.contains(appId)) {
+        appIds.append(appId);
+    }
+
+    const control::FavoriteAppsStoreSaveResult saveResult = m_favoriteAppsStore.save(appIds);
+    if (saveResult.status != control::FavoriteAppsStoreStatus::Accepted) {
+        result.status = control::AppFavoriteChangeStatus::StorageError;
+        result.errorMessage = saveResult.errorMessage;
+        return result;
+    }
+
+    result.status = control::AppFavoriteChangeStatus::Accepted;
+    return result;
+}
+
+control::AppFavoriteChangeResult FakeAppController::removeFavorite(const QString &appId)
+{
+    control::AppFavoriteChangeResult result;
+    result.appId = appId;
+    result.favorite = false;
+
+    const control::FavoriteAppsStoreLoadResult loadResult = m_favoriteAppsStore.load();
+    if (loadResult.status != control::FavoriteAppsStoreStatus::Accepted) {
+        result.status = control::AppFavoriteChangeStatus::StorageError;
+        result.errorMessage = loadResult.errorMessage;
+        return result;
+    }
+
+    QStringList appIds = loadResult.appIds;
+    appIds.removeAll(appId);
+
+    const control::FavoriteAppsStoreSaveResult saveResult = m_favoriteAppsStore.save(appIds);
+    if (saveResult.status != control::FavoriteAppsStoreStatus::Accepted) {
+        result.status = control::AppFavoriteChangeStatus::StorageError;
+        result.errorMessage = saveResult.errorMessage;
+        return result;
+    }
+
+    result.status = control::AppFavoriteChangeStatus::Accepted;
+    return result;
+}
+
+control::AppOpenResult FakeAppController::openApp(const QString &appId, const control::AppOpenOptions &options)
+{
+    ++m_openCallCount;
+    m_lastOpenedAppId = appId;
+    m_lastOpenSwitchToExisting = options.switchToExisting;
+
+    control::AppOpenResult result;
+    result.appId = appId;
+
+    if (!hasApp(appId)) {
+        result.status = control::AppOpenStatus::AppNotFound;
+        return result;
+    }
+
+    if (!m_openFailureMessage.isEmpty()) {
+        result.status = control::AppOpenStatus::LaunchFailed;
+        result.errorMessage = m_openFailureMessage;
+        return result;
+    }
+
+    result.status = control::AppOpenStatus::Accepted;
+    return result;
+}
+
+void FakeAppController::setAvailableApps(const QList<plasma_bridge::AppInfo> &apps)
+{
+    m_availableApps = apps;
+}
+
+void FakeAppController::setOpenFailure(const QString &message)
+{
+    m_openFailureMessage = message;
+}
+
+void FakeAppController::clearOpenFailure()
+{
+    m_openFailureMessage.clear();
+}
+
+QString FakeAppController::lastOpenedAppId() const
+{
+    return m_lastOpenedAppId;
+}
+
+bool FakeAppController::lastOpenSwitchToExisting() const
+{
+    return m_lastOpenSwitchToExisting;
+}
+
+int FakeAppController::openCallCount() const
+{
+    return m_openCallCount;
+}
+
+QString FakeAppController::favoritesFilePath() const
+{
+    return m_favoriteAppsStore.filePath();
+}
+
+bool FakeAppController::hasApp(const QString &appId) const
+{
+    return std::any_of(m_availableApps.cbegin(), m_availableApps.cend(), [&appId](const plasma_bridge::AppInfo &app) {
+        return app.appId == appId;
+    });
 }
 
 } // namespace plasma_bridge::tests

@@ -38,6 +38,7 @@ add_custom_command(
 set_source_files_properties("${GENERATED_DOCS_QRC}" PROPERTIES GENERATED TRUE)
 
 add_library(plasma_bridge_api STATIC
+    app_control_http_helpers.cpp
     audio_control_http_helpers.cpp
     media_control_http_helpers.cpp
     window_control_http_helpers.cpp

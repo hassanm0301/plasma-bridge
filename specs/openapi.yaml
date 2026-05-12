@@ -2,7 +2,7 @@ openapi: 3.2.0
 info:
   title: plasma_bridge HTTP API
   version: '@PLASMA_BRIDGE_VERSION@'
-  summary: Audio, media, and window snapshot endpoints plus local audio, media, and window control endpoints for KDE Plasma.
+  summary: Audio, media, window, and app snapshot endpoints plus local audio, media, window, and app control endpoints for KDE Plasma.
 servers:
   - url: '@PLASMA_BRIDGE_DEFAULT_HTTP_SERVER_URL@'
 tags:
@@ -14,6 +14,8 @@ tags:
     description: Read the current selected media session.
   - name: Snapshots / Windows
     description: Read the current window snapshot and active window.
+  - name: Snapshots / Apps
+    description: Read KDE-discoverable applications and persisted favorites.
   - name: Control / Defaults
     description: Change the current default sink or source.
   - name: Control / Mute
@@ -23,7 +25,9 @@ tags:
   - name: Control / Media
     description: Control the currently selected MPRIS media session.
   - name: Control / Windows
-    description: Activate existing Plasma windows.
+    description: Activate or close existing Plasma windows.
+  - name: Control / Apps
+    description: Favorite, unfavorite, and launch KDE applications.
 paths:
   /snapshot/audio/sinks:
     get:
@@ -255,7 +259,7 @@ paths:
         - Snapshots / Media
       operationId: getCurrentMediaSession
       summary: Get the current media session
-      description: Returns the selected current MPRIS media session, or `player: null` when no session is currently selected.
+      description: "Returns the selected current MPRIS media session, or `player: null` when no session is currently selected."
       responses:
         '200':
           description: Current media session result.
@@ -382,7 +386,7 @@ paths:
                     payload: null
                     error:
                       code: bad_request
-                      message: sortBy must be one of: usage, name.
+                      message: "sortBy must be one of: usage, name."
         '405':
           description: Method not allowed.
           headers:
@@ -459,6 +463,108 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '503':
           description: Initial window state is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /snapshot/apps:
+    get:
+      tags:
+        - Snapshots / Apps
+      operationId: getAvailableApps
+      summary: List available KDE apps
+      description: Returns KDE applications discovered through the local service registry, optionally filtered by a case-insensitive search query, then sorted by display name and app id.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive app search matched against name, generic name, desktop entry name, and app id.
+          schema:
+            type: string
+          example: konsole
+      responses:
+        '200':
+          description: Available KDE apps.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppListEnvelope'
+              examples:
+                apps:
+                  value:
+                    payload:
+                      apps:
+                        - appId: org.kde.kate.desktop
+                          name: Kate
+                          genericName: Text Editor
+                          desktopEntryName: org.kde.kate
+                          menuId: org.kde.kate.desktop
+                          iconUrl: /icons/apps/org.kde.kate
+                    error: null
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: App control is not available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /snapshot/apps/favorites:
+    get:
+      tags:
+        - Snapshots / Apps
+      operationId: getFavoriteApps
+      summary: List favorite KDE apps
+      description: Returns persisted favorite KDE applications in stored order. Favorite ids that no longer resolve are skipped.
+      responses:
+        '200':
+          description: Favorite KDE apps.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppListEnvelope'
+              examples:
+                favorites:
+                  value:
+                    payload:
+                      apps:
+                        - appId: org.kde.kate.desktop
+                          name: Kate
+                          genericName: Text Editor
+                          desktopEntryName: org.kde.kate
+                          menuId: org.kde.kate.desktop
+                          iconUrl: /icons/apps/org.kde.kate
+                    error: null
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: GET
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Favorite apps storage could not be read or parsed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: App control is not available.
           content:
             application/json:
               schema:
@@ -582,6 +688,242 @@ paths:
                         windowId: window-editor
         '503':
           description: Initial window state or window activation control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/windows/{windowId}/close:
+    post:
+      tags:
+        - Control / Windows
+      operationId: closeWindow
+      summary: Close a window
+      description: >
+        Requests that KWin close the target Plasma window. The response confirms that the request was accepted;
+        the resulting window removal or state change is published later through the normal snapshot and WebSocket
+        state flow.
+      parameters:
+        - $ref: '#/components/parameters/WindowId'
+      responses:
+        '200':
+          description: Window close request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WindowCloseEnvelope'
+              examples:
+                accepted:
+                  value:
+                    payload:
+                      windowId: window-editor
+                    error: null
+        '400':
+          description: Unexpected request body, invalid window id path segment, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Requested window was not found in the current window snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                windowNotFound:
+                  value:
+                    payload: null
+                    error:
+                      code: window_not_found
+                      message: Requested window was not found.
+                      details:
+                        windowId: window-editor
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Window exists but cannot be closed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+              examples:
+                notCloseable:
+                  value:
+                    payload: null
+                    error:
+                      code: window_not_closeable
+                      message: Window exists but cannot be closed.
+                      details:
+                        windowId: window-editor
+        '503':
+          description: Initial window state or window close control is not ready yet.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/apps/{appId}/favorite:
+    post:
+      tags:
+        - Control / Apps
+      operationId: favoriteApp
+      summary: Add an app to favorites
+      description: Resolves the KDE app id, stores it in `favorite_apps.json`, and preserves insertion order.
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Favorite app change accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppFavoriteChangeEnvelope'
+        '400':
+          description: Invalid app id path segment, unexpected request body, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Requested app id could not be resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Favorite apps storage could not be read or written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: App control is not available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/apps/{appId}/unfavorite:
+    post:
+      tags:
+        - Control / Apps
+      operationId: unfavoriteApp
+      summary: Remove an app from favorites
+      description: Removes the KDE app id from persisted favorites. Removing a missing favorite is a successful no-op.
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Favorite app removal accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppFavoriteChangeEnvelope'
+        '400':
+          description: Invalid app id path segment, unexpected request body, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Favorite apps storage could not be read or written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: App control is not available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /control/apps/{appId}/open:
+    post:
+      tags:
+        - Control / Apps
+      operationId: openApp
+      summary: Launch an app
+      description: Resolves the KDE app id, optionally activates an existing matching window first, and otherwise launches it through KDE's application launcher.
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+        - name: switchToExisting
+          in: query
+          required: false
+          description: Prefer switching to an already-open matching app window before launching a new instance. Defaults to false.
+          schema:
+            type: boolean
+          example: true
+      responses:
+        '200':
+          description: App launch request accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppOpenEnvelope'
+        '400':
+          description: Invalid app id path segment, unexpected request body, or other bad request error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Requested app id could not be resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '405':
+          description: Method not allowed.
+          headers:
+            Allow:
+              description: Allowed HTTP methods for this endpoint.
+              schema:
+                type: string
+              example: POST
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: The KDE launcher could not start the requested app.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: App control is not available.
           content:
             application/json:
               schema:
@@ -1446,6 +1788,14 @@ components:
       example: window-editor
       schema:
         type: string
+    AppId:
+      name: appId
+      in: path
+      required: true
+      description: URL-decoded KDE application storage id. Encoded slashes are not supported.
+      example: org.kde.kate.desktop
+      schema:
+        type: string
   schemas:
     NullValue:
       type: 'null'
@@ -1832,6 +2182,74 @@ components:
       properties:
         windowId:
           type: string
+    WindowClosePayload:
+      type: object
+      additionalProperties: false
+      required:
+        - windowId
+      properties:
+        windowId:
+          type: string
+    AppState:
+      type: object
+      additionalProperties: false
+      required:
+        - appId
+        - name
+        - genericName
+        - desktopEntryName
+        - menuId
+        - iconUrl
+      properties:
+        appId:
+          type: string
+        name:
+          type: string
+        genericName:
+          type:
+            - string
+            - 'null'
+        desktopEntryName:
+          type:
+            - string
+            - 'null'
+        menuId:
+          type:
+            - string
+            - 'null'
+        iconUrl:
+          type:
+            - string
+            - 'null'
+    AppListPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - apps
+      properties:
+        apps:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppState'
+    AppFavoriteChangePayload:
+      type: object
+      additionalProperties: false
+      required:
+        - appId
+        - favorite
+      properties:
+        appId:
+          type: string
+        favorite:
+          type: boolean
+    AppOpenPayload:
+      type: object
+      additionalProperties: false
+      required:
+        - appId
+      properties:
+        appId:
+          type: string
     ErrorObject:
       type: object
       additionalProperties: false
@@ -1915,6 +2333,17 @@ components:
           $ref: '#/components/schemas/ActiveWindowPayload'
         error:
           $ref: '#/components/schemas/NullValue'
+    AppListEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/AppListPayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
     AudioDeviceEnvelope:
       type: object
       additionalProperties: false
@@ -1979,5 +2408,38 @@ components:
       properties:
         payload:
           $ref: '#/components/schemas/WindowActivationPayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    WindowCloseEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/WindowClosePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    AppFavoriteChangeEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/AppFavoriteChangePayload'
+        error:
+          $ref: '#/components/schemas/NullValue'
+    AppOpenEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - payload
+        - error
+      properties:
+        payload:
+          $ref: '#/components/schemas/AppOpenPayload'
         error:
           $ref: '#/components/schemas/NullValue'

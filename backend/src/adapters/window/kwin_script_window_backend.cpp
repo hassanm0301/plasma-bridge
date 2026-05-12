@@ -205,8 +205,9 @@ function publishSnapshot(reason, changedWindowId) {
              changedWindowId || "");
 }
 
-let activationPollTimer = null;
+let controlPollTimer = null;
 let activationPollInFlight = false;
+let closePollInFlight = false;
 
 function findTrackedWindowById(targetWindowId) {
     const targetId = String(targetWindowId || "");
@@ -261,6 +262,18 @@ function activateWindowById(targetWindowId) {
     return true;
 }
 
+function closeWindowById(targetWindowId) {
+    const targetWindow = findTrackedWindowById(targetWindowId);
+    if (!targetWindow || !targetWindow.closeable) {
+        publishSnapshot("window-close-failed", targetWindowId);
+        return false;
+    }
+
+    targetWindow.closeWindow();
+    publishSnapshot("window-close-requested", targetWindowId);
+    return true;
+}
+
 function pollActivationRequest() {
     if (activationPollInFlight) {
         return;
@@ -275,21 +288,45 @@ function pollActivationRequest() {
                  activationPollInFlight = false;
                  if (targetWindowId && String(targetWindowId).length > 0) {
                      activateWindowById(String(targetWindowId));
-                     pollActivationRequest();
+                     pollControlRequests();
                  }
              });
 }
 
-function startActivationRequestPolling() {
-    if (activationPollTimer) {
+function pollCloseRequest() {
+    if (closePollInFlight) {
         return;
     }
 
-    activationPollTimer = new QTimer();
-    activationPollTimer.interval = 100;
-    activationPollTimer.timeout.connect(pollActivationRequest);
-    activationPollTimer.start();
+    closePollInFlight = true;
+    callDBus("%1",
+             "%2",
+             "%3",
+             "TakeCloseRequest",
+             function(targetWindowId) {
+                 closePollInFlight = false;
+                 if (targetWindowId && String(targetWindowId).length > 0) {
+                     closeWindowById(String(targetWindowId));
+                     pollControlRequests();
+                 }
+             });
+}
+
+function pollControlRequests() {
     pollActivationRequest();
+    pollCloseRequest();
+}
+
+function startControlRequestPolling() {
+    if (controlPollTimer) {
+        return;
+    }
+
+    controlPollTimer = new QTimer();
+    controlPollTimer.interval = 100;
+    controlPollTimer.timeout.connect(pollControlRequests);
+    controlPollTimer.start();
+    pollControlRequests();
 }
 
 const watchedWindows = new Map();
@@ -341,7 +378,7 @@ function attachExistingWindows() {
 function main() {
     attachExistingWindows();
     publishSnapshot("initial", "");
-    startActivationRequestPolling();
+    startControlRequestPolling();
 
     connectSignal(workspace, "windowAdded", (window) => {
         attachWindow(window);
@@ -836,6 +873,30 @@ public slots:
         return m_activationRequests.takeFirst();
     }
 
+    bool RequestCloseWindow(const QString &windowId)
+    {
+        if (!m_ready || windowId.isEmpty()) {
+            return false;
+        }
+
+        if (const std::optional<bool> closeable = readBool(windowInfoForId(windowId), {QStringLiteral("closeable")});
+            closeable.has_value() && !*closeable) {
+            return false;
+        }
+
+        m_closeRequests.append(windowId);
+        return true;
+    }
+
+    QString TakeCloseRequest()
+    {
+        if (m_closeRequests.isEmpty()) {
+            return {};
+        }
+
+        return m_closeRequests.takeFirst();
+    }
+
 signals:
     void SnapshotChanged(const QString &backendName,
                          const QString &snapshotJson,
@@ -866,6 +927,7 @@ private:
     WindowSnapshot m_snapshot;
     QString m_snapshotJson;
     QStringList m_activationRequests;
+    QStringList m_closeRequests;
     bool m_ready = false;
 };
 
@@ -1101,7 +1163,7 @@ KWinScriptBackendCommandResult KWinScriptWindowBackendController::teardown()
     return m_impl->teardown();
 }
 
-class KWinScriptWindowActivationController::Impl final
+class KWinScriptWindowControlController::Impl final
 {
 public:
     control::WindowActivationResult activateWindow(const QString &windowId)
@@ -1151,18 +1213,71 @@ public:
                                       : control::WindowActivationStatus::WindowNotActivatable;
         return result;
     }
+
+    control::WindowCloseResult closeWindow(const QString &windowId)
+    {
+        control::WindowCloseResult result;
+        result.windowId = windowId;
+
+        if (windowId.isEmpty()) {
+            result.status = control::WindowCloseStatus::WindowNotFound;
+            return result;
+        }
+
+        if (s_localHelperService != nullptr) {
+            if (!s_localHelperService->IsReady()) {
+                result.status = control::WindowCloseStatus::NotReady;
+                return result;
+            }
+
+            result.status = s_localHelperService->RequestCloseWindow(windowId)
+                              ? control::WindowCloseStatus::Accepted
+                              : control::WindowCloseStatus::WindowNotCloseable;
+            return result;
+        }
+
+        QDBusInterface helper(QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_SERVICE),
+                              QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_PATH),
+                              QStringLiteral(PLASMA_BRIDGE_WINDOW_PROBE_HELPER_INTERFACE),
+                              QDBusConnection::sessionBus());
+        if (!helper.isValid()) {
+            result.status = control::WindowCloseStatus::NotReady;
+            return result;
+        }
+
+        const QDBusReply<bool> readyReply = helper.call(QStringLiteral("IsReady"));
+        if (!readyReply.isValid() || !readyReply.value()) {
+            result.status = control::WindowCloseStatus::NotReady;
+            return result;
+        }
+
+        const QDBusReply<bool> reply = helper.call(QStringLiteral("RequestCloseWindow"), windowId);
+        if (!reply.isValid()) {
+            result.status = control::WindowCloseStatus::NotReady;
+            return result;
+        }
+
+        result.status = reply.value() ? control::WindowCloseStatus::Accepted
+                                      : control::WindowCloseStatus::WindowNotCloseable;
+        return result;
+    }
 };
 
-KWinScriptWindowActivationController::KWinScriptWindowActivationController()
+KWinScriptWindowControlController::KWinScriptWindowControlController()
     : m_impl(std::make_unique<Impl>())
 {
 }
 
-KWinScriptWindowActivationController::~KWinScriptWindowActivationController() = default;
+KWinScriptWindowControlController::~KWinScriptWindowControlController() = default;
 
-control::WindowActivationResult KWinScriptWindowActivationController::activateWindow(const QString &windowId)
+control::WindowActivationResult KWinScriptWindowControlController::activateWindow(const QString &windowId)
 {
     return m_impl->activateWindow(windowId);
+}
+
+control::WindowCloseResult KWinScriptWindowControlController::closeWindow(const QString &windowId)
+{
+    return m_impl->closeWindow(windowId);
 }
 
 class KWinScriptWindowObserver::Impl final : public QObject

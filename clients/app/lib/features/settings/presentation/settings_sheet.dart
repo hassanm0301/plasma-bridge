@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -28,6 +29,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   late AppThemeMode _themeMode;
   late WindowSortBy _windowSortBy;
   late WindowSortDirection _windowSortDirection;
+  late AppLaunchBehavior _appLaunchBehavior;
   String? _error;
 
   @override
@@ -38,6 +40,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
     _themeMode = ref.read(settingsControllerProvider).themeMode;
     _windowSortBy = widget.settings.windowSortBy;
     _windowSortDirection = widget.settings.windowSortDirection;
+    _appLaunchBehavior = widget.settings.appLaunchBehavior;
   }
 
   @override
@@ -71,6 +74,7 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
               wsUrl: _wsController.text,
               windowSortBy: _windowSortBy,
               windowSortDirection: _windowSortDirection,
+              appLaunchBehavior: _appLaunchBehavior,
             ),
           );
       Navigator.of(context).pop();
@@ -84,6 +88,8 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final showAndroidLaunchBehavior =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return SafeArea(
       child: Center(
@@ -213,6 +219,34 @@ class _SettingsSheetState extends ConsumerState<SettingsSheet> {
                           },
                           segments: _directionSegments(_windowSortBy),
                         ),
+                        if (showAndroidLaunchBehavior) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Favorite App Launch',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 10),
+                          SegmentedButton<AppLaunchBehavior>(
+                            selected: {_appLaunchBehavior},
+                            onSelectionChanged: (selection) {
+                              setState(() {
+                                _appLaunchBehavior = selection.first;
+                              });
+                            },
+                            segments: const [
+                              ButtonSegment(
+                                value: AppLaunchBehavior.openNewInstance,
+                                label: Text('New instance'),
+                                icon: Icon(Icons.open_in_new_rounded),
+                              ),
+                              ButtonSegment(
+                                value: AppLaunchBehavior.switchToExisting,
+                                label: Text('Switch existing'),
+                                icon: Icon(Icons.flip_to_front_rounded),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),

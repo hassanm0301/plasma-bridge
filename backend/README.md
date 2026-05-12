@@ -1,11 +1,13 @@
 # Plasma Bridge Backend
 
-`plasma_bridge` is a Qt 6 service for KDE Plasma that exposes desktop state plus local audio and media controls to localhost clients by default, with optional LAN access when explicitly configured.
+`plasma_bridge` is a Qt 6 service for KDE Plasma that exposes desktop state plus local audio, app, and media controls to localhost clients by default, with optional LAN access when explicitly configured.
 
 The current implementation exposes local audio, media, and window state:
 
 - list all KDE-visible output sinks
 - list all KDE-visible input sources
+- list KDE applications discovered through the local service registry
+- list favorite KDE applications persisted in a local file
 - list Plasma windows through the KWin script helper backend
 - track the currently selected MPRIS media session
 - report the active Plasma window
@@ -20,7 +22,9 @@ The current implementation exposes local audio, media, and window state:
 - set sink and source mute state over HTTP
 - set, increment, and decrement sink volume over HTTP
 - request play, pause, play-pause, next-track, previous-track, and absolute seek over HTTP
-- activate Plasma windows over HTTP
+- add and remove favorite KDE apps over HTTP
+- launch KDE apps over HTTP, with optional switch-to-existing behavior
+- activate and close Plasma windows over HTTP
 - publish live sink, source, media, and window updates over WebSocket
 
 The current media payload reports one selected MPRIS session at a time and includes title, artists, album, playback status, capability flags, backend-relative app icon URLs, best-effort artwork URLs, current playback position, and total track length. While playback is active, the backend refreshes the selected player's position so WebSocket clients can keep progress displays in sync.
@@ -46,5 +50,8 @@ Default local endpoints:
 - Hosted docs: `http://127.0.0.1:8080/docs/`
 
 To allow another machine on the same network to reach the backend, start it with a non-loopback `--host`. For browser-based dashboards on other machines, also add one or more `--allow-origin` values that match the dashboard's web origin.
+
+Favorite apps are stored in `favorite_apps.json` under `QStandardPaths::AppConfigLocation` by default. Override that location with `--favorites-dir` when you need a different storage root.
+The app catalog endpoint also supports `q=...` search filtering, and app launches support `switchToExisting=true` when clients want to focus an existing matching window first.
 
 Automated tests use Qt Test and CTest. See [Getting Started](docs/getting-started.md) for how to build and run the unit and feature suites from the monorepo root.

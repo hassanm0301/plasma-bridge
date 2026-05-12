@@ -2,6 +2,8 @@
 ### Added
 
 - Android-first Flutter mobile client under `clients/app`, with first-run endpoint setup, persisted theme/settings, live window/media/audio state, and parity control coverage for window activation, media transport/seek, sink volume, and sink/source mute.
+- HTTP app snapshot and control endpoints for KDE-discoverable apps, favorite-app persistence, and app launch requests with optional switch-to-existing behavior.
+- Favorite KDE apps persistence through `favorite_apps.json`, plus backend support to list, add, and remove favorites.
 - `plasma_bridge` now accepts repeatable `--allow-origin` flags to grant CORS access to additional browser origins when the backend is exposed beyond localhost.
 - Current MPRIS media-session snapshots on HTTP and WebSocket, including player metadata, app icon URLs, and best-effort artwork URLs.
 - HTTP media transport control endpoints for play, pause, play-pause, next, previous, and absolute seek.
@@ -9,6 +11,7 @@
 - A current-media section in the React dashboard between windows and sinks/sources, including artwork or app-icon rendering plus previous, play/pause, and next controls.
 - Media playback progress reporting and seek support, including draggable web timeline controls with elapsed and total track time.
 - `/snapshot/windows` now accepts optional `sortBy` and `sortDirection` query parameters for `usage` or `name` window ordering.
+- HTTP endpoint to close a Plasma window by id, alongside the existing activation endpoint.
 
 ### Fixed
 
@@ -22,6 +25,7 @@
 - The Flutter Android client now uses a more Breeze-like compact visual language with a landscape-first tablet dashboard layout.
 - The Flutter dashboard now keeps connection status in the top-right app bar, promotes windows and current media to full-width sections, and renders denser window/media tiles for better tablet landscape use.
 - The Flutter dashboard `Windows`, `Playback`, and `Capture` tiles now support local expand/compact toggles, with compact audio showing only the active device and expanded windows using a full grid.
+- The Flutter dashboard now exposes KDE app favorites/launch controls and inline window-close actions through the shared HTTP API.
 - The web client's Vite dev and preview servers now bind on all interfaces to simplify LAN testing.
 - Backend and web docs now explain localhost-only defaults, LAN exposure, and remote browser setup requirements.
 - The WebSocket state protocol version is now `3` to include top-level media state and `playerId` patch metadata.

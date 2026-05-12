@@ -56,7 +56,7 @@ Current coverage includes:
 
 - unit tests for common audio-state serialization and formatting
 - unit tests for common media/window-state serialization and formatting
-- unit tests for volume, device-control, media-control, and window activation result formatting
+- unit tests for volume, device-control, media-control, and window activation/close result formatting
 - unit tests for audio state store behavior
 - unit tests for the `audio_probe` and `audio_control_probe` runner helpers
 - unit tests for the `media_probe` and `window_probe` runner helpers
@@ -84,6 +84,7 @@ Supported flags:
 - `--port`: HTTP port, default `8080`
 - `--ws-port`: WebSocket port, default `8081`
 - `--allow-origin`: repeatable browser origin allowlist entry for CORS, default loopback-only
+- `--favorites-dir`: directory used to store `favorite_apps.json`, default `QStandardPaths::AppConfigLocation`
 
 Example:
 
@@ -98,6 +99,9 @@ LAN browser example:
 ```
 
 `--host` controls which network interfaces accept TCP connections. `--allow-origin` controls which browser origins receive CORS permission on HTTP responses. Non-browser clients such as `curl` only need reachability; browser dashboards need both.
+
+Favorite apps are stored in `favorite_apps.json` inside the configured favorites directory. The backend creates that directory on startup when needed.
+`GET /snapshot/apps` also supports an optional `q` query parameter for case-insensitive app search, and `POST /control/apps/{appId}/open` supports `switchToExisting=true` when you want the backend to focus an already-open matching window before launching a new instance.
 
 On startup, the service prints one HTTP listener, one WebSocket listener, and the hosted docs URLs.
 
@@ -130,12 +134,16 @@ Check the HTTP endpoints:
 SINK_ID='alsa_output.usb-default.analog-stereo'
 SOURCE_ID='alsa_input.usb-default.analog-stereo'
 WINDOW_ID='window-editor'
+APP_ID='org.kde.kate.desktop'
 
 curl http://127.0.0.1:8080/snapshot/audio/sinks
 curl http://127.0.0.1:8080/snapshot/audio/default-sink
 curl http://127.0.0.1:8080/snapshot/audio/sources
 curl http://127.0.0.1:8080/snapshot/audio/default-source
 curl http://127.0.0.1:8080/snapshot/media/current
+curl http://127.0.0.1:8080/snapshot/apps
+curl 'http://127.0.0.1:8080/snapshot/apps?q=konsole'
+curl http://127.0.0.1:8080/snapshot/apps/favorites
 curl http://127.0.0.1:8080/snapshot/windows
 curl 'http://127.0.0.1:8080/snapshot/windows?sortBy=usage&sortDirection=oldest_first'
 curl 'http://127.0.0.1:8080/snapshot/windows?sortBy=name&sortDirection=asc'
@@ -165,7 +173,12 @@ curl -X POST http://127.0.0.1:8080/control/media/current/previous
 curl -X POST http://127.0.0.1:8080/control/media/current/seek \
   -H 'Content-Type: application/json' \
   -d '{"positionMs":90000}'
+curl -X POST http://127.0.0.1:8080/control/apps/${APP_ID}/favorite
+curl -X POST http://127.0.0.1:8080/control/apps/${APP_ID}/unfavorite
+curl -X POST http://127.0.0.1:8080/control/apps/${APP_ID}/open
+curl -X POST "http://127.0.0.1:8080/control/apps/${APP_ID}/open?switchToExisting=true"
 curl -X POST http://127.0.0.1:8080/control/windows/${WINDOW_ID}/active
+curl -X POST http://127.0.0.1:8080/control/windows/${WINDOW_ID}/close
 ```
 
 HTTP JSON responses now use a consistent envelope:
@@ -207,7 +220,7 @@ Server messages use the same explicit contract:
 ```
 
 You should receive one `fullState` message followed by `patch` messages as sink, source, media, or window state changes.
-Local HTTP default, mute, volume-control, media transport, media seek, and window activation writes will converge back through the same WebSocket state stream.
+Local HTTP default, mute, volume-control, media transport, media seek, and window activate/close writes will converge back through the same WebSocket state stream.
 The `fullState` payload includes `audio`, `media`, and `windowState` once all configured stores are ready.
 The `audio` object includes `sinks`, `selectedSinkId`, `sources`, and `selectedSourceId`.
 The `media` object includes `player`, which is either the selected current player object or `null`. When a player is available, it includes playback metadata, capability flags, backend-relative icon URLs, best-effort artwork URLs, current `positionMs`, and `trackLengthMs`.

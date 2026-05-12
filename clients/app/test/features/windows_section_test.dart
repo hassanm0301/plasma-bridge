@@ -67,6 +67,7 @@ void main() {
                 pendingActions: const {},
                 errors: const {'window-2': 'Activation failed'},
                 onActivateWindow: (_) async {},
+                onCloseWindow: (_) async {},
                 onToggleExpanded: () {},
               ),
             ),
@@ -120,6 +121,7 @@ void main() {
                 pendingActions: const {},
                 errors: const {},
                 onActivateWindow: (_) async {},
+                onCloseWindow: (_) async {},
                 onToggleExpanded: () {},
               ),
             ),
@@ -142,4 +144,50 @@ void main() {
       expect(find.text('Fourth title'), findsOneWidget);
     },
   );
+
+  testWidgets('invokes the close callback from the inline close button', (
+    tester,
+  ) async {
+    String? closedWindowId;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: WindowsSection(
+              expanded: false,
+              snapshot: WindowSnapshot(
+                activeWindowId: 'window-1',
+                activeWindow: _windowState(
+                  'window-1',
+                  'Konsole',
+                  isActive: true,
+                ),
+                windows: [
+                  _windowState('window-1', 'Konsole', isActive: true),
+                  _windowState('window-2', 'System Settings'),
+                ],
+              ),
+              httpBaseUrl: 'http://127.0.0.1:8080',
+              sortBy: WindowSortBy.usage,
+              sortDirection: WindowSortDirection.newestFirst,
+              pendingActions: const {},
+              errors: const {},
+              onActivateWindow: (_) async {},
+              onCloseWindow: (windowId) async {
+                closedWindowId = windowId;
+              },
+              onToggleExpanded: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('window-close:window-2')));
+    await tester.pump();
+
+    expect(closedWindowId, 'window-2');
+  });
 }

@@ -28,6 +28,7 @@ class SettingsRepository {
         wsUrl: normalizeWebSocketUrl(settings.wsUrl),
         windowSortBy: settings.windowSortBy,
         windowSortDirection: settings.windowSortDirection,
+        appLaunchBehavior: settings.appLaunchBehavior,
       );
     } catch (_) {
       return null;
@@ -40,6 +41,7 @@ class SettingsRepository {
       wsUrl: normalizeWebSocketUrl(settings.wsUrl),
       windowSortBy: settings.windowSortBy,
       windowSortDirection: settings.windowSortDirection,
+      appLaunchBehavior: settings.appLaunchBehavior,
     );
     _sharedPreferences.setString(
       endpointStorageKey,

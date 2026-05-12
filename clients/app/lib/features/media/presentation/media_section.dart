@@ -119,7 +119,6 @@ class _MediaSectionState extends State<MediaSection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final player = widget.player;
 
     return DesktopPanel(

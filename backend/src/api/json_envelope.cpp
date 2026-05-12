@@ -1,9 +1,10 @@
 #include "api/json_envelope.h"
 
+#include "control/app_controller.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "control/media_controller.h"
-#include "control/window_activation_controller.h"
+#include "control/window_control_controller.h"
 
 #include <cmath>
 
@@ -41,6 +42,13 @@ QJsonValue numberOrNull(const std::optional<double> &value)
 QJsonValue integerOrNull(const std::optional<qint64> &value)
 {
     return value.has_value() ? QJsonValue(*value) : QJsonValue(QJsonValue::Null);
+}
+
+QJsonObject buildWindowPayload(const QString &windowId)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("windowId")] = windowId;
+    return payload;
 }
 
 } // namespace
@@ -145,14 +153,55 @@ QJsonObject buildMediaControlErrorDetails(const control::MediaControlResult &res
 
 QJsonObject buildWindowActivationPayload(const control::WindowActivationResult &result)
 {
-    QJsonObject payload;
-    payload[QStringLiteral("windowId")] = result.windowId;
-    return payload;
+    return buildWindowPayload(result.windowId);
 }
 
 QJsonObject buildWindowActivationErrorDetails(const control::WindowActivationResult &result)
 {
     return buildWindowActivationPayload(result);
+}
+
+QJsonObject buildWindowClosePayload(const control::WindowCloseResult &result)
+{
+    return buildWindowPayload(result.windowId);
+}
+
+QJsonObject buildWindowCloseErrorDetails(const control::WindowCloseResult &result)
+{
+    return buildWindowClosePayload(result);
+}
+
+QJsonObject buildAppFavoriteChangePayload(const control::AppFavoriteChangeResult &result)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("appId")] = result.appId;
+    payload[QStringLiteral("favorite")] = result.favorite;
+    return payload;
+}
+
+QJsonObject buildAppFavoriteChangeErrorDetails(const control::AppFavoriteChangeResult &result)
+{
+    QJsonObject details = buildAppFavoriteChangePayload(result);
+    if (!result.errorMessage.isEmpty()) {
+        details[QStringLiteral("reason")] = result.errorMessage;
+    }
+    return details;
+}
+
+QJsonObject buildAppOpenPayload(const control::AppOpenResult &result)
+{
+    QJsonObject payload;
+    payload[QStringLiteral("appId")] = result.appId;
+    return payload;
+}
+
+QJsonObject buildAppOpenErrorDetails(const control::AppOpenResult &result)
+{
+    QJsonObject details = buildAppOpenPayload(result);
+    if (!result.errorMessage.isEmpty()) {
+        details[QStringLiteral("reason")] = result.errorMessage;
+    }
+    return details;
 }
 
 } // namespace plasma_bridge::api

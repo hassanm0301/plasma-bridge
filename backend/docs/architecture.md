@@ -17,7 +17,7 @@ The current implementation exposes local audio, MPRIS media-session, and Plasma 
 - identify the current default input source
 - identify the current media player, playback position, track length, and transport/seek capabilities
 - report per-device volume and mute state
-- expose audio, media, and window snapshot reads plus local default, mute, sink-volume, media transport, media seek, and window activation control over HTTP
+- expose audio, media, and window snapshot reads plus local default, mute, sink-volume, media transport, media seek, and window activation/close control over HTTP
 - expose live audio, media, and window updates over one WebSocket state stream
 
 ## System Flow
@@ -29,12 +29,12 @@ The runtime has six main parts:
 2. A media adapter watches MPRIS players on the session DBus bus, selects one current session, refreshes playback position while that session is playing, and forwards transport and seek actions.
 3. A window adapter registers an app-owned DBus helper, installs/enables the KWin script while the app runs, and reads normalized helper snapshots.
 4. Shared in-memory state stores keep canonical audio, media, and window snapshots.
-5. An HTTP server serves snapshots from those stores and forwards local sink/source default, sink/source mute, sink volume-control, media transport, media seek, and window activation requests.
+5. An HTTP server serves snapshots from those stores and forwards local sink/source default, sink/source mute, sink volume-control, media transport, media seek, and window activation/close requests.
 6. A WebSocket server streams the same state to connected clients from the unified `/ws` endpoint as it changes.
 
 For local CLI inspection, `window_probe` reads from the `plasma_bridge`-owned KWin script backend instead of owning a persistent helper service or binding directly to the Plasma window-management Wayland interface.
 
-Both transports use the same underlying stores so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP default, mute, volume, media transport, media seek, and window activation changes flow back through the observer and state store.
+Both transports use the same underlying stores so HTTP snapshots and WebSocket updates stay aligned, including after local HTTP default, mute, volume, media transport, media seek, and window activation/close changes flow back through the observer and state store.
 The WebSocket `fullState` payload contains the ready audio, media, and window snapshots, and later `patch` payloads replace either the `audio`, `media`, or `windowState` subtree.
 
 The HTTP listener also serves local API documentation pages and runtime-adjusted OpenAPI and AsyncAPI documents under `/docs/`.
@@ -52,7 +52,7 @@ The current defaults are:
 - WebSocket on `ws://127.0.0.1:8081/ws`
 - local audio sink/source snapshot, default, mute, and sink volume-control HTTP behavior
 - local current-media snapshot and play/pause/play-pause/next/previous/seek HTTP behavior
-- local window snapshot, active-window, and window activation HTTP behavior
+- local window snapshot, active-window, and window activation/close HTTP behavior
 - localhost binding unless the operator explicitly changes it
 - hosted docs on the HTTP listener under `/docs/`
 
@@ -63,7 +63,7 @@ These areas are still outside the current public scope:
 - source volume-control actions
 - richer media transport actions beyond play/pause/play-pause/next/previous/seek
 - broader output-control actions beyond default-device and mute changes
-- window control actions beyond activation
+- window control actions beyond activation and close
 - authentication and pairing
 - packaging and service installation workflow
 - cross-desktop support beyond KDE Plasma

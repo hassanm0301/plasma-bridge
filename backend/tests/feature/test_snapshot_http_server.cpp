@@ -1,10 +1,13 @@
+#include <QFile>
 #include <QHostAddress>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QtTest>
 
 #include <cstring>
@@ -39,6 +42,14 @@ private slots:
     void mapsMediaControlFailures();
     void servesWindowActivationControlEndpoint();
     void mapsWindowActivationControlFailures();
+    void servesWindowCloseControlEndpoint();
+    void mapsWindowCloseControlFailures();
+    void servesAppSnapshotAndFavoriteEndpoints();
+    void persistsFavoriteAppsAcrossServerRestart();
+    void servesAppOpenControlEndpoint();
+    void switchesToExistingAppWindowWhenRequested();
+    void fallsBackToLaunchingWhenSwitchingCannotReuseWindow();
+    void mapsAppControlFailures();
     void handlesMethodNotAllowedAndUnknownPath();
     void rejectsInvalidVolumeControlRequests();
     void rejectsInvalidDeviceControlRequests();
@@ -1185,11 +1196,11 @@ void SnapshotHttpServerFeatureTest::servesWindowActivationControlEndpoint()
     plasma_bridge::state::WindowStateStore windowStore;
     windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
 
-    plasma_bridge::tests::FakeWindowActivationController controller;
+    plasma_bridge::tests::FakeWindowControlController controller;
     plasma_bridge::control::WindowActivationResult acceptedResult;
     acceptedResult.status = Status::Accepted;
     acceptedResult.windowId = QStringLiteral("window-terminal");
-    controller.setResult(acceptedResult);
+    controller.setActivationResult(acceptedResult);
 
     plasma_bridge::api::SnapshotHttpServer server(&audioStore,
                                                   &windowStore,
@@ -1213,8 +1224,8 @@ void SnapshotHttpServerFeatureTest::servesWindowActivationControlEndpoint()
         QVERIFY(envelope.value(QStringLiteral("error")).isNull());
         const QJsonObject body = payloadObject(envelope);
         QCOMPARE(body.value(QStringLiteral("windowId")).toString(), QStringLiteral("window-terminal"));
-        QCOMPARE(controller.lastWindowId(), QStringLiteral("window-terminal"));
-        QCOMPARE(controller.callCount(), 1);
+        QCOMPARE(controller.lastActivationWindowId(), QStringLiteral("window-terminal"));
+        QCOMPARE(controller.activationCallCount(), 1);
     }
     reply->deleteLater();
 }
@@ -1228,7 +1239,7 @@ void SnapshotHttpServerFeatureTest::mapsWindowActivationControlFailures()
     plasma_bridge::state::WindowStateStore windowStore;
     windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
 
-    plasma_bridge::tests::FakeWindowActivationController controller;
+    plasma_bridge::tests::FakeWindowControlController controller;
     plasma_bridge::api::SnapshotHttpServer server(&audioStore,
                                                   &windowStore,
                                                   nullptr,
@@ -1254,14 +1265,14 @@ void SnapshotHttpServerFeatureTest::mapsWindowActivationControlFailures()
         QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("window_not_found"));
         QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
                  QStringLiteral("missing-window"));
-        QCOMPARE(controller.callCount(), 0);
+        QCOMPARE(controller.activationCallCount(), 0);
     }
     missingReply->deleteLater();
 
     plasma_bridge::control::WindowActivationResult notReadyResult;
     notReadyResult.status = Status::NotReady;
     notReadyResult.windowId = QStringLiteral("window-terminal");
-    controller.setResult(notReadyResult);
+    controller.setActivationResult(notReadyResult);
 
     QNetworkRequest notReadyRequest(
         plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/active")));
@@ -1282,7 +1293,7 @@ void SnapshotHttpServerFeatureTest::mapsWindowActivationControlFailures()
     plasma_bridge::control::WindowActivationResult notActivatableResult;
     notActivatableResult.status = Status::WindowNotActivatable;
     notActivatableResult.windowId = QStringLiteral("window-terminal");
-    controller.setResult(notActivatableResult);
+    controller.setActivationResult(notActivatableResult);
 
     QNetworkRequest notActivatableRequest(
         plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/active")));
@@ -1348,6 +1359,550 @@ void SnapshotHttpServerFeatureTest::mapsWindowActivationControlFailures()
     missingControllerReply->deleteLater();
 }
 
+void SnapshotHttpServerFeatureTest::servesWindowCloseControlEndpoint()
+{
+    using Status = plasma_bridge::control::WindowCloseStatus;
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeWindowControlController controller;
+    plasma_bridge::control::WindowCloseResult acceptedResult;
+    acceptedResult.status = Status::Accepted;
+    acceptedResult.windowId = QStringLiteral("window-terminal");
+    controller.setCloseResult(acceptedResult);
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkRequest request(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/close")));
+    QNetworkReply *reply = manager.post(request, QByteArray());
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(reply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject body = payloadObject(envelope);
+        QCOMPARE(body.value(QStringLiteral("windowId")).toString(), QStringLiteral("window-terminal"));
+        QCOMPARE(controller.lastCloseWindowId(), QStringLiteral("window-terminal"));
+        QCOMPARE(controller.closeCallCount(), 1);
+    }
+    reply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::mapsWindowCloseControlFailures()
+{
+    using Status = plasma_bridge::control::WindowCloseStatus;
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeWindowControlController controller;
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &controller,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkRequest missingRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/missing-window/close")));
+    QNetworkReply *missingReply = manager.post(missingRequest, QByteArray());
+    QSignalSpy missingSpy(missingReply, &QNetworkReply::finished);
+    QVERIFY(missingSpy.wait());
+    QCOMPARE(missingReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("window_not_found"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
+                 QStringLiteral("missing-window"));
+        QCOMPARE(controller.closeCallCount(), 0);
+    }
+    missingReply->deleteLater();
+
+    plasma_bridge::control::WindowCloseResult notReadyResult;
+    notReadyResult.status = Status::NotReady;
+    notReadyResult.windowId = QStringLiteral("window-terminal");
+    controller.setCloseResult(notReadyResult);
+
+    QNetworkRequest notReadyRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/close")));
+    QNetworkReply *notReadyReply = manager.post(notReadyRequest, QByteArray());
+    QSignalSpy notReadySpy(notReadyReply, &QNetworkReply::finished);
+    QVERIFY(notReadySpy.wait());
+    QCOMPARE(notReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notReadyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
+                 QStringLiteral("window-terminal"));
+    }
+    notReadyReply->deleteLater();
+
+    plasma_bridge::control::WindowCloseResult notCloseableResult;
+    notCloseableResult.status = Status::WindowNotCloseable;
+    notCloseableResult.windowId = QStringLiteral("window-terminal");
+    controller.setCloseResult(notCloseableResult);
+
+    QNetworkRequest notCloseableRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/windows/window-terminal/close")));
+    QNetworkReply *notCloseableReply = manager.post(notCloseableRequest, QByteArray());
+    QSignalSpy notCloseableSpy(notCloseableReply, &QNetworkReply::finished);
+    QVERIFY(notCloseableSpy.wait());
+    QCOMPARE(notCloseableReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 409);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(notCloseableReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        const QJsonObject error = errorObject(body);
+        QCOMPARE(error.value(QStringLiteral("code")).toString(), QStringLiteral("window_not_closeable"));
+        QCOMPARE(error.value(QStringLiteral("details")).toObject().value(QStringLiteral("windowId")).toString(),
+                 QStringLiteral("window-terminal"));
+    }
+    notCloseableReply->deleteLater();
+
+    plasma_bridge::state::WindowStateStore notReadyWindowStore;
+    plasma_bridge::api::SnapshotHttpServer notReadyServer(&audioStore,
+                                                          &notReadyWindowStore,
+                                                          nullptr,
+                                                          nullptr,
+                                                          &controller,
+                                                          QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                          18080,
+                                                          18081);
+    QVERIFY(notReadyServer.listen(bindAddress(), 0));
+    QNetworkReply *storeNotReadyReply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(notReadyServer.serverPort(),
+                                                      QStringLiteral("/control/windows/window-terminal/close"))),
+        QByteArray());
+    QSignalSpy storeNotReadySpy(storeNotReadyReply, &QNetworkReply::finished);
+    QVERIFY(storeNotReadySpy.wait());
+    QCOMPARE(storeNotReadyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(storeNotReadyReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    storeNotReadyReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::servesAppSnapshotAndFavoriteEndpoints()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAppController controller(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    server.setAppController(&controller);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *appsReply =
+        manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps"))));
+    QSignalSpy appsSpy(appsReply, &QNetworkReply::finished);
+    QVERIFY(appsSpy.wait());
+    QCOMPARE(appsReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(appsReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonArray apps = payloadObject(envelope).value(QStringLiteral("apps")).toArray();
+        QCOMPARE(apps.size(), 2);
+        QCOMPARE(apps.at(0).toObject().value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.kate.desktop"));
+    }
+    appsReply->deleteLater();
+
+    QNetworkReply *searchReply = manager.get(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps?q=terminal"))));
+    QSignalSpy searchSpy(searchReply, &QNetworkReply::finished);
+    QVERIFY(searchSpy.wait());
+    QCOMPARE(searchReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(searchReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonArray apps = payloadObject(envelope).value(QStringLiteral("apps")).toArray();
+        QCOMPARE(apps.size(), 1);
+        QCOMPARE(apps.at(0).toObject().value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.konsole.desktop"));
+    }
+    searchReply->deleteLater();
+
+    QNetworkReply *favoriteReply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                      QStringLiteral("/control/apps/org.kde.kate.desktop/favorite"))),
+        QByteArray());
+    QSignalSpy favoriteSpy(favoriteReply, &QNetworkReply::finished);
+    QVERIFY(favoriteSpy.wait());
+    QCOMPARE(favoriteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(favoriteReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject payload = payloadObject(envelope);
+        QCOMPARE(payload.value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.kate.desktop"));
+        QCOMPARE(payload.value(QStringLiteral("favorite")).toBool(), true);
+    }
+    favoriteReply->deleteLater();
+
+    QNetworkReply *favoritesReply = manager.get(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps/favorites"))));
+    QSignalSpy favoritesSpy(favoritesReply, &QNetworkReply::finished);
+    QVERIFY(favoritesSpy.wait());
+    QCOMPARE(favoritesReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(favoritesReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonArray apps = payloadObject(envelope).value(QStringLiteral("apps")).toArray();
+        QCOMPARE(apps.size(), 1);
+        QCOMPARE(apps.at(0).toObject().value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.kate.desktop"));
+    }
+    favoritesReply->deleteLater();
+
+    QNetworkReply *unfavoriteReply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                      QStringLiteral("/control/apps/org.kde.kate.desktop/unfavorite"))),
+        QByteArray());
+    QSignalSpy unfavoriteSpy(unfavoriteReply, &QNetworkReply::finished);
+    QVERIFY(unfavoriteSpy.wait());
+    QCOMPARE(unfavoriteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(unfavoriteReply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        const QJsonObject payload = payloadObject(envelope);
+        QCOMPARE(payload.value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.kate.desktop"));
+        QCOMPARE(payload.value(QStringLiteral("favorite")).toBool(), false);
+    }
+    unfavoriteReply->deleteLater();
+
+    QNetworkReply *emptyFavoritesReply = manager.get(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps/favorites"))));
+    QSignalSpy emptyFavoritesSpy(emptyFavoritesReply, &QNetworkReply::finished);
+    QVERIFY(emptyFavoritesSpy.wait());
+    QCOMPARE(emptyFavoritesReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(emptyFavoritesReply));
+        QCOMPARE(payloadObject(envelope).value(QStringLiteral("apps")).toArray().size(), 0);
+    }
+    emptyFavoritesReply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::persistsFavoriteAppsAcrossServerRestart()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    {
+        plasma_bridge::tests::FakeAppController controller(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+        plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                      nullptr,
+                                                      nullptr,
+                                                      QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                      18080,
+                                                      18081);
+        server.setAppController(&controller);
+        QVERIFY(server.listen(bindAddress(), 0));
+
+        QNetworkAccessManager manager;
+        QNetworkReply *reply = manager.post(
+            QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                          QStringLiteral("/control/apps/org.kde.konsole.desktop/favorite"))),
+            QByteArray());
+        QSignalSpy spy(reply, &QNetworkReply::finished);
+        QVERIFY(spy.wait());
+        QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+        reply->deleteLater();
+    }
+
+    {
+        plasma_bridge::tests::FakeAppController controller(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+        plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                      nullptr,
+                                                      nullptr,
+                                                      QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                      18080,
+                                                      18081);
+        server.setAppController(&controller);
+        QVERIFY(server.listen(bindAddress(), 0));
+
+        QNetworkAccessManager manager;
+        QNetworkReply *reply = manager.get(
+            QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps/favorites"))));
+        QSignalSpy spy(reply, &QNetworkReply::finished);
+        QVERIFY(spy.wait());
+        QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+        {
+            const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(reply));
+            const QJsonArray apps = payloadObject(envelope).value(QStringLiteral("apps")).toArray();
+            QCOMPARE(apps.size(), 1);
+            QCOMPARE(apps.at(0).toObject().value(QStringLiteral("appId")).toString(),
+                     QStringLiteral("org.kde.konsole.desktop"));
+        }
+        reply->deleteLater();
+    }
+}
+
+void SnapshotHttpServerFeatureTest::servesAppOpenControlEndpoint()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAppController controller(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    server.setAppController(&controller);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkReply *reply = manager.post(
+        QNetworkRequest(
+            plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/apps/org.kde.kate.desktop/open"))),
+        QByteArray());
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    {
+        const QJsonObject envelope = plasma_bridge::tests::parseJsonObject(readReplyBody(reply));
+        QVERIFY(envelope.value(QStringLiteral("error")).isNull());
+        QCOMPARE(payloadObject(envelope).value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.kate.desktop"));
+        QCOMPARE(controller.lastOpenedAppId(), QStringLiteral("org.kde.kate.desktop"));
+        QCOMPARE(controller.lastOpenSwitchToExisting(), false);
+        QCOMPARE(controller.openCallCount(), 1);
+    }
+    reply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::switchesToExistingAppWindowWhenRequested()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAppController appController(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+    plasma_bridge::tests::FakeWindowControlController windowController;
+    plasma_bridge::control::WindowActivationResult activationResult;
+    activationResult.status = plasma_bridge::control::WindowActivationStatus::Accepted;
+    windowController.setActivationResult(activationResult);
+
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &windowController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    server.setAppController(&appController);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkReply *reply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(
+            server.serverPort(), QStringLiteral("/control/apps/org.kde.konsole.desktop/open?switchToExisting=true"))),
+        QByteArray());
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    QCOMPARE(windowController.activationCallCount(), 1);
+    QCOMPARE(windowController.lastActivationWindowId(), QStringLiteral("window-terminal"));
+    QCOMPARE(appController.openCallCount(), 0);
+    reply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::fallsBackToLaunchingWhenSwitchingCannotReuseWindow()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::state::WindowStateStore windowStore;
+    windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAppController appController(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+    QList<plasma_bridge::AppInfo> apps = plasma_bridge::tests::sampleApps();
+    plasma_bridge::AppInfo dolphin;
+    dolphin.appId = QStringLiteral("org.kde.dolphin.desktop");
+    dolphin.name = QStringLiteral("Dolphin");
+    dolphin.genericName = QStringLiteral("File Manager");
+    dolphin.desktopEntryName = QStringLiteral("org.kde.dolphin");
+    dolphin.menuId = QStringLiteral("org.kde.dolphin.desktop");
+    dolphin.iconUrl = QStringLiteral("/icons/apps/org.kde.dolphin");
+    apps.append(dolphin);
+    appController.setAvailableApps(apps);
+
+    plasma_bridge::tests::FakeWindowControlController windowController;
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  &windowStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  &windowController,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    server.setAppController(&appController);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+    QNetworkReply *reply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(
+            server.serverPort(), QStringLiteral("/control/apps/org.kde.dolphin.desktop/open?switchToExisting=true"))),
+        QByteArray());
+    QSignalSpy spy(reply, &QNetworkReply::finished);
+    QVERIFY(spy.wait());
+    QCOMPARE(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 200);
+    QCOMPARE(windowController.activationCallCount(), 0);
+    QCOMPARE(appController.openCallCount(), 1);
+    QCOMPARE(appController.lastOpenedAppId(), QStringLiteral("org.kde.dolphin.desktop"));
+    QCOMPARE(appController.lastOpenSwitchToExisting(), true);
+    reply->deleteLater();
+}
+
+void SnapshotHttpServerFeatureTest::mapsAppControlFailures()
+{
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+
+    plasma_bridge::state::AudioStateStore audioStore;
+    audioStore.updateAudioState(plasma_bridge::tests::sampleAudioState(), true, QStringLiteral("initial"));
+
+    plasma_bridge::tests::FakeAppController controller(tempDir.filePath(QStringLiteral("favorite_apps.json")));
+    plasma_bridge::api::SnapshotHttpServer server(&audioStore,
+                                                  nullptr,
+                                                  nullptr,
+                                                  QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                  18080,
+                                                  18081);
+    server.setAppController(&controller);
+    QVERIFY(server.listen(bindAddress(), 0));
+
+    QNetworkAccessManager manager;
+
+    QNetworkReply *invalidIdReply = manager.post(
+        QNetworkRequest(
+            plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/apps/org.kde%2Fkate/open"))),
+        QByteArray());
+    QSignalSpy invalidIdSpy(invalidIdReply, &QNetworkReply::finished);
+    QVERIFY(invalidIdSpy.wait());
+    QCOMPARE(invalidIdReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    QCOMPARE(errorObject(plasma_bridge::tests::parseJsonObject(readReplyBody(invalidIdReply)))
+                 .value(QStringLiteral("code"))
+                 .toString(),
+             QStringLiteral("bad_request"));
+    invalidIdReply->deleteLater();
+
+    QNetworkReply *missingFavoriteReply = manager.post(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
+                                                      QStringLiteral("/control/apps/org.kde.unknown.desktop/favorite"))),
+        QByteArray());
+    QSignalSpy missingFavoriteSpy(missingFavoriteReply, &QNetworkReply::finished);
+    QVERIFY(missingFavoriteSpy.wait());
+    QCOMPARE(missingFavoriteReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 404);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingFavoriteReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_found"));
+        QCOMPARE(errorObject(body).value(QStringLiteral("details")).toObject().value(QStringLiteral("appId")).toString(),
+                 QStringLiteral("org.kde.unknown.desktop"));
+    }
+    missingFavoriteReply->deleteLater();
+
+    controller.setOpenFailure(QStringLiteral("Synthetic launch failure."));
+    QNetworkReply *openFailureReply = manager.post(
+        QNetworkRequest(
+            plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/apps/org.kde.kate.desktop/open"))),
+        QByteArray());
+    QSignalSpy openFailureSpy(openFailureReply, &QNetworkReply::finished);
+    QVERIFY(openFailureSpy.wait());
+    QCOMPARE(openFailureReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 500);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(openFailureReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("launch_failed"));
+        QCOMPARE(errorObject(body).value(QStringLiteral("details")).toObject().value(QStringLiteral("appId")).toString(),
+                 QStringLiteral("org.kde.kate.desktop"));
+        QCOMPARE(errorObject(body).value(QStringLiteral("details")).toObject().value(QStringLiteral("reason")).toString(),
+                 QStringLiteral("Synthetic launch failure."));
+    }
+    openFailureReply->deleteLater();
+    controller.clearOpenFailure();
+
+    QFile malformedFavoritesFile(controller.favoritesFilePath());
+    QVERIFY(malformedFavoritesFile.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    malformedFavoritesFile.write("{");
+    malformedFavoritesFile.close();
+
+    QNetworkReply *favoritesReply = manager.get(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps/favorites"))));
+    QSignalSpy favoritesSpy(favoritesReply, &QNetworkReply::finished);
+    QVERIFY(favoritesSpy.wait());
+    QCOMPARE(favoritesReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 500);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(favoritesReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("storage_error"));
+    }
+    favoritesReply->deleteLater();
+
+    plasma_bridge::api::SnapshotHttpServer missingControllerServer(&audioStore,
+                                                                   nullptr,
+                                                                   nullptr,
+                                                                   QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
+                                                                   18080,
+                                                                   18081);
+    QVERIFY(missingControllerServer.listen(bindAddress(), 0));
+
+    QNetworkReply *missingControllerReply = manager.get(
+        QNetworkRequest(plasma_bridge::tests::httpUrl(missingControllerServer.serverPort(), QStringLiteral("/snapshot/apps"))));
+    QSignalSpy missingControllerSpy(missingControllerReply, &QNetworkReply::finished);
+    QVERIFY(missingControllerSpy.wait());
+    QCOMPARE(missingControllerReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 503);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(missingControllerReply));
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("not_ready"));
+    }
+    missingControllerReply->deleteLater();
+}
+
 void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
 {
     plasma_bridge::state::AudioStateStore store;
@@ -1355,12 +1910,16 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
 
     plasma_bridge::tests::FakeAudioVolumeController controller;
     plasma_bridge::tests::FakeAudioDeviceController deviceController;
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    plasma_bridge::tests::FakeAppController appController(tempDir.filePath(QStringLiteral("favorite_apps.json")));
     plasma_bridge::api::SnapshotHttpServer server(&store,
                                                   &controller,
                                                   &deviceController,
                                                   QStringLiteral(PLASMA_BRIDGE_DEFAULT_HOST),
                                                   18080,
                                                   18081);
+    server.setAppController(&appController);
     QVERIFY(server.listen(bindAddress(), 0));
 
     QNetworkAccessManager manager;
@@ -1417,6 +1976,14 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
     }
     activeWindowPostReply->deleteLater();
 
+    QNetworkRequest appsRequest(plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/snapshot/apps")));
+    QNetworkReply *appsPostReply = manager.sendCustomRequest(appsRequest, "POST");
+    QSignalSpy appsPostSpy(appsPostReply, &QNetworkReply::finished);
+    QVERIFY(appsPostSpy.wait());
+    QCOMPARE(appsPostReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
+    QCOMPARE(appsPostReply->rawHeader("Allow"), QByteArrayLiteral("GET"));
+    appsPostReply->deleteLater();
+
     QNetworkReply *controlGetReply = manager.get(QNetworkRequest(
         plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/audio/sinks/sink-1/volume"))));
     QSignalSpy controlGetSpy(controlGetReply, &QNetworkReply::finished);
@@ -1468,6 +2035,14 @@ void SnapshotHttpServerFeatureTest::handlesMethodNotAllowedAndUnknownPath()
         QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("method_not_allowed"));
     }
     windowActivationGetReply->deleteLater();
+
+    QNetworkReply *appOpenGetReply = manager.get(QNetworkRequest(
+        plasma_bridge::tests::httpUrl(server.serverPort(), QStringLiteral("/control/apps/org.kde.kate.desktop/open"))));
+    QSignalSpy appOpenGetSpy(appOpenGetReply, &QNetworkReply::finished);
+    QVERIFY(appOpenGetSpy.wait());
+    QCOMPARE(appOpenGetReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 405);
+    QCOMPARE(appOpenGetReply->rawHeader("Allow"), QByteArrayLiteral("POST"));
+    appOpenGetReply->deleteLater();
 
     QNetworkReply *notFoundReply = manager.get(QNetworkRequest(plasma_bridge::tests::httpUrl(server.serverPort(),
                                                                                              QStringLiteral("/unknown"))));
@@ -1759,7 +2334,7 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidWindowActivationControlRequest
     plasma_bridge::state::WindowStateStore windowStore;
     windowStore.updateWindowState(plasma_bridge::tests::sampleWindowSnapshot(), true, QStringLiteral("initial"));
 
-    plasma_bridge::tests::FakeWindowActivationController controller;
+    plasma_bridge::tests::FakeWindowControlController controller;
     plasma_bridge::api::SnapshotHttpServer server(&audioStore,
                                                   &windowStore,
                                                   nullptr,
@@ -1785,7 +2360,7 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidWindowActivationControlRequest
         QVERIFY(body.value(QStringLiteral("payload")).isNull());
         QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
     }
-    QCOMPARE(controller.callCount(), 0);
+    QCOMPARE(controller.activationCallCount(), 0);
     unexpectedBodyReply->deleteLater();
 
     QNetworkReply *encodedSlashReply =
@@ -1802,8 +2377,24 @@ void SnapshotHttpServerFeatureTest::rejectsInvalidWindowActivationControlRequest
         QVERIFY(body.value(QStringLiteral("payload")).isNull());
         QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
     }
-    QCOMPARE(controller.callCount(), 0);
+    QCOMPARE(controller.activationCallCount(), 0);
     encodedSlashReply->deleteLater();
+
+    QNetworkReply *unexpectedCloseBodyReply =
+        postJson(&manager,
+                 plasma_bridge::tests::httpUrl(server.serverPort(),
+                                               QStringLiteral("/control/windows/window-terminal/close")),
+                 QJsonObject{});
+    QSignalSpy unexpectedCloseBodySpy(unexpectedCloseBodyReply, &QNetworkReply::finished);
+    QVERIFY(unexpectedCloseBodySpy.wait());
+    QCOMPARE(unexpectedCloseBodyReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), 400);
+    {
+        const QJsonObject body = plasma_bridge::tests::parseJsonObject(readReplyBody(unexpectedCloseBodyReply));
+        QVERIFY(body.value(QStringLiteral("payload")).isNull());
+        QCOMPARE(errorObject(body).value(QStringLiteral("code")).toString(), QStringLiteral("bad_request"));
+    }
+    QCOMPARE(controller.closeCallCount(), 0);
+    unexpectedCloseBodyReply->deleteLater();
 }
 
 void SnapshotHttpServerFeatureTest::rejectsMalformedAndOversizedRequests()
@@ -1916,6 +2507,7 @@ void SnapshotHttpServerFeatureTest::servesDocsAndRewritesSpecHosts()
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sinks/{sinkId}/mute")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/audio/sources/{sourceId}/mute")));
     QVERIFY(openApiBody.contains(QStringLiteral("/control/windows/{windowId}/active")));
+    QVERIFY(openApiBody.contains(QStringLiteral("/control/windows/{windowId}/close")));
     QVERIFY(openApiBody.contains(QStringLiteral("payload:")));
     QVERIFY(openApiBody.contains(QStringLiteral("error:")));
     openApiReply->deleteLater();

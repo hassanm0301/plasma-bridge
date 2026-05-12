@@ -164,12 +164,12 @@ public:
 
     control::WindowActivationResult activateWindow(const QString &windowId)
     {
-        return m_activationController.activateWindow(windowId);
+        return m_windowControlController.activateWindow(windowId);
     }
 
 private:
     window::KWinScriptWindowBackendController m_backend;
-    window::KWinScriptWindowActivationController m_activationController;
+    window::KWinScriptWindowControlController m_windowControlController;
 };
 
 KWinScriptWindowProbeBackendController::KWinScriptWindowProbeBackendController(QObject *parent)

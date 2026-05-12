@@ -59,6 +59,18 @@ flutter run -d android
 
 The mobile client uses the same backend endpoints as the web client, but first launch requires manual endpoint setup instead of assuming localhost. On a physical Android device, point the app at the KDE machine's LAN address.
 
+To build Android artifacts instead of launching the app directly:
+
+```bash
+cd clients/app
+flutter pub get
+flutter build apk --debug
+flutter build apk --release
+flutter build appbundle --release
+```
+
+Build outputs are written under `clients/app/build/app/outputs/`. Release APK and App Bundle builds require Android signing to be configured before distribution.
+
 The Android UI is tuned for landscape tablet usage. It keeps connection state in the top-right app bar, gives windows and current media full-width sections, and packs the rest of the controls more tightly than the web dashboard.
 
 See [clients/app](../clients/app/) for app-specific docs.

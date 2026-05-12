@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/models/backend_models.dart';
@@ -22,6 +24,7 @@ class WindowsSection extends StatelessWidget {
     required this.pendingActions,
     required this.errors,
     required this.onActivateWindow,
+    required this.onCloseWindow,
     required this.onToggleExpanded,
   });
 
@@ -33,6 +36,7 @@ class WindowsSection extends StatelessWidget {
   final Map<String, bool> pendingActions;
   final Map<String, String> errors;
   final Future<void> Function(String windowId) onActivateWindow;
+  final Future<void> Function(String windowId) onCloseWindow;
   final VoidCallback onToggleExpanded;
 
   @override
@@ -89,6 +93,7 @@ class WindowsSection extends StatelessWidget {
                             pendingActions: pendingActions,
                             errors: errors,
                             onActivateWindow: onActivateWindow,
+                            onCloseWindow: onCloseWindow,
                           );
                         },
                       );
@@ -107,6 +112,7 @@ class WindowsSection extends StatelessWidget {
                           pendingActions: pendingActions,
                           errors: errors,
                           onActivateWindow: onActivateWindow,
+                          onCloseWindow: onCloseWindow,
                         );
                       },
                       separatorBuilder: (_, _) =>
@@ -128,6 +134,7 @@ class _WindowTile extends StatelessWidget {
     required this.pendingActions,
     required this.errors,
     required this.onActivateWindow,
+    required this.onCloseWindow,
   });
 
   final WindowState window;
@@ -136,21 +143,33 @@ class _WindowTile extends StatelessWidget {
   final Map<String, bool> pendingActions;
   final Map<String, String> errors;
   final Future<void> Function(String windowId) onActivateWindow;
+  final Future<void> Function(String windowId) onCloseWindow;
 
   @override
   Widget build(BuildContext context) {
     final isActive = window.id == activeWindowId || window.isActive;
-    final isPending = pendingActions['window-active:${window.id}'] ?? false;
+    final activationPending =
+        pendingActions['window-active:${window.id}'] ?? false;
+    final closePending = pendingActions['window-close:${window.id}'] ?? false;
     final appLabel = window.appId ?? window.resourceName ?? 'Application';
     final iconUrl = resolveAssetUrl(httpBaseUrl, window.iconUrl);
     final content = _WindowTileContent(
+      windowId: window.id,
       title: displayWindowTitle(window),
       appLabel: appLabel,
-      statusText: isPending ? 'Focusing...' : null,
+      statusText: closePending
+          ? 'Closing...'
+          : activationPending
+          ? 'Focusing...'
+          : null,
       error: errors[window.id],
       iconUrl: iconUrl,
       fallbackLabel: appLabel,
       isActive: isActive,
+      closePending: closePending,
+      onCloseWindow: () {
+        unawaited(onCloseWindow(window.id));
+      },
     );
 
     return SizedBox(
@@ -159,7 +178,9 @@ class _WindowTile extends StatelessWidget {
           ? content
           : InkWell(
               borderRadius: BorderRadius.circular(DesktopMetrics.itemRadius),
-              onTap: isPending ? null : () => onActivateWindow(window.id),
+              onTap: activationPending
+                  ? null
+                  : () => onActivateWindow(window.id),
               child: content,
             ),
     );
@@ -168,6 +189,7 @@ class _WindowTile extends StatelessWidget {
 
 class _WindowTileContent extends StatelessWidget {
   const _WindowTileContent({
+    required this.windowId,
     required this.title,
     required this.appLabel,
     required this.statusText,
@@ -175,8 +197,11 @@ class _WindowTileContent extends StatelessWidget {
     required this.iconUrl,
     required this.fallbackLabel,
     required this.isActive,
+    required this.closePending,
+    required this.onCloseWindow,
   });
 
+  final String windowId;
   final String title;
   final String appLabel;
   final String? statusText;
@@ -184,6 +209,8 @@ class _WindowTileContent extends StatelessWidget {
   final String? iconUrl;
   final String fallbackLabel;
   final bool isActive;
+  final bool closePending;
+  final VoidCallback onCloseWindow;
 
   @override
   Widget build(BuildContext context) {
@@ -245,6 +272,24 @@ class _WindowTileContent extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelMedium,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Tooltip(
+                message: 'Close window',
+                child: InkResponse(
+                  key: ValueKey('window-close:$windowId'),
+                  radius: 14,
+                  onTap: closePending ? null : onCloseWindow,
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 14,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ),
               ),
             ],

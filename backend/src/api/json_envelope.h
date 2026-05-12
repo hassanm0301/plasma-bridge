@@ -3,14 +3,18 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QString>
 
 namespace plasma_bridge::control
 {
+struct AppFavoriteChangeResult;
+struct AppOpenResult;
 struct DefaultDeviceChangeResult;
 struct MediaControlResult;
 struct MuteChangeResult;
 struct VolumeChangeResult;
 struct WindowActivationResult;
+struct WindowCloseResult;
 }
 
 namespace plasma_bridge::api
@@ -34,5 +38,11 @@ QJsonObject buildMediaControlPayload(const control::MediaControlResult &result);
 QJsonObject buildMediaControlErrorDetails(const control::MediaControlResult &result);
 QJsonObject buildWindowActivationPayload(const control::WindowActivationResult &result);
 QJsonObject buildWindowActivationErrorDetails(const control::WindowActivationResult &result);
+QJsonObject buildWindowClosePayload(const control::WindowCloseResult &result);
+QJsonObject buildWindowCloseErrorDetails(const control::WindowCloseResult &result);
+QJsonObject buildAppFavoriteChangePayload(const control::AppFavoriteChangeResult &result);
+QJsonObject buildAppFavoriteChangeErrorDetails(const control::AppFavoriteChangeResult &result);
+QJsonObject buildAppOpenPayload(const control::AppOpenResult &result);
+QJsonObject buildAppOpenErrorDetails(const control::AppOpenResult &result);
 
 } // namespace plasma_bridge::api

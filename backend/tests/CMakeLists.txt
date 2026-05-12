@@ -112,6 +112,11 @@ plasma_bridge_add_qt_test(test_audio_control_http_helpers
 )
 target_link_libraries(test_audio_control_http_helpers PRIVATE plasma_bridge_api)
 
+plasma_bridge_add_qt_test(test_app_control_http_helpers
+    unit/test_app_control_http_helpers.cpp
+)
+target_link_libraries(test_app_control_http_helpers PRIVATE plasma_bridge_api)
+
 plasma_bridge_add_qt_test(test_window_control_http_helpers
     unit/test_window_control_http_helpers.cpp
 )
@@ -131,6 +136,11 @@ plasma_bridge_add_qt_test(test_state
     unit/test_state.cpp
 )
 target_link_libraries(test_state PRIVATE plasma_bridge_state)
+
+plasma_bridge_add_qt_test(test_favorite_apps_store
+    unit/test_favorite_apps_store.cpp
+)
+target_link_libraries(test_favorite_apps_store PRIVATE plasma_bridge_control)
 
 plasma_bridge_add_qt_test(test_audio_probe_runner
     unit/test_audio_probe_runner.cpp

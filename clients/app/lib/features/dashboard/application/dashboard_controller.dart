@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/backend_models.dart';
@@ -14,6 +15,12 @@ import 'app_providers.dart';
 class DashboardState {
   const DashboardState({
     required this.backendState,
+    required this.favoriteApps,
+    required this.appSearchResults,
+    required this.favoriteAppsAddMode,
+    required this.favoriteAppsEditMode,
+    required this.appSearchQuery,
+    required this.appSearchLoading,
     required this.connectionStatus,
     required this.connectionDetail,
     required this.httpStatus,
@@ -26,6 +33,12 @@ class DashboardState {
   factory DashboardState.initial() {
     return const DashboardState(
       backendState: BackendState.empty(),
+      favoriteApps: [],
+      appSearchResults: [],
+      favoriteAppsAddMode: false,
+      favoriteAppsEditMode: false,
+      appSearchQuery: '',
+      appSearchLoading: false,
       connectionStatus: ConnectionStatus.connecting,
       connectionDetail: 'Opening WebSocket stream...',
       httpStatus: HttpCheckState.checking,
@@ -37,6 +50,12 @@ class DashboardState {
   }
 
   final BackendState backendState;
+  final List<AppInfo> favoriteApps;
+  final List<AppInfo> appSearchResults;
+  final bool favoriteAppsAddMode;
+  final bool favoriteAppsEditMode;
+  final String appSearchQuery;
+  final bool appSearchLoading;
   final ConnectionStatus connectionStatus;
   final String connectionDetail;
   final HttpCheckState httpStatus;
@@ -47,6 +66,12 @@ class DashboardState {
 
   DashboardState copyWith({
     BackendState? backendState,
+    List<AppInfo>? favoriteApps,
+    List<AppInfo>? appSearchResults,
+    bool? favoriteAppsAddMode,
+    bool? favoriteAppsEditMode,
+    String? appSearchQuery,
+    bool? appSearchLoading,
     ConnectionStatus? connectionStatus,
     String? connectionDetail,
     HttpCheckState? httpStatus,
@@ -57,6 +82,12 @@ class DashboardState {
   }) {
     return DashboardState(
       backendState: backendState ?? this.backendState,
+      favoriteApps: favoriteApps ?? this.favoriteApps,
+      appSearchResults: appSearchResults ?? this.appSearchResults,
+      favoriteAppsAddMode: favoriteAppsAddMode ?? this.favoriteAppsAddMode,
+      favoriteAppsEditMode: favoriteAppsEditMode ?? this.favoriteAppsEditMode,
+      appSearchQuery: appSearchQuery ?? this.appSearchQuery,
+      appSearchLoading: appSearchLoading ?? this.appSearchLoading,
       connectionStatus: connectionStatus ?? this.connectionStatus,
       connectionDetail: connectionDetail ?? this.connectionDetail,
       httpStatus: httpStatus ?? this.httpStatus,
@@ -75,6 +106,8 @@ class DashboardController extends Notifier<DashboardState> {
 
   StateStreamHandle? _streamHandle;
   StreamSubscription<StateStreamEvent>? _streamSubscription;
+  Timer? _appSearchDebounce;
+  int _appSearchRequestId = 0;
   bool _closedByController = false;
   bool _hasState = false;
 
@@ -85,6 +118,7 @@ class DashboardController extends Notifier<DashboardState> {
     _settings = ref.watch(settingsControllerProvider).endpointSettings!;
 
     ref.onDispose(() {
+      _appSearchDebounce?.cancel();
       unawaited(_closeStream());
     });
 
@@ -97,6 +131,12 @@ class DashboardController extends Notifier<DashboardState> {
     _closedByController = false;
     state = state.copyWith(
       backendState: const BackendState.empty(),
+      favoriteApps: const [],
+      appSearchResults: const [],
+      favoriteAppsAddMode: false,
+      favoriteAppsEditMode: false,
+      appSearchQuery: '',
+      appSearchLoading: false,
       connectionStatus: ConnectionStatus.connecting,
       connectionDetail: 'Opening WebSocket stream...',
       httpStatus: HttpCheckState.checking,
@@ -105,6 +145,7 @@ class DashboardController extends Notifier<DashboardState> {
     );
 
     unawaited(_checkHttp());
+    unawaited(_refreshFavoriteApps());
     await _openStream();
   }
 
@@ -170,6 +211,15 @@ class DashboardController extends Notifier<DashboardState> {
     );
   }
 
+  Future<void> closeWindow(String windowId) async {
+    await _runWindowAction(
+      windowId: windowId,
+      actionKey: 'window-close:$windowId',
+      action: () =>
+          _controlRepository.closeWindow(_settings.httpBaseUrl, windowId),
+    );
+  }
+
   Future<void> performMediaAction(String action) async {
     final player = state.backendState.media?.player;
     await _runMediaAction(
@@ -186,6 +236,144 @@ class DashboardController extends Notifier<DashboardState> {
       'seek',
       () => _controlRepository.seekMedia(_settings.httpBaseUrl, positionMs),
     );
+  }
+
+  void showFavoriteAppsAddMode() {
+    _appSearchDebounce?.cancel();
+    _setRowError('apps', '');
+    state = state.copyWith(
+      favoriteAppsAddMode: true,
+      favoriteAppsEditMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+      appSearchLoading: false,
+    );
+  }
+
+  void hideFavoriteAppsAddMode() {
+    _appSearchDebounce?.cancel();
+    state = state.copyWith(
+      favoriteAppsAddMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+      appSearchLoading: false,
+    );
+  }
+
+  void toggleFavoriteAppsEditMode() {
+    _appSearchDebounce?.cancel();
+    state = state.copyWith(
+      favoriteAppsEditMode: !state.favoriteAppsEditMode,
+      favoriteAppsAddMode: false,
+      appSearchQuery: '',
+      appSearchResults: const [],
+      appSearchLoading: false,
+    );
+  }
+
+  void updateAppSearchQuery(String query) {
+    _appSearchDebounce?.cancel();
+    _setRowError('apps', '');
+    state = state.copyWith(
+      appSearchQuery: query,
+      appSearchResults: const [],
+      appSearchLoading: query.trim().isNotEmpty,
+    );
+
+    if (query.trim().isEmpty) {
+      return;
+    }
+
+    final requestId = ++_appSearchRequestId;
+    _appSearchDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_searchAvailableApps(query, requestId));
+    });
+  }
+
+  Future<void> addFavoriteApp(AppInfo app) async {
+    final actionKey = 'app-favorite:${app.appId}';
+    _setPending(actionKey, true);
+    _setRowError('apps', '');
+    try {
+      await _controlRepository.favoriteApp(_settings.httpBaseUrl, app.appId);
+      hideFavoriteAppsAddMode();
+      await _refreshFavoriteApps();
+    } catch (error) {
+      _setRowError('apps', _messageFromError(error));
+    } finally {
+      _setPending(actionKey, false);
+    }
+  }
+
+  Future<void> removeFavoriteApp(AppInfo app) async {
+    final actionKey = 'app-unfavorite:${app.appId}';
+    _setPending(actionKey, true);
+    _setRowError('apps', '');
+    try {
+      await _controlRepository.unfavoriteApp(_settings.httpBaseUrl, app.appId);
+      await _refreshFavoriteApps();
+    } catch (error) {
+      _setRowError('apps', _messageFromError(error));
+    } finally {
+      _setPending(actionKey, false);
+    }
+  }
+
+  Future<void> openFavoriteApp(AppInfo app) async {
+    final actionKey = 'app-open:${app.appId}';
+    _setPending(actionKey, true);
+    _setRowError('apps', '');
+    try {
+      await _controlRepository.openApp(
+        _settings.httpBaseUrl,
+        app.appId,
+        switchToExisting: _shouldSwitchToExisting(),
+      );
+    } catch (error) {
+      _setRowError('apps', _messageFromError(error));
+    } finally {
+      _setPending(actionKey, false);
+    }
+  }
+
+  Future<void> _searchAvailableApps(String query, int requestId) async {
+    try {
+      final apps = await _controlRepository.fetchAvailableApps(
+        _settings.httpBaseUrl,
+        query: query,
+      );
+      if (requestId != _appSearchRequestId || query != state.appSearchQuery) {
+        return;
+      }
+
+      final favoriteIds = state.favoriteApps.map((app) => app.appId).toSet();
+      state = state.copyWith(
+        appSearchResults: apps
+            .where((app) => !favoriteIds.contains(app.appId))
+            .toList(growable: false),
+        appSearchLoading: false,
+      );
+    } catch (error) {
+      if (requestId != _appSearchRequestId) {
+        return;
+      }
+      _setRowError('apps', _messageFromError(error));
+      state = state.copyWith(
+        appSearchLoading: false,
+        appSearchResults: const [],
+      );
+    }
+  }
+
+  Future<void> _refreshFavoriteApps() async {
+    try {
+      final apps = await _controlRepository.fetchFavoriteApps(
+        _settings.httpBaseUrl,
+      );
+      state = state.copyWith(favoriteApps: apps);
+    } catch (error) {
+      _setRowError('apps', _messageFromError(error));
+    }
   }
 
   Future<void> _checkHttp() async {
@@ -212,6 +400,7 @@ class DashboardController extends Notifier<DashboardState> {
 
   Future<void> _closeStream() async {
     _closedByController = true;
+    _appSearchDebounce?.cancel();
     await _streamSubscription?.cancel();
     _streamSubscription = null;
     await _streamHandle?.close();
@@ -343,5 +532,11 @@ class DashboardController extends Notifier<DashboardState> {
     return error is Exception
         ? error.toString().replaceFirst('Exception: ', '')
         : 'Request failed.';
+  }
+
+  bool _shouldSwitchToExisting() {
+    return !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android &&
+        _settings.appLaunchBehavior == AppLaunchBehavior.switchToExisting;
   }
 }

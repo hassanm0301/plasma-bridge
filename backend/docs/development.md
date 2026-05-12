@@ -18,7 +18,7 @@ This guide is for contributors who want to understand where behavior lives befor
 ## Runtime Shape
 
 The app wires adapters into state stores, then serves those stores through HTTP and WebSocket transports.
-HTTP reads, local audio controls, media transport and seek controls, and window activation controls are handled by `SnapshotHttpServer`.
+HTTP reads, local audio controls, media transport and seek controls, and window activation/close controls are handled by `SnapshotHttpServer`.
 Live updates are handled by `StateWebSocketServer` on one endpoint, `/ws`.
 
 The WebSocket flow is:

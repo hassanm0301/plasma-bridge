@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/models/backend_models.dart';
-import '../../../core/widgets/desktop_panel.dart';
 import '../../../core/utils/backend_state_helpers.dart';
+import '../../../core/widgets/desktop_panel.dart';
+import '../../apps/presentation/favorite_apps_section.dart';
 import '../../audio/presentation/audio_section.dart';
 import '../../media/presentation/media_section.dart';
 import '../../settings/domain/endpoint_settings.dart';
@@ -200,6 +201,7 @@ class _DashboardBody extends StatelessWidget {
       pendingActions: state.pendingActions,
       errors: state.rowErrors,
       onActivateWindow: controller.activateWindow,
+      onCloseWindow: controller.closeWindow,
       onToggleExpanded: onWindowsExpandedChanged,
     );
     final mediaSection = MediaSection(
@@ -211,6 +213,24 @@ class _DashboardBody extends StatelessWidget {
       onTogglePlayPause: () => controller.performMediaAction('play-pause'),
       onNext: () => controller.performMediaAction('next'),
       onSeek: controller.seekCurrentMedia,
+    );
+    final favoriteAppsSection = FavoriteAppsSection(
+      favoriteApps: state.favoriteApps,
+      searchResults: state.appSearchResults,
+      addMode: state.favoriteAppsAddMode,
+      editMode: state.favoriteAppsEditMode,
+      searchQuery: state.appSearchQuery,
+      searchLoading: state.appSearchLoading,
+      error: state.rowErrors['apps'] ?? '',
+      pendingActions: state.pendingActions,
+      httpBaseUrl: httpBaseUrl,
+      onShowAddMode: controller.showFavoriteAppsAddMode,
+      onHideAddMode: controller.hideFavoriteAppsAddMode,
+      onToggleEditMode: controller.toggleFavoriteAppsEditMode,
+      onSearchChanged: controller.updateAppSearchQuery,
+      onOpenApp: controller.openFavoriteApp,
+      onAddFavorite: controller.addFavoriteApp,
+      onRemoveFavorite: controller.removeFavoriteApp,
     );
     final sinksSection = AudioSection(
       expanded: playbackExpanded,
@@ -245,6 +265,8 @@ class _DashboardBody extends StatelessWidget {
         children: [
           windowsSection,
           const SizedBox(height: DesktopMetrics.sectionGap),
+          favoriteAppsSection,
+          const SizedBox(height: DesktopMetrics.sectionGap),
           mediaSection,
           const SizedBox(height: DesktopMetrics.sectionGap),
           _AudioGrid(
@@ -260,6 +282,8 @@ class _DashboardBody extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         windowsSection,
+        const SizedBox(height: DesktopMetrics.sectionGap),
+        favoriteAppsSection,
         const SizedBox(height: DesktopMetrics.sectionGap),
         mediaSection,
         const SizedBox(height: DesktopMetrics.sectionGap),

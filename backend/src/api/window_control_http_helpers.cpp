@@ -9,17 +9,29 @@ namespace
 
 const QString kControlWindowsPrefix = QStringLiteral("/control/windows/");
 const QString kActivePathSuffix = QStringLiteral("/active");
+const QString kClosePathSuffix = QStringLiteral("/close");
 
 } // namespace
 
 WindowControlRouteParseResult parseWindowControlRoute(const QString &path)
 {
     WindowControlRouteParseResult result;
-    if (!path.startsWith(kControlWindowsPrefix) || !path.endsWith(kActivePathSuffix)) {
+    if (!path.startsWith(kControlWindowsPrefix)) {
         return result;
     }
 
-    const qsizetype encodedWindowIdLength = path.size() - kControlWindowsPrefix.size() - kActivePathSuffix.size();
+    QString actionSuffix;
+    WindowControlAction action = WindowControlAction::Activate;
+    if (path.endsWith(kActivePathSuffix)) {
+        actionSuffix = kActivePathSuffix;
+    } else if (path.endsWith(kClosePathSuffix)) {
+        actionSuffix = kClosePathSuffix;
+        action = WindowControlAction::Close;
+    } else {
+        return result;
+    }
+
+    const qsizetype encodedWindowIdLength = path.size() - kControlWindowsPrefix.size() - actionSuffix.size();
     if (encodedWindowIdLength <= 0) {
         return result;
     }
@@ -38,6 +50,7 @@ WindowControlRouteParseResult parseWindowControlRoute(const QString &path)
 
     result.match = WindowControlRouteMatch::Match;
     result.route.windowId = windowId;
+    result.route.action = action;
     return result;
 }
 
@@ -51,6 +64,22 @@ int httpStatusCodeForWindowActivationStatus(const control::WindowActivationStatu
     case control::WindowActivationStatus::WindowNotActivatable:
         return 409;
     case control::WindowActivationStatus::NotReady:
+        return 503;
+    }
+
+    return 503;
+}
+
+int httpStatusCodeForWindowCloseStatus(const control::WindowCloseStatus status)
+{
+    switch (status) {
+    case control::WindowCloseStatus::Accepted:
+        return 200;
+    case control::WindowCloseStatus::WindowNotFound:
+        return 404;
+    case control::WindowCloseStatus::WindowNotCloseable:
+        return 409;
+    case control::WindowCloseStatus::NotReady:
         return 503;
     }
 

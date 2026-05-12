@@ -1,5 +1,6 @@
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -34,6 +35,7 @@ void CliBinariesFeatureTest::plasmaBridgeHelpAndValidationErrors()
     QVERIFY(help.standardOutput.contains(QStringLiteral("--host")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("--allow-origin")));
     QVERIFY(help.standardOutput.contains(QStringLiteral("--ws-port")));
+    QVERIFY(help.standardOutput.contains(QStringLiteral("--favorites-dir")));
 
     const ProcessResult invalidHost = runProcess(plasmaBridgeBin, {QStringLiteral("--host"), QStringLiteral("not-an-address")});
     QCOMPARE(invalidHost.exitCode, 1);
@@ -51,6 +53,19 @@ void CliBinariesFeatureTest::plasmaBridgeHelpAndValidationErrors()
         runProcess(plasmaBridgeBin, {QStringLiteral("--allow-origin"), QStringLiteral("http://example.test/dashboard")});
     QCOMPARE(invalidAllowedOrigin.exitCode, 1);
     QVERIFY(invalidAllowedOrigin.standardError.contains(QStringLiteral("Invalid allowed origin")));
+
+    QTemporaryDir tempDir;
+    QVERIFY(tempDir.isValid());
+    const QString invalidFavoritesDir = tempDir.filePath(QStringLiteral("not-a-dir"));
+    QFile invalidFavoritesFile(invalidFavoritesDir);
+    QVERIFY(invalidFavoritesFile.open(QIODevice::WriteOnly));
+    invalidFavoritesFile.write("x");
+    invalidFavoritesFile.close();
+
+    const ProcessResult invalidFavorites =
+        runProcess(plasmaBridgeBin, {QStringLiteral("--favorites-dir"), invalidFavoritesDir});
+    QCOMPARE(invalidFavorites.exitCode, 1);
+    QVERIFY(invalidFavorites.standardError.contains(QStringLiteral("Invalid favorites directory")));
 }
 
 void CliBinariesFeatureTest::audioProbeHelpAndHermeticFailurePaths()

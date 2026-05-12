@@ -1,7 +1,8 @@
+#include "control/app_controller.h"
 #include "control/audio_device_controller.h"
 #include "control/audio_volume_controller.h"
 #include "control/media_controller.h"
-#include "control/window_activation_controller.h"
+#include "control/window_control_controller.h"
 
 #include <QtTest>
 
@@ -39,6 +40,16 @@ private slots:
     void activationJsonAndHumanFormatting();
 };
 
+class WindowCloseControllerFormattingTest : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void statusName_data();
+    void statusName();
+    void closeJsonAndHumanFormatting();
+};
+
 class MediaControllerFormattingTest : public QObject
 {
     Q_OBJECT
@@ -49,6 +60,19 @@ private slots:
     void statusName_data();
     void statusName();
     void controlJsonAndHumanFormatting();
+};
+
+class AppControllerFormattingTest : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void favoriteStatusName_data();
+    void favoriteStatusName();
+    void openStatusName_data();
+    void openStatusName();
+    void favoriteChangeJsonAndHumanFormatting();
+    void appOpenJsonAndHumanFormatting();
 };
 
 void AudioVolumeControllerFormattingTest::statusName_data()
@@ -223,6 +247,50 @@ void WindowActivationControllerFormattingTest::activationJsonAndHumanFormatting(
     QVERIFY(text.contains(QStringLiteral("Window: window-editor")));
 }
 
+void WindowCloseControllerFormattingTest::statusName_data()
+{
+    QTest::addColumn<int>("status");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("accepted")
+        << static_cast<int>(plasma_bridge::control::WindowCloseStatus::Accepted)
+        << QStringLiteral("accepted");
+    QTest::newRow("not-ready")
+        << static_cast<int>(plasma_bridge::control::WindowCloseStatus::NotReady)
+        << QStringLiteral("not_ready");
+    QTest::newRow("window-missing")
+        << static_cast<int>(plasma_bridge::control::WindowCloseStatus::WindowNotFound)
+        << QStringLiteral("window_not_found");
+    QTest::newRow("window-not-closeable")
+        << static_cast<int>(plasma_bridge::control::WindowCloseStatus::WindowNotCloseable)
+        << QStringLiteral("window_not_closeable");
+}
+
+void WindowCloseControllerFormattingTest::statusName()
+{
+    QFETCH(int, status);
+    QFETCH(QString, expected);
+
+    QCOMPARE(plasma_bridge::control::windowCloseStatusName(
+                 static_cast<plasma_bridge::control::WindowCloseStatus>(status)),
+             expected);
+}
+
+void WindowCloseControllerFormattingTest::closeJsonAndHumanFormatting()
+{
+    plasma_bridge::control::WindowCloseResult result;
+    result.status = plasma_bridge::control::WindowCloseStatus::WindowNotCloseable;
+    result.windowId = QStringLiteral("window-editor");
+
+    const QJsonObject json = plasma_bridge::control::toJsonObject(result);
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("window_not_closeable"));
+    QCOMPARE(json.value(QStringLiteral("windowId")).toString(), QStringLiteral("window-editor"));
+
+    const QString text = plasma_bridge::control::formatHumanReadableResult(result);
+    QVERIFY(text.contains(QStringLiteral("Status: window_not_closeable")));
+    QVERIFY(text.contains(QStringLiteral("Window: window-editor")));
+}
+
 void MediaControllerFormattingTest::actionName_data()
 {
     QTest::addColumn<int>("action");
@@ -299,6 +367,89 @@ void MediaControllerFormattingTest::controlJsonAndHumanFormatting()
     QVERIFY(text.contains(QStringLiteral("Position Ms: 88000")));
 }
 
+void AppControllerFormattingTest::favoriteStatusName_data()
+{
+    QTest::addColumn<int>("status");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("accepted")
+        << static_cast<int>(plasma_bridge::control::AppFavoriteChangeStatus::Accepted) << QStringLiteral("accepted");
+    QTest::newRow("missing")
+        << static_cast<int>(plasma_bridge::control::AppFavoriteChangeStatus::AppNotFound)
+        << QStringLiteral("app_not_found");
+    QTest::newRow("storage")
+        << static_cast<int>(plasma_bridge::control::AppFavoriteChangeStatus::StorageError)
+        << QStringLiteral("storage_error");
+}
+
+void AppControllerFormattingTest::favoriteStatusName()
+{
+    QFETCH(int, status);
+    QFETCH(QString, expected);
+
+    QCOMPARE(plasma_bridge::control::appFavoriteChangeStatusName(
+                 static_cast<plasma_bridge::control::AppFavoriteChangeStatus>(status)),
+             expected);
+}
+
+void AppControllerFormattingTest::openStatusName_data()
+{
+    QTest::addColumn<int>("status");
+    QTest::addColumn<QString>("expected");
+
+    QTest::newRow("accepted")
+        << static_cast<int>(plasma_bridge::control::AppOpenStatus::Accepted) << QStringLiteral("accepted");
+    QTest::newRow("missing")
+        << static_cast<int>(plasma_bridge::control::AppOpenStatus::AppNotFound)
+        << QStringLiteral("app_not_found");
+    QTest::newRow("launch-failed")
+        << static_cast<int>(plasma_bridge::control::AppOpenStatus::LaunchFailed)
+        << QStringLiteral("launch_failed");
+}
+
+void AppControllerFormattingTest::openStatusName()
+{
+    QFETCH(int, status);
+    QFETCH(QString, expected);
+
+    QCOMPARE(plasma_bridge::control::appOpenStatusName(
+                 static_cast<plasma_bridge::control::AppOpenStatus>(status)),
+             expected);
+}
+
+void AppControllerFormattingTest::favoriteChangeJsonAndHumanFormatting()
+{
+    plasma_bridge::control::AppFavoriteChangeResult result;
+    result.status = plasma_bridge::control::AppFavoriteChangeStatus::StorageError;
+    result.appId = QStringLiteral("org.kde.kate.desktop");
+    result.favorite = true;
+
+    const QJsonObject json = plasma_bridge::control::toJsonObject(result);
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("storage_error"));
+    QCOMPARE(json.value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.kate.desktop"));
+    QCOMPARE(json.value(QStringLiteral("favorite")).toBool(), true);
+
+    const QString text = plasma_bridge::control::formatHumanReadableResult(result);
+    QVERIFY(text.contains(QStringLiteral("Status: storage_error")));
+    QVERIFY(text.contains(QStringLiteral("App: org.kde.kate.desktop")));
+    QVERIFY(text.contains(QStringLiteral("Favorite: true")));
+}
+
+void AppControllerFormattingTest::appOpenJsonAndHumanFormatting()
+{
+    plasma_bridge::control::AppOpenResult result;
+    result.status = plasma_bridge::control::AppOpenStatus::LaunchFailed;
+    result.appId = QStringLiteral("org.kde.konsole.desktop");
+
+    const QJsonObject json = plasma_bridge::control::toJsonObject(result);
+    QCOMPARE(json.value(QStringLiteral("status")).toString(), QStringLiteral("launch_failed"));
+    QCOMPARE(json.value(QStringLiteral("appId")).toString(), QStringLiteral("org.kde.konsole.desktop"));
+
+    const QString text = plasma_bridge::control::formatHumanReadableResult(result);
+    QVERIFY(text.contains(QStringLiteral("Status: launch_failed")));
+    QVERIFY(text.contains(QStringLiteral("App: org.kde.konsole.desktop")));
+}
+
 int main(int argc, char *argv[])
 {
     int status = 0;
@@ -315,7 +466,15 @@ int main(int argc, char *argv[])
         status |= QTest::qExec(&test, argc, argv);
     }
     {
+        WindowCloseControllerFormattingTest test;
+        status |= QTest::qExec(&test, argc, argv);
+    }
+    {
         MediaControllerFormattingTest test;
+        status |= QTest::qExec(&test, argc, argv);
+    }
+    {
+        AppControllerFormattingTest test;
         status |= QTest::qExec(&test, argc, argv);
     }
     return status;

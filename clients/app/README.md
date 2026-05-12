@@ -6,7 +6,7 @@ Flutter client for Plasma Bridge, with Android as the first supported target and
 
 - First-launch endpoint setup for remote KDE hosts
 - Live window, media, sink, and source state from the shared WebSocket stream
-- Window activation, media transport/seek, sink volume, and sink/source mute control through the existing HTTP API
+- Window activation/close, media transport/seek, sink volume, and sink/source mute control through the existing HTTP API
 - Persisted light/dark theme plus saved endpoint settings
 - Breeze-like light and dark themes tuned for a denser desktop-utility feel
 - Landscape-first dashboard for tablets, with full-width windows and current-media sections plus compact audio controls
@@ -23,6 +23,28 @@ flutter run -d android
 ```
 
 Start `plasma_bridge` first on the KDE Plasma machine. On a physical Android device, use the backend machine's LAN address instead of `127.0.0.1` during first-run setup.
+Release APKs include internet permission and allow the backend's default cleartext `http://` and `ws://` LAN endpoints, so the tablet can connect to the desktop host without extra Android-side configuration.
+
+## Build For Android
+
+Create a debug APK from the monorepo root:
+
+```bash
+cd clients/app
+flutter pub get
+flutter build apk --debug
+```
+
+The generated APK is written to `clients/app/build/app/outputs/flutter-apk/app-debug.apk`.
+
+Create a release APK:
+
+```bash
+cd clients/app
+flutter pub get
+flutter build apk --release
+```
+
 
 The Android UI is optimized for landscape tablet use. Portrait remains supported, but the primary layout is a denser two-stage control surface with windows and current media prioritized above audio controls.
 

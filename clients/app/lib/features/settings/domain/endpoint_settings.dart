@@ -45,6 +45,22 @@ enum WindowSortDirection {
   }
 }
 
+enum AppLaunchBehavior {
+  openNewInstance('open_new_instance'),
+  switchToExisting('switch_to_existing');
+
+  const AppLaunchBehavior(this.storageValue);
+
+  final String storageValue;
+
+  static AppLaunchBehavior fromStorageValue(String? value) {
+    return AppLaunchBehavior.values.firstWhere(
+      (behavior) => behavior.storageValue == value,
+      orElse: () => AppLaunchBehavior.openNewInstance,
+    );
+  }
+}
+
 WindowSortDirection defaultWindowSortDirection(WindowSortBy sortBy) {
   switch (sortBy) {
     case WindowSortBy.usage:
@@ -70,18 +86,21 @@ class EndpointSettings {
     required this.wsUrl,
     required this.windowSortBy,
     required this.windowSortDirection,
+    required this.appLaunchBehavior,
   });
 
   final String httpBaseUrl;
   final String wsUrl;
   final WindowSortBy windowSortBy;
   final WindowSortDirection windowSortDirection;
+  final AppLaunchBehavior appLaunchBehavior;
 
   EndpointSettings copyWith({
     String? httpBaseUrl,
     String? wsUrl,
     WindowSortBy? windowSortBy,
     WindowSortDirection? windowSortDirection,
+    AppLaunchBehavior? appLaunchBehavior,
   }) {
     final nextSortBy = windowSortBy ?? this.windowSortBy;
     return EndpointSettings(
@@ -92,6 +111,7 @@ class EndpointSettings {
         nextSortBy,
         windowSortDirection ?? this.windowSortDirection,
       ),
+      appLaunchBehavior: appLaunchBehavior ?? this.appLaunchBehavior,
     );
   }
 
@@ -101,6 +121,7 @@ class EndpointSettings {
       'wsUrl': wsUrl,
       'windowSortBy': windowSortBy.storageValue,
       'windowSortDirection': windowSortDirection.storageValue,
+      'appLaunchBehavior': appLaunchBehavior.storageValue,
     };
   }
 
@@ -130,6 +151,9 @@ class EndpointSettings {
       wsUrl: json['wsUrl'] as String,
       windowSortBy: sortBy,
       windowSortDirection: direction,
+      appLaunchBehavior: AppLaunchBehavior.fromStorageValue(
+        json['appLaunchBehavior'] as String?,
+      ),
     );
   }
 }

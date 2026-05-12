@@ -68,6 +68,8 @@ set(CMAKE_AUTOUIC OFF)
 set(CMAKE_AUTORCC OFF)
 
 find_package(Qt6 REQUIRED COMPONENTS Core DBus Network WebSockets)
+find_package(KF6Service REQUIRED)
+find_package(KF6KIO REQUIRED)
 find_package(KF6PulseAudioQt REQUIRED)
 
 if(BUILD_TESTING)

@@ -5,6 +5,7 @@ add_executable(plasma_bridge
 target_link_libraries(plasma_bridge
     PRIVATE
         plasma_bridge_api
+        plasma_bridge_app_adapter
         plasma_bridge_audio_adapter
         plasma_bridge_audio_control_adapter
         plasma_bridge_media_adapter

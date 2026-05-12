@@ -1,4 +1,5 @@
 #include "plasma_bridge_build_config.h"
+#include "adapters/apps/kde_app_controller.h"
 #include "adapters/audio/pulse_audio_device_controller.h"
 #include "adapters/audio/pulse_audio_state_observer.h"
 #include "adapters/audio/pulse_audio_volume_controller.h"
@@ -16,7 +17,10 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QDir>
+#include <QFileInfo>
 #include <QHostAddress>
+#include <QStandardPaths>
 #include <QTextStream>
 
 namespace
@@ -45,6 +49,42 @@ bool parseHostAddress(const QString &value, QHostAddress *outAddress)
 QString urlHost(const QString &host)
 {
     return host.contains(QLatin1Char(':')) && !host.startsWith(QLatin1Char('[')) ? QStringLiteral("[%1]").arg(host) : host;
+}
+
+QString defaultFavoritesDirectory()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+}
+
+bool ensureDirectoryExists(const QString &path, QString *errorMessage)
+{
+    if (path.isEmpty()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Favorites directory path is empty.");
+        }
+        return false;
+    }
+
+    QFileInfo fileInfo(path);
+    if (fileInfo.exists() && !fileInfo.isDir()) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Favorites directory path points to a file.");
+        }
+        return false;
+    }
+
+    if (fileInfo.exists()) {
+        return true;
+    }
+
+    if (!QDir().mkpath(path)) {
+        if (errorMessage != nullptr) {
+            *errorMessage = QStringLiteral("Failed to create favorites directory.");
+        }
+        return false;
+    }
+
+    return true;
 }
 
 bool parseAllowedOrigins(const QStringList &values,
@@ -108,11 +148,17 @@ int main(int argc, char *argv[])
     QCommandLineOption allowOriginOption(QStringLiteral("allow-origin"),
                                          QStringLiteral("Additional browser origin allowed by CORS. Repeat to allow multiple origins."),
                                          QStringLiteral("origin"));
+    QCommandLineOption favoritesDirOption(QStringLiteral("favorites-dir"),
+                                          QStringLiteral("Directory used to store favorite_apps.json. Defaults to %1.")
+                                              .arg(defaultFavoritesDirectory()),
+                                          QStringLiteral("dir"),
+                                          defaultFavoritesDirectory());
 
     parser.addOption(hostOption);
     parser.addOption(portOption);
     parser.addOption(wsPortOption);
     parser.addOption(allowOriginOption);
+    parser.addOption(favoritesDirOption);
     parser.process(app);
 
     QHostAddress bindAddress;
@@ -147,6 +193,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    const QString favoritesDirectory = parser.value(favoritesDirOption);
+    QString favoritesDirectoryError;
+    if (!ensureDirectoryExists(favoritesDirectory, &favoritesDirectoryError)) {
+        QTextStream error(stderr);
+        error << "Invalid favorites directory: " << favoritesDirectory << ". " << favoritesDirectoryError << Qt::endl;
+        return 1;
+    }
+
     PulseAudioQt::Context::setApplicationId(QStringLiteral(PLASMA_BRIDGE_APP_ID));
 
     plasma_bridge::audio::PulseAudioStateObserver observer;
@@ -161,7 +215,8 @@ int main(int argc, char *argv[])
     plasma_bridge::window::KWinScriptWindowObserver windowObserver;
     plasma_bridge::state::WindowStateStore windowStateStore;
     windowStateStore.attachObserver(&windowObserver);
-    plasma_bridge::window::KWinScriptWindowActivationController windowActivationController;
+    plasma_bridge::window::KWinScriptWindowControlController windowControlController;
+    plasma_bridge::apps::KdeAppController appController(QDir(favoritesDirectory).filePath(QStringLiteral("favorite_apps.json")));
 
     plasma_bridge::api::SnapshotHttpServer httpServer(&audioStateStore,
                                                       &mediaStateStore,
@@ -169,11 +224,12 @@ int main(int argc, char *argv[])
                                                       &volumeController,
                                                       &deviceController,
                                                       &mediaController,
-                                                      &windowActivationController,
+                                                      &windowControlController,
                                                       parser.value(hostOption),
                                                       port,
                                                       wsPort,
                                                       allowedOrigins);
+    httpServer.setAppController(&appController);
     if (!httpServer.listen(bindAddress, port)) {
         QTextStream error(stderr);
         error << "Failed to listen on " << parser.value(hostOption) << ':' << port << ": "

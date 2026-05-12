@@ -20,6 +20,24 @@ class AudioDeviceState {
   final String? backendApi;
 }
 
+class AppInfo {
+  const AppInfo({
+    required this.appId,
+    required this.name,
+    required this.genericName,
+    required this.desktopEntryName,
+    required this.menuId,
+    required this.iconUrl,
+  });
+
+  final String appId;
+  final String genericName;
+  final String name;
+  final String desktopEntryName;
+  final String menuId;
+  final String? iconUrl;
+}
+
 class AudioState {
   const AudioState({
     required this.sinks,

@@ -1,11 +1,16 @@
 #pragma once
 
-#include "control/window_activation_controller.h"
+#include "control/window_control_controller.h"
 
 #include <QString>
 
 namespace plasma_bridge::api
 {
+
+enum class WindowControlAction {
+    Activate,
+    Close,
+};
 
 enum class WindowControlRouteMatch {
     NoMatch,
@@ -15,6 +20,7 @@ enum class WindowControlRouteMatch {
 
 struct WindowControlRoute {
     QString windowId;
+    WindowControlAction action = WindowControlAction::Activate;
 };
 
 struct WindowControlRouteParseResult {
@@ -24,5 +30,6 @@ struct WindowControlRouteParseResult {
 
 WindowControlRouteParseResult parseWindowControlRoute(const QString &path);
 int httpStatusCodeForWindowActivationStatus(control::WindowActivationStatus status);
+int httpStatusCodeForWindowCloseStatus(control::WindowCloseStatus status);
 
 } // namespace plasma_bridge::api
