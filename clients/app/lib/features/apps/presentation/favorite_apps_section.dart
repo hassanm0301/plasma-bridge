@@ -348,6 +348,8 @@ class _SearchResultTile extends StatelessWidget {
 }
 
 class _FavoriteAppTile extends StatelessWidget {
+  static const _tileWidth = 172.0;
+
   const _FavoriteAppTile({
     super.key,
     required this.app,
@@ -371,9 +373,14 @@ class _FavoriteAppTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final iconUrl = resolveAssetUrl(httpBaseUrl, app.iconUrl);
+    final subtitle = opening
+        ? 'Opening...'
+        : app.genericName.isNotEmpty
+        ? app.genericName
+        : app.desktopEntryName;
 
     return SizedBox(
-      width: 132,
+      width: _tileWidth,
       child: Material(
         color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(DesktopMetrics.itemRadius),
@@ -381,59 +388,57 @@ class _FavoriteAppTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(DesktopMetrics.itemRadius),
           onTap: opening || removing || editMode ? null : onOpenApp,
           child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _AppIcon(
-                      iconUrl: iconUrl,
-                      fallbackLabel: app.name,
-                      size: 40,
-                    ),
-                    const Spacer(),
-                    if (editMode)
-                      IconButton(
-                        key: ValueKey('favorite-app-remove:${app.appId}'),
-                        tooltip: 'Remove ${app.name}',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: removing ? null : onRemoveFavorite,
-                        icon: removing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.remove_circle_outline_rounded,
-                                size: 20,
-                              ),
+                _AppIcon(iconUrl: iconUrl, fallbackLabel: app.name, size: 36),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        app.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall,
                       ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  app.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  opening
-                      ? 'Opening...'
-                      : app.genericName.isNotEmpty
-                      ? app.genericName
-                      : app.desktopEntryName,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall,
-                ),
+                if (editMode) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    key: ValueKey('favorite-app-remove:${app.appId}'),
+                    tooltip: 'Remove ${app.name}',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 28,
+                      height: 28,
+                    ),
+                    onPressed: removing ? null : onRemoveFavorite,
+                    icon: removing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(
+                            Icons.remove_circle_outline_rounded,
+                            size: 18,
+                          ),
+                  ),
+                ],
               ],
             ),
           ),
